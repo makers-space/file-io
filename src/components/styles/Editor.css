@@ -1,0 +1,589 @@
+/* ===== Editor Component CSS ===== */
+/* MDX Editor integration with the application's theming system */
+
+/* Notification Status Animations */
+.rotating {
+    animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.themed-editor {
+    position: relative;
+    min-width: 250px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    background: var(--background-color);
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+/* ===== MDX Editor Theme Integration ===== */
+/* Override MDX Editor CSS variables with our theme colors */
+
+.themed-editor .mdxeditor {
+    /* Base colors */
+    --baseBase: var(--background-color);
+    --baseBgSubtle: var(--surface-color);
+    --baseBg: var(--background-color);
+    --baseBgHover: var(--surface-accent-color);
+    --baseBgActive: var(--primary-color);
+    --baseLine: var(--border-color);
+    --baseBorder: var(--border-color);
+    --baseBorderHover: var(--primary-color);
+    --baseSolid: var(--neutral-color);
+    --baseSolidHover: var(--text-color);
+    --baseText: var(--text-color);
+    --baseTextContrast: var(--text-color);
+
+    /* Accent colors (primary) */
+    --accentBase: var(--primary-color);
+    --accentBgSubtle: var(--primary-color);
+    --accentBg: var(--primary-color);
+    --accentBgHover: var(--primary-accent-color);
+    --accentBgActive: var(--primary-accent-color);
+    --accentLine: var(--primary-color);
+    --accentBorder: var(--primary-color);
+    --accentBorderHover: var(--primary-accent-color);
+    --accentSolid: var(--primary-color);
+    --accentSolidHover: var(--primary-accent-color);
+    --accentText: var(--primary-color);
+    --accentTextContrast: var(--text-contrast-color);
+
+    /* Typography */
+    font-family: var(--font-family-primary);
+    color: var(--text-color);
+    background: transparent;
+
+    /* Code font */
+    --font-mono: var(--font-family-monospace);
+}
+
+.cm-editor {
+    /* Base styles */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--surface-color);
+    color: var(--text-color);
+    font-family: var(--font-family-monospace);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-relaxed);
+    padding: var(--spacing-md);
+    overflow: auto;
+}
+
+.cm-content {
+    padding: var(--spacing-md);
+    font-family: var(--font-family-monospace);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-relaxed);
+    overflow: auto;
+}
+
+.cm-editor .cm-activeLineGutter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--primary-color);
+}
+
+/* ===== Content Area Styling ===== */
+/* Style the content editable area - target the actual MDX Editor classes */
+
+.themed-editor.themed-editor [class*="_contentEditable_"] {
+    font-family: var(--font-family-primary);
+    color: var(--text-color);
+    line-height: var(--line-height-relaxed);
+    font-size: var(--font-size-base);
+    min-height: 100px;
+    max-height: 1000px;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    box-sizing: border-box;
+}
+
+/* ===== Placeholder Styling ===== */
+/* Override MDX Editor's placeholder to match content area styling exactly */
+
+.themed-editor.themed-editor [class*="_placeholder_"] {
+    padding: var(--spacing-md);
+    font-family: var(--font-family-primary);
+    line-height: var(--line-height-relaxed);
+    font-size: var(--font-size-base);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    box-sizing: border-box;
+    position: absolute;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+    border: none;
+    background: transparent;
+}
+
+/* Ensure placeholder wrapper has same constraints as content area */
+.themed-editor.themed-editor [class*="_rootContentEditableWrapper_"] {
+    position: relative;
+    width: 100%;
+    min-height: 100px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.themed-editor.themed-editor [class*="_rootContentEditableWrapper_"] [class*="_placeholder_"] {
+    position: absolute;
+    pointer-events: none;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.themed-editor-content {
+    min-width: 100%;
+    /* Headings */
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: var(--font-family-primary), serif;
+        font-weight: var(--font-weight-bold);
+        color: var(--text-color);
+        margin-top: var(--spacing-lg);
+        margin-bottom: var(--spacing-md);
+        line-height: var(--line-height-tight);
+    }
+
+    h1 {
+        font-size: var(--font-size-4xl);
+    }
+
+    h2 {
+        font-size: var(--font-size-3xl);
+    }
+
+    h3 {
+        font-size: var(--font-size-2xl);
+    }
+
+    h4 {
+        font-size: var(--font-size-xl);
+    }
+
+    h5 {
+        font-size: var(--font-size-lg);
+    }
+
+    h6 {
+        font-size: var(--font-size-base);
+    }
+
+    /* Paragraphs */
+
+    p {
+        margin-bottom: var(--spacing-md);
+        color: var(--text-color);
+        line-height: var(--line-height-relaxed);
+        font-size: var(--font-size-base);
+    }
+
+    /* Lists */
+
+    ul, ol {
+        margin-bottom: var(--spacing-md);
+        padding-left: var(--spacing-lg);
+    }
+
+    li {
+        margin-bottom: var(--spacing-xs);
+        color: var(--text-color);
+    }
+
+    /* Links */
+
+    a {
+        color: var(--primary-color);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: all 0.2s ease;
+    }
+
+    a:hover {
+        color: var(--primary-accent-color);
+        border-bottom-color: var(--primary-color);
+    }
+
+    /* Code */
+
+    code {
+        font-family: var(--font-family-monospace), serif;
+        background: var(--surface-accent-color);
+        color: var(--text-color);
+        padding: 0.125rem 0.25rem;
+        border-radius: var(--border-radius);
+        font-size: var(--font-size-sm);
+    }
+
+    /* Code blocks */
+
+    pre {
+        background: var(--surface-accent-color);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+        overflow-x: auto;
+    }
+
+    pre code {
+        background: transparent;
+        padding: 0;
+        border-radius: 0;
+        font-size: var(--font-size-sm);
+    }
+
+    /* Blockquotes */
+
+    blockquote {
+        border-left: 4px solid var(--primary-color);
+        padding-left: var(--spacing-md);
+        margin-left: 0;
+        margin-bottom: var(--spacing-md);
+        font-style: italic;
+        color: var(--neutral-color);
+    }
+
+    /* Tables */
+
+    table {
+        width: auto;
+        border-collapse: collapse;
+        margin-bottom: var(--spacing-md);
+        table-layout: auto;
+        min-width: 1000px;
+    }
+
+    th, td {
+        border: 1px solid var(--border-color);
+        padding: var(--spacing-sm);
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    th {
+        background: var(--surface-accent-color);
+        font-weight: var(--font-weight-semibold);
+    }
+
+    /* Horizontal rules */
+
+    hr {
+        border: none;
+        height: 1px;
+        background: var(--border-color);
+        margin: var(--spacing-lg) 0;
+    }
+
+    /* Images */
+
+    img {
+        max-width: 100%;
+        height: auto;
+        border-radius: var(--border-radius);
+        margin-bottom: var(--spacing-md);
+        display: block;
+    }
+}
+
+/* ===== MDX Editor Image Plugin Styling ===== */
+/* Style the image plugin components */
+
+.themed-editor [class*="_imageContainer_"] {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    margin: var(--spacing-md) 0;
+}
+
+.themed-editor [class*="_imageContainer_"] img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--button-radius, var(--border-radius-md));
+    border: 1px solid var(--border-color);
+}
+
+.themed-editor [class*="_imageContainer_"]:hover img {
+    border-color: var(--primary-color);
+}
+
+/* Image upload dialog styling */
+.themed-editor [class*="_imageDialog_"] {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--button-radius, var(--border-radius-md));
+    box-shadow: var(--shadow-lg);
+}
+
+.themed-editor [class*="_imageDialog_"] input {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--button-radius, var(--border-radius-md));
+    color: var(--text-color);
+    padding: var(--spacing-sm);
+    font-family: var(--font-family-primary);
+}
+
+.themed-editor [class*="_imageDialog_"] input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* Image error state styling */
+.themed-editor [class*="_imageError_"] {
+    background: var(--surface-accent-color);
+    border: 1px solid var(--error-color, var(--border-color));
+    border-radius: var(--button-radius, var(--border-radius-md));
+    padding: var(--spacing-md);
+    color: var(--error-color, var(--text-color));
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-height: 100px;
+    justify-content: center;
+}
+
+.themed-editor [class*="_imageError_"] svg {
+    fill: var(--error-color, var(--text-color));
+    width: 24px;
+    height: 24px;
+}
+
+/* ===== Toolbar Styling ===== */
+/* Style the MDX Editor toolbar to match our theme */
+
+.themed-editor .mdxeditor-toolbar {
+    background: var(--surface-accent-color);
+    border-radius: var(--border-radius);
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+}
+
+.themed-editor .mdxeditor-toolbar button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-color);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--button-radius, var(--border-radius-md)) !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: var(--font-size-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    min-width: 32px;
+    min-height: 32px;
+    position: relative;
+}
+
+/* Tooltip triggers within toolbar buttons */
+.themed-editor [class*="_tooltipTrigger_"] {
+    border-radius: var(--button-radius, var(--border-radius-md)) !important;
+}
+
+/* Ensure toggle group containers also use theme radius */
+.themed-editor [class*="_toolbarToggleSingleGroup_"],
+.themed-editor [class*="_toolbarToggleMultipleGroup_"] {
+    border-radius: var(--button-radius, var(--border-radius-md));
+}
+
+
+/* Icon styling within toolbar buttons */
+.themed-editor .mdxeditor-toolbar button svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    stroke: currentColor;
+    transition: all 0.2s ease;
+}
+
+.themed-editor .mdxeditor-toolbar button:hover {
+    background: var(--surface-color);
+    border-color: var(--border-color);
+    color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.themed-editor .mdxeditor-toolbar button:hover svg {
+    color: var(--primary-color);
+    transform: scale(1.1);
+}
+
+.themed-editor .mdxeditor-toolbar button[data-state="on"] {
+    background: var(--primary-color);
+    color: var(--text-contrast-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.themed-editor .mdxeditor-toolbar button[data-state="on"] svg {
+    color: var(--text-contrast-color);
+}
+
+.themed-editor .mdxeditor-toolbar button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: transparent;
+    border-color: transparent;
+}
+
+.themed-editor .mdxeditor-toolbar button:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* Toolbar separators */
+.themed-editor .mdxeditor-toolbar [data-orientation="vertical"] {
+    width: 1px;
+    height: 24px;
+    background: var(--border-color);
+    margin: 0 var(--spacing-xs);
+    border-radius: 1px;
+}
+
+/* ===== Code Block Styling ===== */
+/* Style code block language selector */
+
+.themed-editor.themed-editor [class*="_selectTrigger_"] {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: var(--button-radius, var(--border-radius-md)) !important;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    transition: all 0.2s ease;
+}
+
+.themed-editor.themed-editor [class*="_selectTrigger_"]:hover {
+    border-color: var(--primary-color);
+    background: var(--surface-accent-color);
+}
+
+.themed-editor.themed-editor [class*="_selectTrigger_"][data-state="open"] {
+    border-color: var(--primary-color);
+    background: var(--surface-accent-color);
+}
+
+/* ===== Focus and Accessibility ===== */
+
+.themed-editor .mdxeditor-root-contenteditable:focus {
+    outline: none;
+}
+
+.themed-editor .mdxeditor-toolbar button:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* ===== Size Variants ===== */
+
+.themed-editor.editor-small.themed-editor [class*="_contentEditable_"] {
+    min-height: 150px;
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-sm);
+}
+
+.themed-editor.editor-small.themed-editor [class*="_placeholder_"] {
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-sm);
+}
+
+.themed-editor.editor-large.themed-editor [class*="_contentEditable_"] {
+    min-height: 400px;
+    font-size: var(--font-size-lg);
+    padding: var(--spacing-lg);
+}
+
+.themed-editor.editor-large.themed-editor [class*="_placeholder_"] {
+    font-size: var(--font-size-lg);
+    padding: var(--spacing-lg);
+}
+
+/* ===== Read-only State ===== */
+
+.themed-editor.editor-readonly {
+    border-color: var(--border-color);
+    background: var(--surface-accent-color);
+    opacity: 0.9;
+}
+
+.themed-editor.editor-readonly:hover {
+    border-color: var(--border-color);
+}
+
+.themed-editor.editor-readonly .mdxeditor-toolbar {
+    display: none;
+}
+
+.themed-editor.editor-readonly.themed-editor [class*="_contentEditable_"] {
+    background: var(--surface-accent-color);
+}
+
+/* ===== Enhanced Editor Features ===== */
+
+/* Toolbar button groups */
+.themed-editor .mdxeditor-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0 var(--spacing-xs);
+}
+
+.themed-editor .mdxeditor-toolbar-group:first-child {
+    margin-left: 0;
+}
+
+.themed-editor .mdxeditor-toolbar-group:last-child {
+    margin-right: 0;
+}
+
+/* Enhanced button states */
+.themed-editor .mdxeditor-toolbar button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Dropdown menus in toolbar */
+.themed-editor .mdxeditor-dropdown-trigger {
+    position: relative;
+}
+
+.themed-editor .mdxeditor-dropdown-trigger::after {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+    border-top: 3px solid currentColor;
+    margin-left: var(--spacing-xs);
+    transition: transform 0.2s ease;
+}
+
+.themed-editor .mdxeditor-dropdown-trigger[data-state="open"]::after {
+    transform: rotate(180deg);
+}

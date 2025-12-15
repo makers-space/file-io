@@ -1,0 +1,300 @@
+/* Page component structural styles */
+.page,
+.themed-page {
+    height: 100vh;
+    height: 100dvh;
+    width: 100%;
+    background-color: var(--background-color, #ffffff);
+    color: var(--text-color, #1a1a1a);
+    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.page-header {
+    width: 100%;
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.page-header h1 {
+    margin: 0;
+}
+
+.page-content {
+    padding: var(--spacing-lg);
+    max-width: var(--page-max-width, 100%);
+    margin: 0 auto;
+}
+
+.page-footer {
+    margin-top: auto;
+    padding: var(--spacing-lg);
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+}
+
+/* ===== Page Layout Types ===== */
+.page.layout-block,
+.themed-page.layout-block {
+    display: block;
+}
+
+.page.layout-flex,
+.themed-page.layout-flex {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+.page.layout-flex-wrap,
+.themed-page.layout-flex-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+.page.layout-flex-column,
+.themed-page.layout-flex-column {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+.page.layout-grid,
+.themed-page.layout-grid {
+    display: grid;
+    align-items: stretch;
+    min-height: 0;
+}
+
+.page.layout-multicolumn,
+.themed-page.layout-multicolumn {
+    column-count: 2;
+}
+
+.page.layout-positioned,
+.themed-page.layout-positioned {
+    position: relative;
+    min-height: 100vh;
+}
+
+/* ===== Page Grid System ===== */
+.page.grid-1, .themed-page.grid-1 {
+    grid-template-columns: 1fr;
+}
+
+.page.grid-2, .themed-page.grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.page.grid-3, .themed-page.grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.page.grid-4, .themed-page.grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.page.grid-5, .themed-page.grid-5 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.page.grid-6, .themed-page.grid-6 {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.page.grid-auto, .themed-page.grid-auto {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.page.grid-auto-sm, .themed-page.grid-auto-sm {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.page.grid-auto-lg, .themed-page.grid-auto-lg {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+/* ===== Page Multi-column System ===== */
+.page.columns-2, .themed-page.columns-2 {
+    column-count: 2;
+}
+
+.page.columns-3, .themed-page.columns-3 {
+    column-count: 3;
+}
+
+.page.columns-4, .themed-page.columns-4 {
+    column-count: 4;
+}
+
+.page.columns-auto, .themed-page.columns-auto {
+    column-count: auto;
+    column-width: 250px;
+}
+
+/* ===== Page Alignment System ===== */
+/* Align items (cross-axis) */
+.page.align-start, .themed-page.align-start {
+    align-items: flex-start;
+}
+
+.page.align-center, .themed-page.align-center {
+    align-items: center;
+}
+
+.page.align-end, .themed-page.align-end {
+    align-items: flex-end;
+}
+
+.page.align-stretch, .themed-page.align-stretch {
+    align-items: stretch;
+}
+
+.page.align-baseline, .themed-page.align-baseline {
+    align-items: baseline;
+}
+
+/* Justify content (main-axis) */
+.page.justify-start, .themed-page.justify-start {
+    justify-content: flex-start;
+}
+
+.page.justify-center, .themed-page.justify-center {
+    justify-content: center;
+}
+
+.page.justify-end, .themed-page.justify-end {
+    justify-content: flex-end;
+}
+
+.page.justify-between, .themed-page.justify-between {
+    justify-content: space-between;
+}
+
+.page.justify-around, .themed-page.justify-around {
+    justify-content: space-around;
+}
+
+.page.justify-evenly, .themed-page.justify-evenly {
+    justify-content: space-evenly;
+}
+
+/* Block layout text alignment */
+.page.layout-block.justify-center, .themed-page.layout-block.justify-center {
+    text-align: center;
+}
+
+.page.layout-block.justify-end, .themed-page.layout-block.justify-end {
+    text-align: right;
+}
+
+.page.layout-block.justify-start, .themed-page.layout-block.justify-start {
+    text-align: left;
+}
+
+/* Block layout child centering - center block-level children with explicit widths */
+.page.layout-block.justify-center > *,
+.themed-page.layout-block.justify-center > * {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.page.layout-block.justify-end > *,
+.themed-page.layout-block.justify-end > * {
+    margin-left: auto;
+    margin-right: 0;
+}
+
+.page.layout-block.justify-start > *,
+.themed-page.layout-block.justify-start > * {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+/* ===== Page Spacing System ===== */
+/* Gap utilities */
+.page.gap-none, .themed-page.gap-none {
+    gap: 0;
+    column-gap: 0;
+}
+
+.page.gap-xs, .themed-page.gap-xs {
+    gap: var(--spacing-xs);
+    column-gap: var(--spacing-xs);
+}
+
+.page.gap-sm, .themed-page.gap-sm {
+    gap: var(--spacing-sm);
+    column-gap: var(--spacing-sm);
+}
+
+.page.gap-md, .themed-page.gap-md {
+    gap: var(--spacing-md);
+    column-gap: var(--spacing-md);
+}
+
+.page.gap-lg, .themed-page.gap-lg {
+    gap: var(--spacing-lg);
+    column-gap: var(--spacing-lg);
+}
+
+.page.gap-xl, .themed-page.gap-xl {
+    gap: var(--spacing-xl);
+    column-gap: var(--spacing-xl);
+}
+
+/* Padding utilities */
+.page.p-none, .themed-page.p-none {
+    padding: 0;
+}
+
+.page.p-xs, .themed-page.p-xs {
+    padding: var(--spacing-xs);
+}
+
+.page.p-sm, .themed-page.p-sm {
+    padding: var(--spacing-sm);
+}
+
+.page.p-md, .themed-page.p-md {
+    padding: var(--spacing-md);
+}
+
+.page.p-lg, .themed-page.p-lg {
+    padding: var(--spacing-lg);
+}
+
+.page.p-xl, .themed-page.p-xl {
+    padding: var(--spacing-xl);
+}
+
+/* ===== Genie Integration ===== */
+.page.genie-trigger,
+.themed-page.genie-trigger {
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.page.genie-trigger:hover,
+.themed-page.genie-trigger:hover {
+    background-color: var(--surface-accent-color);
+}
+
+.page.has-genie-active,
+.themed-page.has-genie-active {
+    /* Disable transforms when floating card is active */
+    transform: none;
+}

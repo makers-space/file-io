@@ -365,9 +365,14 @@ const UploadForm = ({ targetPath, onSuccess, onCancel }) => {
       const safePath = targetPath || '/';
       
       // Upload all files and get the response
-      const response = await fileService.uploadFiles(files, safePath, (progress) => {
-        setUploadProgress(progress);
-      });
+      const response = await fileService.uploadFiles(
+        files, 
+        safePath, 
+        (progress) => {
+          setUploadProgress(progress);
+        },
+        overwrite
+      );
       
       // Extract file paths from the server response
       const uploadedPaths = response.files.map(file => file.filePath);

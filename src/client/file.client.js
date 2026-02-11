@@ -641,15 +641,23 @@ export const fileService = {
      * @param {FileList|File[]} files - Files to upload
      * @param {string} targetPath - Target directory path
      * @param {Function} onProgress - Progress callback
+     * @param {boolean} overwrite - Whether to overwrite existing files
      * @returns {Promise<object>} Upload response
      */
-    async uploadFiles(files, targetPath = '/', onProgress = null) {
+    async uploadFiles(files, targetPath = '/', onProgress = null, overwrite = false) {
         const normalizedPath = this.normalizePath(targetPath);
         const formData = new FormData();
         
+        // Append files
         Array.from(files).forEach((file, index) => {
             formData.append('files', file);
         });
+        
+        // Append metadata
+        formData.append('targetPath', normalizedPath);
+        if (overwrite) {
+            formData.append('overwrite', 'true');
+        }
 
         const config = {
             headers: {

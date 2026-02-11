@@ -10,9 +10,15 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localho
 // CSRF cookie name (must match server's CSRF_COOKIE_NAME)
 const CSRF_COOKIE_NAME = 'csrfToken';
 
+// In-memory CSRF token cache for cross-origin scenarios
+// When web app and API are on different domains, JavaScript cannot read cross-domain cookies
+// even with httpOnly: false. We cache the token from the response body as a fallback.
+let csrfTokenCache = null;
+
 /**
  * Get CSRF token from cookie
  * The server sets this cookie with httpOnly: false so JS can read it
+ * Falls back to cached token for cross-origin scenarios
  */
 const getCsrfTokenFromCookie = () => {
     const cookies = document.cookie.split(';');
@@ -22,24 +28,41 @@ const getCsrfTokenFromCookie = () => {
             return decodeURIComponent(value);
         }
     }
-    return null;
+    // Fallback to cached token (for cross-origin setups)
+    return csrfTokenCache;
 };
 
 /**
  * Fetch a fresh CSRF token from the server
  * This will set the cookie which we can then read
+ * For cross-origin setups, also caches the token from response body
  */
 const fetchCsrfToken = async () => {
     try {
-        await axios.get(`${API_BASE_URL}/auth/csrf-token`, {
+        const response = await axios.get(`${API_BASE_URL}/auth/csrf-token`, {
             withCredentials: true,
             timeout: 10000
         });
-        // The server sets the cookie, we read it from there
-        return getCsrfTokenFromCookie();
+        
+        // Try to read from cookie first (same-origin scenario)
+        const cookieToken = getCsrfTokenFromCookie();
+        if (cookieToken && cookieToken !== csrfTokenCache) {
+            csrfTokenCache = cookieToken;
+            return cookieToken;
+        }
+
+        // Fallback to response body token (cross-origin scenario)
+        // Server returns { success: true, message: "...", csrfToken: "..." }
+        const responseToken = response?.data?.csrfToken || null;
+        if (responseToken) {
+            csrfTokenCache = responseToken;
+            return responseToken;
+        }
+
+        return cookieToken || csrfTokenCache;
     } catch (error) {
         console.error('Failed to fetch CSRF token:', error.message);
-        return null;
+        return csrfTokenCache; // Return cached token if fetch fails
     }
 };
 

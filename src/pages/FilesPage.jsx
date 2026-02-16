@@ -18,7 +18,8 @@ import {
   Switch,
   Image,
   Video,
-  Audio
+  Audio,
+  Model3D
 } from '../components/Components';
 import { ShareForm } from '../components/Explorer';
 
@@ -1115,6 +1116,20 @@ export const FilesPage = () => {
     isLoading: false,
     isReadOnly: false, // Simple boolean for read-only state
   });
+  
+  // Cleanup blob URLs when activeFile changes
+  useEffect(() => {
+    return () => {
+      // Cleanup blob URLs when component unmounts or activeFile changes
+      if (activeFile?.file?._isBlobUrl && activeFile?.file?.modelSrc) {
+        URL.revokeObjectURL(activeFile.file.modelSrc);
+      }
+      if (activeFile?.file?.imageSrc && activeFile?.file?.imageSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(activeFile.file.imageSrc);
+      }
+    };
+  }, [activeFile?.file?.modelSrc, activeFile?.file?.imageSrc]);
+  
   const [versionView, setVersionView] = useState(null);
   const [selectedDirectory, setSelectedDirectory] = useState('/');
   const [isLoading, setIsLoading] = useState(true);
@@ -1201,10 +1216,11 @@ export const FilesPage = () => {
       const isImage = filePath.match(/\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|tiff|tif)$/i);
       const isVideo = filePath.match(/\.(mp4|webm|avi|mov|wmv|flv)$/i);
       const isAudio = filePath.match(/\.(mp3|wav)$/i);
+      const is3DModel = filePath.match(/\.(obj|gltf|glb|fbx|stl|dae|3ds|blend|ply|3mf|usdz|usda|usdc|vrm|vox|c4d)$/i);
       
       // For audio/video files, fetch full metadata to get mediaMetadata field
       let fileWithMetadata = file;
-      if (isAudio || isVideo) {
+      if (isAudio || isVideo || is3DModel) {
         try {
           const fullMetadata = await fileService.getMetadata(filePath);
           fileWithMetadata = { ...file, ...fullMetadata };
@@ -1250,6 +1266,25 @@ export const FilesPage = () => {
           isReadOnly: true // Audio files are always read-only
         });
         setLatestVersionContent('');
+      } else if (is3DModel) {
+        // For 3D models, download file with credentials and create blob URL
+        // THREE.js loaders don't support credentials, so we fetch the blob first
+        try {
+          const blob = await fileService.downloadFile(filePath);
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const modelExt = filePath.split('.').pop()?.toLowerCase() || 'glb';
+          setActiveFile({ 
+            file: { ...fileWithMetadata, is3DModel: true, type: '3d-model', modelSrc: blobUrl, modelFormat: modelExt, _isBlobUrl: true }, 
+            content: '', 
+            isLoading: false, 
+            isReadOnly: true // 3D models are always read-only
+          });
+          setLatestVersionContent('');
+        } catch (error) {
+          console.error('Failed to load 3D model:', error);
+          showNotification('Failed to load 3D model', 'error');
+        }
       } else if (file.type === 'text') {
         setActiveFile({ file: { ...file, isImage: false, type: 'text' }, content: '', isLoading: false, isReadOnly: isReadOnlyForUser });
 
@@ -1584,7 +1619,7 @@ export const FilesPage = () => {
     // If viewing a version, render version view (no Yjs)
     if (versionView) {
       return (
-        <Container layout="flex-column" align="center" minHeight="100vh" width="100%" gap="none">
+        <Container layout="flex-column" minHeight="100vh" width="100%" gap="none">
           {/* Version header */}
           <Card
             layout="flex" 
@@ -1619,14 +1654,15 @@ export const FilesPage = () => {
           </Card>
 
           {/* Version Editor - completely separate from Yjs */}
-          <Container padding="sm" margin="sm">
+          <Container layout="flex" align="center" justify="center" minHeight="80vh" width="100%" padding="sm">
             <Editor
               key={`version-editor-${versionView.versionNumber}`}
               content={versionView.content}
               placeholder="Version content..."
               showToolbar={false}
               readOnly={true}
-              minHeight="400px"
+              width="100%"
+              minHeight="80vh"
             />
           </Container>
 
@@ -1685,7 +1721,7 @@ export const FilesPage = () => {
         : fileContent;
 
     return (
-      <Container layout="flex-column" align="center" minHeight="100vh" width="100%" gap="none">
+      <Container layout="flex-column" minHeight="100vh" width="100%" gap="none">
         {/* File header */}
         <Card
           layout="flex" 
@@ -1744,6 +1780,12 @@ export const FilesPage = () => {
                     <Typography size="xs" color="primary">AUDIO</Typography>
                 </Container>
             )}
+            {activeFile.file.is3DModel && (
+                <Container layout="flex" align="center" gap="sm">
+                    <Icon name="FiBox" size="sm" />
+                    <Typography size="xs" color="primary">3D MODEL</Typography>
+                </Container>
+            )}
             {activeFile.file.isBinary && (
                 <Container layout="flex" align="center" gap="sm">
                     <Icon name="FiFile" size="sm" />
@@ -1778,7 +1820,7 @@ export const FilesPage = () => {
         </Card>
 
         {/* Editor */}
-        <Container padding="sm" margin="sm">
+        <Container layout="flex" align="center" justify="center" minHeight="80vh" width="100%" padding="sm">
           {activeFile.file.type === 'text' ? (
             <Editor
               key={`text-editor-${activeFile.file.filePath}`}
@@ -1789,7 +1831,8 @@ export const FilesPage = () => {
               placeholder={activeFile.isReadOnly ? "This file is read-only for you" : "Start typing..."}
               showToolbar={!activeFile.isReadOnly}
               readOnly={activeFile.isReadOnly}
-              minHeight="400px"
+              width="100%"
+              minHeight="80vh"
             />
           ) : activeFile.file.isImage ? (
             <Container layout="flex" align="center" justify="center" width="100%">
@@ -1862,6 +1905,22 @@ export const FilesPage = () => {
                 );
               })()}
             </Container>
+          ) : activeFile.file.is3DModel ? (
+            <Model3D
+              key={`model3d-viewer-${activeFile.file.filePath}`}
+              src={activeFile.file.modelSrc}
+              format={activeFile.file.modelFormat}
+              alt={activeFile.file.name}
+              controls={true}
+              autoRotate={false}
+              autoRotateSpeed={1}
+              width="100%"
+              height="80vh"
+              environment="studio"
+              showGrid={true}
+              showShadows={true}
+              cameraFov={50}
+            />
           ) : (
             <Container layout="flex" align="center" justify="center" minHeight="400px">
               <Container layout="flex-column" align="center" gap="md">

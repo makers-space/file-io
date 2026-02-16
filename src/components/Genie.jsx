@@ -1060,7 +1060,7 @@ export const useGeniePortal = (genieConfig, triggerRef, onShow = null, onHide = 
           ? genieConfig.content({ onClose: handleHide })
           : genieConfig.content}
       </Genie>,
-      document.body
+      document.fullscreenElement || document.body
     );
   }, [
     genieConfig, 

@@ -355,14 +355,14 @@ export const fileService = {
         const fileName = normalized.split('/').pop();
         const extension = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
         
-        // Binary file extensions
-        const binaryExtensions = [
+        // Use cached binary extensions from server, or default fallback
+        const binaryExtensions = this._cachedBinaryExtensions || [
             // Images
             'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff',
-            // Videos
-            'mp4', 'webm', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'm4v',
             // Audio
             'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma',
+            // Video
+            'mp4', 'webm', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'm4v',
             // Documents
             'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
             // Archives
@@ -372,10 +372,30 @@ export const fileService = {
             // Databases
             'db', 'sqlite', 'mdb', 'accdb',
             // Design
-            'psd', 'ai', 'indd', 'sketch', 'fig'
+            'psd', 'ai', 'indd', 'sketch', 'fig',
+            // 3D Models
+            'obj', 'gltf', 'glb', 'fbx', 'stl', 'dae', '3ds', 'blend',
+            'ply', '3mf', 'usdz', 'usda', 'usdc', 'vrm', 'vox', 'c4d'
         ];
         
         return binaryExtensions.includes(extension) ? 'binary' : 'text';
+    },
+
+    /**
+     * Load supported file types from server (called on init)
+     * Caches binary extensions for client-side file type detection
+     */
+    async loadSupportedTypes() {
+        try {
+            const response = await api.get('/files/types');
+            if (response.data?.types?.binary?.extensions) {
+                this._cachedBinaryExtensions = response.data.types.binary.extensions;
+            }
+            return response.data;
+        } catch (error) {
+            console.warn('Failed to load supported types from server, using defaults:', error.message);
+            return null;
+        }
     },
 
     // =============================================================================

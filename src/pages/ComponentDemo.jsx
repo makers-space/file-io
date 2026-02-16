@@ -22,6 +22,7 @@ import {
     Image,
     Video,
     Audio,
+    Model3D,
 } from '@components/Components';
 
 /**
@@ -1965,6 +1966,139 @@ const COMPONENT_METADATA = {
             }
         },
         description: 'Spinning disc audio player with minimalist design and centered controls'
+    },
+
+    Model3D: {
+        component: Model3D,
+        defaultProps: {
+            src: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
+            alt: '3D Model Viewer',
+            controls: true,
+            autoRotate: false,
+            autoRotateSpeed: 1,
+            width: '100%',
+            height: '500px',
+            aspectRatio: null,
+            backgroundColor: null,
+            environment: 'studio',
+            showGrid: false,
+            showShadows: true,
+            cameraFov: 50,
+            theme: null
+        },
+        propConfigs: {
+            src: {
+                type: 'text',
+                label: '3D Model URL',
+                group: 'Content',
+                placeholder: 'https://example.com/model.glb'
+            },
+            controls: {
+                type: 'boolean',
+                label: 'Orbit Controls',
+                group: 'Interaction'
+            },
+            autoRotate: {
+                type: 'boolean',
+                label: 'Auto Rotate',
+                group: 'Interaction'
+            },
+            autoRotateSpeed: {
+                type: 'number',
+                label: 'Rotation Speed',
+                group: 'Interaction',
+                min: 0.1,
+                max: 5,
+                step: 0.1
+            },
+            width: {
+                type: 'select',
+                label: 'Width',
+                group: 'Layout',
+                options: ['100%', '80%', '600px', '800px']
+            },
+            height: {
+                type: 'select',
+                label: 'Height',
+                group: 'Layout',
+                options: ['400px', '500px', '600px', '800px']
+            },
+            aspectRatio: {
+                type: 'select',
+                label: 'Aspect Ratio',
+                group: 'Layout',
+                options: [null, '16/9', '4/3', '1/1'],
+                optionLabels: {
+                    'null': 'None (use height)',
+                    '16/9': '16:9',
+                    '4/3': '4:3',
+                    '1/1': 'Square'
+                }
+            },
+            backgroundColor: {
+                type: 'select',
+                label: 'Background Color',
+                group: 'Appearance',
+                options: [null, 'transparent', 'background', 'surface', 'primary', 'secondary', 'tertiary', 'success', 'warning', 'error', 'neutral'],
+                optionLabels: {
+                    'null': 'Theme Default',
+                    'transparent': 'Transparent',
+                    'background': 'Background',
+                    'surface': 'Surface',
+                    'primary': 'Primary',
+                    'secondary': 'Secondary',
+                    'tertiary': 'Tertiary',
+                    'success': 'Success',
+                    'warning': 'Warning',
+                    'error': 'Error',
+                    'neutral': 'Neutral'
+                }
+            },
+            environment: {
+                type: 'select',
+                label: 'Lighting Environment',
+                group: 'Appearance',
+                options: ['studio', 'sunset', 'dawn', 'night', 'warehouse', 'forest', 'apartment', 'city', 'park', 'lobby'],
+                optionLabels: {
+                    'studio': 'Studio (Neutral)',
+                    'sunset': 'Sunset (Warm)',
+                    'dawn': 'Dawn (Cool)',
+                    'night': 'Night (Dark)',
+                    'warehouse': 'Warehouse (Industrial)',
+                    'forest': 'Forest (Natural)',
+                    'apartment': 'Apartment (Interior)',
+                    'city': 'City (Urban)',
+                    'park': 'Park (Outdoor)',
+                    'lobby': 'Lobby (Bright)'
+                }
+            },
+            showGrid: {
+                type: 'boolean',
+                label: 'Show Ground Grid',
+                group: 'Appearance'
+            },
+            showShadows: {
+                type: 'boolean',
+                label: 'Show Contact Shadows',
+                group: 'Appearance'
+            },
+            cameraFov: {
+                type: 'number',
+                label: 'Camera FOV',
+                group: 'Camera',
+                min: 20,
+                max: 100,
+                step: 5
+            },
+            theme: {
+                type: 'select',
+                label: 'Theme Override',
+                group: 'Appearance',
+                options: THEME_OVERRIDES,
+                optionLabels: THEME_OPTION_LABELS
+            }
+        },
+        description: 'Interactive 3D model viewer with orbit controls, multiple lighting presets, and auto-rotation'
     },
 };
 const DEFAULT_COMPONENT = Object.keys(COMPONENT_METADATA)[0];

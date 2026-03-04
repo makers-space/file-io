@@ -99,15 +99,32 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
+// Deduplicate concurrent token refresh attempts.
+// If multiple requests get a 401 at the same time only one /refresh-token
+// call is made; all others wait for that same promise to resolve.
+let _refreshPromise = null;
+
+const attemptTokenRefresh = () => {
+    if (!_refreshPromise) {
+        _refreshPromise = axios
+            .post(`${API_BASE_URL}/auth/refresh-token`, {}, {
+                withCredentials: true,
+                timeout: 10000
+            })
+            .finally(() => { _refreshPromise = null; });
+    }
+    return _refreshPromise;
+};
+
 // Add token refresh interceptor
 api.interceptors.response.use(
     (response) => response.data,
     async (error) => {
         const originalRequest = error.config;
-        
+
         // Handle CSRF token errors - refresh token and retry
-        if (error.response?.status === 403 && 
-            error.response?.data?.message?.includes('CSRF') && 
+        if (error.response?.status === 403 &&
+            error.response?.data?.message?.includes('CSRF') &&
             !originalRequest._csrfRetry) {
             originalRequest._csrfRetry = true;
             await fetchCsrfToken();
@@ -117,26 +134,25 @@ api.interceptors.response.use(
             }
             return api(originalRequest);
         }
-        
+
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
-            
+
             try {
-                // Attempt to refresh token
-                await axios.post(`${API_BASE_URL}/auth/refresh-token`, {}, {
-                    withCredentials: true,
-                    timeout: 10000
-                });
-                
+                // All concurrent 401s share one refresh call instead of each
+                // firing independently, which would trigger reuse-detection on
+                // the second call and wipe the cookies.
+                await attemptTokenRefresh();
+
                 // Retry original request
                 return api(originalRequest);
             } catch (refreshError) {
-                // Refresh failed, dispatch auth failure
+                // Refresh failed - clear any stale UI state
                 window.dispatchEvent(new CustomEvent('authFailure'));
                 throw refreshError;
             }
         }
-        
+
         throw error;
     }
 );

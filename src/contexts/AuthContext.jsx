@@ -33,6 +33,14 @@ export const AuthProvider = ({ children }) => {
         initAuth();
     }, []);
 
+    // Clear user state when the refresh interceptor gives up
+    // (e.g. refresh token expired or all retries exhausted)
+    useEffect(() => {
+        const handleAuthFailure = () => setUser(null);
+        window.addEventListener('authFailure', handleAuthFailure);
+        return () => window.removeEventListener('authFailure', handleAuthFailure);
+    }, []);
+
     // Simple login
     const login = async (credentials) => {
         setIsLoading(true);

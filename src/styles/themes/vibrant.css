@@ -79,6 +79,23 @@
   --font-weight-extra-bold: 800;
   --font-weight-black: 900;    
   
+  /* Code Editor Colors - derived from vibrant palette */
+  --code-background:      #f5973a;
+  --code-foreground:      #0a2e3a;
+  --code-gutter:          #f2822c;
+  --code-line-highlight:  #e07820;
+  --code-selection:       #a0522d;
+  --code-cursor:          #175178;
+  --code-line-number:     #7a5020;
+  --code-keyword:         #1a4a70;
+  --code-string:          #6b0010;
+  --code-number:          #b02020;
+  --code-comment:         #7a6040;
+  --code-type:            #175178;
+  --code-function:        #2176ae;
+  --code-variable:        #0a2e3a;
+  --code-operator:        #d12b1f;
+
   /* Border Radius System - Vibrant theme uses playful rounded corners */
   --border-radius: 1rem;           /* 16px */
   --card-radius: 1.5rem;           /* 24px */

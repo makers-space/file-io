@@ -220,3 +220,85 @@ body {
 .theme-override-wrapper {
   max-width: 100%;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   @media print — App chrome & layout
+   Editor-specific print rules live at the bottom of Editor.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media print {
+
+    @page { margin: 1in; }
+
+    *,
+    *::before,
+    *::after {
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    html, body, #root {
+        height: auto !important;
+        overflow: visible !important;
+        background: #fff !important;
+        color: #000 !important;
+    }
+
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        /* Do NOT override font-size / line-height — preserve document text sizes */
+    }
+
+    /* Hide all app chrome */
+    .navigation-fab,
+    .notification-display,
+    .fab-container,
+    .fab-snap-preview,
+    .genie-container,
+    .page-header,
+    .file-header-card,
+    .file-metadata-bar,
+    .version-header-card,
+    .version-footer-card {
+        display: none !important;
+    }
+
+    .page, .themed-page {
+        min-height: auto !important;
+        height: auto !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        display: block !important;
+    }
+
+    .container, .themed-container {
+        min-height: auto !important;
+        height: auto !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    .card, .themed-card {
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+        overflow: visible !important;
+    }
+
+    /* Typography */
+    h1, h2, h3, h4, h5, h6 { color: #000 !important; page-break-after: avoid; }
+    p, li, td, th, blockquote { color: #000 !important; }
+    a { color: #000 !important; text-decoration: underline !important; }
+    img { max-width: 100% !important; page-break-inside: avoid; }
+
+    table { border-collapse: collapse !important; }
+    th, td { border: 1px solid #666 !important; padding: 4pt 6pt !important; color: #000 !important; }
+    th { background: #eee !important; }
+
+    pre, blockquote, table, figure, .docx-image-wrapper { page-break-inside: avoid; }
+}

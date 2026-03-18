@@ -19,7 +19,8 @@ import {
   Image,
   Video,
   Audio,
-  Model3D
+  Model3D,
+  PdfViewer
 } from '../components/Components';
 import { ShareForm } from '../components/Explorer';
 
@@ -50,7 +51,6 @@ const useYjsDocument = (file) => {
         const initialContent = connection.ytext.toString();
         setContent(initialContent);
 
-        // Listen to provider status events
         if (connection.provider) {
           connection.provider.on('status', (event) => {
             if (mounted) {
@@ -74,7 +74,6 @@ const useYjsDocument = (file) => {
         connection.ytext.observe(observer);
         connection.observer = observer;
 
-        // Set initial status as connected after setup
         if (mounted) {
           setConnectionStatus('connected');
         }
@@ -113,24 +112,28 @@ const useYjsDocument = (file) => {
       showError('No collaborative connection available. Please refresh the page.');
       return;
     }
-    setContent(newContent);
+    // Do NOT call setContent(newContent) here.
+    // The Yjs observer already filters 'editor-change' transactions so it
+    // won't fire for our own edits.  Calling setContent() would update the
+    // `content` prop fed into the Editor, which would then call
+    // editor.commands.setContent() again — resetting cursor position after
+    // every debounced keystroke and re-introducing the phantom blank paragraph.
+    // The editor itself is the source of truth while mounted; remote changes
+    // arrive via the Yjs observer (origin !== 'editor-change') as intended.
   }, [showError]);
 
   return { content, updateContent, connectionStatus };
 };
 
-/**
- * Enhanced form components with Input validation
- */
-const CreateFileForm = ({ filePath: initialPath, fileTree, onSuccess, onCancel }) => {
-  const [fileName, setFileName] = useState('');
+const CreateItemForm = ({ type, filePath: initialPath, fileTree, onSuccess, onCancel }) => {
+  const isDir = type === 'directory';
+  const [name, setName] = useState('');
   const [content, setContent] = useState('');
   const [description, setDescription] = useState('');
   const [targetPath, setTargetPath] = useState(initialPath || '/');
   const [validationErrors, setValidationErrors] = useState({});
   const { error: showError, success: showSuccess } = useNotification();
 
-  // Validation callback
   const handleValidation = (validation, inputName) => {
     setValidationErrors(prev => ({
       ...prev,
@@ -138,48 +141,48 @@ const CreateFileForm = ({ filePath: initialPath, fileTree, onSuccess, onCancel }
     }));
   };
 
-  // Calculate full path automatically
   const fullPath = useMemo(() => {
-    if (!fileName.trim()) return '';
-    const safePath = targetPath || '/';
-    return `${safePath}/${fileName}`.replace(/\/+/g, '/');
-  }, [targetPath, fileName]);
+    if (!name.trim()) return '';
+    return `${targetPath || '/'}/${name}`.replace(/\/+/g, '/');
+  }, [targetPath, name]);
 
   const handleSubmit = async () => {
-    if (!fileName.trim()) {
-      showError('File name is required');
+    if (!name.trim()) {
+      showError(`${isDir ? 'Directory' : 'File'} name is required`);
       return;
     }
-    
-    // Check for validation errors
-    const hasErrors = Object.values(validationErrors).some(error => error !== null);
-    if (hasErrors) {
+    if (Object.values(validationErrors).some(e => e !== null)) {
       showError('Please fix validation errors before submitting');
       return;
     }
-    
     try {
-      await fileService.createFile(fullPath, content, description || 'File created via FilesPage');
-      showSuccess(`File created: ${fileName}`);
-      onSuccess?.(fullPath, 'file');
+      if (isDir) {
+        await fileService.createDirectory(fullPath, description || 'Directory created via FilesPage');
+        showSuccess(`Directory created: ${name}`);
+        onSuccess?.(fullPath, 'directory');
+      } else {
+        await fileService.createFile(fullPath, content, description || 'File created via FilesPage');
+        showSuccess(`File created: ${name}`);
+        onSuccess?.(fullPath, 'file');
+      }
     } catch (err) {
-      showError(`Failed to create file: ${err.message}`);
+      showError(`Failed to create ${isDir ? 'directory' : 'file'}: ${err.message}`);
     }
   };
 
   return (
     <Container layout="flex-column" padding="none" width="400px">
       <Input
-        label="File Name *"
-        value={fileName}
-        onChange={(e) => setFileName(e.target.value)}
-        placeholder="Enter file name"
+        label={isDir ? 'Directory Name *' : 'File Name *'}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={isDir ? 'new-folder' : 'Enter file name'}
         required
         minLength={1}
         onValidation={handleValidation}
         width="100%"
       />
-      
+
       <Container layout="flex-column" gap="small" padding="none" width="100%">
         <Typography variant="label">Target Directory</Typography>
         <Explorer
@@ -194,148 +197,39 @@ const CreateFileForm = ({ filePath: initialPath, fileTree, onSuccess, onCancel }
           width="100%"
         />
       </Container>
-      
-      <Input
-        label="Content"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Enter file content (optional)"
-        multiline
-        width="100%"
-      />
-      
-      <Input
-        label="Description"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Enter description (optional)"
-        maxLength={200}
-        onValidation={handleValidation}
-        width="100%"
-      />
-      
-      <Container layout="flex" gap="sm" justify="end" width="100%">
-        <Button 
-          color="secondary" 
-          onClick={onCancel}
-          width="80px"
-        >
-          Cancel
-        </Button>
-        <Button 
-          color="primary" 
-          onClick={handleSubmit}
-          disabled={!fileName.trim()}
-          width="120px"
-        >
-          Create File
-        </Button>
-      </Container>
 
-      <Typography size="xs" color="success" margin="none" padding="none">
-        Destination: {fullPath}
-      </Typography>
-    </Container>
-  );
-};
-
-const CreateDirectoryForm = ({ filePath: initialPath, fileTree, onSuccess, onCancel }) => {
-  const [dirName, setDirName] = useState('');
-  const [description, setDescription] = useState('');
-  const [targetPath, setTargetPath] = useState(initialPath || '/');
-  const [validationErrors, setValidationErrors] = useState({});
-  const { error: showError, success: showSuccess } = useNotification();
-
-  // Validation callback
-  const handleValidation = (validation, inputName) => {
-    setValidationErrors(prev => ({
-      ...prev,
-      [inputName]: validation.isValid ? null : validation.message
-    }));
-  };
-
-  // Calculate full path automatically
-  const fullPath = useMemo(() => {
-    if (!dirName.trim()) return '';
-    const safePath = targetPath || '/';
-    return `${safePath}/${dirName}`.replace(/\/+/g, '/');
-  }, [targetPath, dirName]);
-
-  const handleSubmit = async () => {
-    if (!dirName.trim()) {
-      showError('Directory name is required');
-      return;
-    }
-    
-    // Check for validation errors
-    const hasErrors = Object.values(validationErrors).some(error => error !== null);
-    if (hasErrors) {
-      showError('Please fix validation errors before submitting');
-      return;
-    }
-    
-    try {
-      await fileService.createDirectory(fullPath, description || 'Directory created via FilesPage');
-      showSuccess(`Directory created: ${dirName}`);
-      onSuccess?.(fullPath, 'directory');
-    } catch (err) {
-      showError(`Failed to create directory: ${err.message}`);
-    }
-  };
-
-  return (
-    <Container layout="flex-column" padding="none" width="400px">
-      <Input
-        label="Directory Name *"
-        placeholder="new-folder"
-        value={dirName}
-        onChange={(e) => setDirName(e.target.value)}
-        required
-        minLength={1}
-        onValidation={handleValidation}
-        width="100%"
-      />
-      
-      <Container layout="flex-column" gap="small" padding="none" width="100%">
-        <Typography variant="label">Target Directory</Typography>
-        <Explorer
-          fileTree={fileTree}
-          currentPath={targetPath || '/'}
-          onPathSelect={(path) => setTargetPath(path || '/')}
-          includeFiles={false}
-          showSelector={true}
-          buttonLabel="Select Directory"
-          hideTitle={true}
-          showContextActions={false}
+      {!isDir && (
+        <Input
+          label="Content"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Enter file content (optional)"
+          multiline
           width="100%"
         />
-      </Container>
-      
+      )}
+
       <Input
         label="Description"
-        placeholder="Folder description"
+        placeholder={isDir ? 'Folder description' : 'Enter description (optional)'}
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         maxLength={200}
         onValidation={handleValidation}
         width="100%"
       />
-      
+
       <Container layout="flex" gap="sm" justify="end" width="100%">
-        <Button 
-          color="secondary" 
-          onClick={onCancel}
-          width="80px"
-        >
+        <Button color="secondary" onClick={onCancel} width="80px">
           Cancel
         </Button>
-        <Button 
-          color="primary" 
+        <Button
+          color="primary"
           onClick={handleSubmit}
-          disabled={!dirName.trim()}
-          width="140px"
+          disabled={!name.trim()}
+          width={isDir ? '140px' : '120px'}
         >
-          Create Directory
+          {isDir ? 'Create Directory' : 'Create File'}
         </Button>
       </Container>
 
@@ -364,8 +258,6 @@ const UploadForm = ({ targetPath, onSuccess, onCancel }) => {
     
     try {
       const safePath = targetPath || '/';
-      
-      // Upload all files and get the response
       const response = await fileService.uploadFiles(
         files, 
         safePath, 
@@ -374,8 +266,6 @@ const UploadForm = ({ targetPath, onSuccess, onCancel }) => {
         },
         overwrite
       );
-      
-      // Extract file paths from the server response
       const uploadedPaths = response.files.map(file => file.filePath);
       
       showSuccess(`Successfully uploaded ${uploadedPaths.length} file(s)`);
@@ -449,16 +339,12 @@ const UploadForm = ({ targetPath, onSuccess, onCancel }) => {
   );
 };
 
-/**
- * Version Management component for genie
- */
 const VersionManagement = ({ file, onSuccess }) => {
   const [activeAction, setActiveAction] = useState(null);
   const [versions, setVersions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const { success: showSuccess, error: showError } = useNotification();
 
-  // Load versions when component mounts
   useEffect(() => {
     if (file?.filePath) {
       loadVersions();
@@ -485,13 +371,8 @@ const VersionManagement = ({ file, onSuccess }) => {
     try {
       await fileService.publishFileVersion(file.filePath, message);
       showSuccess('Version published successfully');
-      
-      // Reload versions list
       await loadVersions();
       setActiveAction(null);
-      
-      // Notify parent to refresh all version-dependent data
-      // This will update diff content with the new latest version
       onSuccess({ refreshVersionData: true });
     } catch (error) {
       showError(`Failed to publish version: ${error.message}`);
@@ -523,12 +404,7 @@ const VersionManagement = ({ file, onSuccess }) => {
     try {
       await fileService.deleteFileVersion(file.filePath, versionNumber);
       showSuccess(`Version ${versionNumber} deleted successfully`);
-      
-      // Reload versions list
       await loadVersions();
-      
-      // Notify parent to refresh all version-dependent data
-      // This will update diff content, file metadata, and version counts
       onSuccess({ refreshVersionData: true });
     } catch (error) {
       showError(`Failed to delete version: ${error.message}`);
@@ -613,9 +489,6 @@ const VersionManagement = ({ file, onSuccess }) => {
   );
 };
 
-/**
- * Publish Version Form component
- */
 const PublishVersionForm = ({ onPublish, onCancel }) => {
   const [message, setMessage] = useState('');
 
@@ -651,16 +524,12 @@ const PublishVersionForm = ({ onPublish, onCancel }) => {
   );
 };
 
-/**
- * File Sharing component for genie
- */
 const FileSharing = ({ file, onSuccess }) => {
   const [collaborators, setCollaborators] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeAction, setActiveAction] = useState(null);
   const { success: showSuccess, error: showError } = useNotification();
 
-  // Load collaborators when component mounts
   useEffect(() => {
     if (file?.filePath) {
       loadCollaborators();
@@ -675,14 +544,11 @@ const FileSharing = ({ file, onSuccess }) => {
       const response = await fileService.getFileSharing(file.filePath);
       const permissions = response.sharing?.permissions || {};
       
-      // Map users with their permission level
       const readUsers = (permissions.read || []).map(user => ({ ...user, permission: 'read' }));
       const writeUsers = (permissions.write || []).map(user => ({ ...user, permission: 'write' }));
-      
-      // Combine users with write permission taking precedence
       const userMap = new Map();
       readUsers.forEach(user => userMap.set(user._id, user));
-      writeUsers.forEach(user => userMap.set(user._id, user)); // Overwrites read with write
+      writeUsers.forEach(user => userMap.set(user._id, user));
       
       setCollaborators(Array.from(userMap.values()));
     } catch (error) {
@@ -794,9 +660,6 @@ const FileSharing = ({ file, onSuccess }) => {
   );
 };
 
-/**
- * Quick Actions component for FAB genie
- */
 const QuickActions = ({ targetPath, fileTree, onActionComplete }) => {
   const [activeAction, setActiveAction] = useState(null);
 
@@ -855,9 +718,9 @@ const QuickActions = ({ targetPath, fileTree, onActionComplete }) => {
 
   switch (activeAction) {
     case 'create-file':
-      return <CreateFileForm {...actionProps} />;
+      return <CreateItemForm type="file" {...actionProps} />;
     case 'create-directory':
-      return <CreateDirectoryForm {...actionProps} />;
+      return <CreateItemForm type="directory" {...actionProps} />;
     case 'upload':
       return <UploadForm targetPath={targetPath} onSuccess={handleSuccess} onCancel={handleClose} />;
     default:
@@ -882,13 +745,10 @@ const FileMetadata = ({ file, isReadOnly, onDownload, onVersionLoaded, onSave, i
 
       const responses = await Promise.allSettled(requests);
 
-      // Extract collaborators from sharing response
       const sharingData = responses[2]?.status === 'fulfilled' ? responses[2].value : {};
       const permissions = sharingData.sharing?.permissions || {};
       const readUsers = permissions.read || [];
       const writeUsers = permissions.write || [];
-      
-      // Combine and deduplicate users
       const userMap = new Map();
       [...readUsers, ...writeUsers].forEach(user => userMap.set(user._id, user));
 
@@ -934,7 +794,7 @@ const FileMetadata = ({ file, isReadOnly, onDownload, onVersionLoaded, onSave, i
   const canManageVersions = file?.type === 'text' && !isReadOnly;
 
   return (
-    <Card padding="xs" width="100%" backgroundColor="surface" margin="none">
+    <Card className="file-metadata-bar" padding="xs" width="100%" backgroundColor="surface" margin="none">
       <Container layout="flex" align="center" justify="between" width="100%" padding="none">
         <Container layout="flex" align="center" gap="sm" padding="none">
           {file.type === 'text' && (
@@ -1009,12 +869,10 @@ const FileMetadata = ({ file, isReadOnly, onDownload, onVersionLoaded, onSave, i
                     file={file}
                     onSuccess={(versionData) => {
                       if (versionData?.content) {
-                        // Loading a specific version for viewing
                         onVersionLoaded(versionData);
                       } else if (versionData?.refreshVersionData) {
-                        // Refresh after publish/delete operations
-                        onVersionLoaded(versionData); // This will refresh diff content
-                        loadMetadata(); // This will refresh version counts
+                        onVersionLoaded(versionData);
+                        loadMetadata();
                       } else {
                         loadMetadata();
                       }
@@ -1053,7 +911,6 @@ const FileMetadata = ({ file, isReadOnly, onDownload, onVersionLoaded, onSave, i
   );
 };
 
-// Helper function for file size formatting
 const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -1062,7 +919,6 @@ const formatFileSize = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-// Helper function for date formatting
 const formatDate = (dateString) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -1071,7 +927,6 @@ const formatDate = (dateString) => {
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   
-  // Show "just a moment" for anything less than 5 minutes
   if (minutes < 5) {
     return 'just a moment ago';
   }
@@ -1090,37 +945,19 @@ const formatDate = (dateString) => {
   }
 };
 
-/**
- * FilesPage - Enhanced file management interface
- * 
- * Features:
- * - Left Explorer panel (30% width, no container/header)
- * - Right content area (70% width) with editor and metadata
- * - FloatingActionButton with enhanced forms
- * - Special image handling with preview
- * - Enhanced Input validation
- * - Resizable panels
- */
 export const FilesPage = () => {
-  // Get current user for permission checks
   const { user } = useAuth();
-  
-  // API base URL for constructing media URLs
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-  
-  // Core state
   const [fileTree, setFileTree] = useState({});
   const [activeFile, setActiveFile] = useState({
     file: null,
-    content: '', // For images or binary file info
+    content: '',
     isLoading: false,
     isReadOnly: false, // Simple boolean for read-only state
   });
   
-  // Cleanup blob URLs when activeFile changes
   useEffect(() => {
     return () => {
-      // Cleanup blob URLs when component unmounts or activeFile changes
       if (activeFile?.file?._isBlobUrl && activeFile?.file?.modelSrc) {
         URL.revokeObjectURL(activeFile.file.modelSrc);
       }
@@ -1137,43 +974,43 @@ export const FilesPage = () => {
   
   const { content: fileContent, connectionStatus, updateContent } = useYjsDocument(activeFile.file);
   
-  // Refs
+  // Guard: clear raw binary DOCX content ("PK...") that was mistakenly written into Yjs.
+  const docxGuardedRef = useRef(null);
+  useEffect(() => {
+    const filePath = activeFile.file?.filePath;
+    if (docxGuardedRef.current !== filePath) docxGuardedRef.current = null;
+    if (!filePath?.match(/\.docx?$/i) || connectionStatus !== 'connected' || docxGuardedRef.current) return;
+    docxGuardedRef.current = filePath;
+    if (fileContent?.startsWith('PK')) {
+      console.warn('[FilesPage] Raw binary DOCX in Yjs — clearing. Re-upload the file.', filePath);
+      updateContent('');
+    }
+  }, [activeFile.file?.filePath, connectionStatus, fileContent, updateContent]);
+  
   const editorRef = useRef(null);
   const imageRef = useRef(null);
+  const pdfRef = useRef(null);
   const [isSavingImage, setIsSavingImage] = useState(false);
   
-  // Hooks
   const { success: showSuccess, error: showError, warning: showWarning, info: showInfo } = useNotification();
   
-  // Centralized state clearing function
   const clearFileSelection = useCallback(() => {
     setActiveFile({ file: null, content: '', isLoading: false, isReadOnly: false });
   }, []);
 
-  // Helper function to check if file is read-only based on metadata
   const checkIfReadOnly = useCallback(async (filePath) => {
     try {
       const metadata = await fileService.getMetadata(filePath);
-      
-      // If no user context or metadata, default to read-only for safety
       if (!user || !metadata) {
         return true;
       }
-
-      // Convert ObjectIds to strings for comparison
       const userId = String(user._id || user.id);
       const ownerId = String(metadata.owner);
-      
-      // Owner always has write access
       if (ownerId === userId) {
         return false;
       }
-      
-      // Check if user has write permission
       const writeUsers = metadata.permissions?.write || [];
       const hasWriteAccess = writeUsers.some(writeUserId => String(writeUserId) === userId);
-      
-      // Read-only if user doesn't have write access
       return !hasWriteAccess;
     } catch (error) {
       console.warn('Failed to check file permissions:', error);
@@ -1181,18 +1018,13 @@ export const FilesPage = () => {
     }
   }, [user]);
 
-  // Load file tree
   const loadFileTree = useCallback(async (showLoadingState = true) => {
     try {
       if (showLoadingState) setIsLoading(true);
-      
       const response = await fileService.getDirectoryTree('/', { format: 'object' });
-      
       const treeData = response?.tree || response?.data?.tree || {};
       setFileTree(treeData);
-      
     } catch (error) {
-      // Show user-friendly error notification
       showError(`Failed to load file tree: ${error.message || 'Unknown error'}`);
       if (showLoadingState) {
         showWarning('Unable to load files. Please try refreshing the page.');
@@ -1202,7 +1034,6 @@ export const FilesPage = () => {
     }
   }, [showError, showWarning]);
 
-  // Load file content with special image handling
   const loadFileContent = useCallback(async (file) => {
     if (!file?.filePath) {
       showError('Invalid file path');
@@ -1217,8 +1048,8 @@ export const FilesPage = () => {
       const isVideo = filePath.match(/\.(mp4|webm|avi|mov|wmv|flv)$/i);
       const isAudio = filePath.match(/\.(mp3|wav)$/i);
       const is3DModel = filePath.match(/\.(obj|gltf|glb|fbx|stl|dae|3ds|blend|ply|3mf|usdz|usda|usdc|vrm|vox|c4d)$/i);
+      const isPdf = filePath.match(/\.pdf$/i);
       
-      // For audio/video files, fetch full metadata to get mediaMetadata field
       let fileWithMetadata = file;
       if (isAudio || isVideo || is3DModel) {
         try {
@@ -1229,11 +1060,9 @@ export const FilesPage = () => {
         }
       }
       
-      // Check if file should be read-only
       const isReadOnlyForUser = await checkIfReadOnly(filePath);
 
       if (isImage) {
-        // Get image blob URL for Image component
         const imageBlob = await fileService.downloadFile(filePath);
         const imageSrc = URL.createObjectURL(imageBlob);
         
@@ -1245,30 +1074,25 @@ export const FilesPage = () => {
         });
         setLatestVersionContent('');
       } else if (isVideo) {
-        // Get streaming URL for Video component (uses HTTP range requests)
         const videoSrc = fileService.getStreamingUrl(filePath);
         
         setActiveFile({ 
           file: { ...fileWithMetadata, isVideo: true, type: 'video', videoSrc }, 
           content: '', 
           isLoading: false, 
-          isReadOnly: true // Videos are always read-only
+          isReadOnly: true
         });
         setLatestVersionContent('');
       } else if (isAudio) {
-        // Get streaming URL for Audio component (uses HTTP range requests)
         const audioSrc = fileService.getStreamingUrl(filePath);
-        
         setActiveFile({ 
           file: { ...fileWithMetadata, isAudio: true, type: 'audio', audioSrc }, 
           content: '', 
           isLoading: false, 
-          isReadOnly: true // Audio files are always read-only
+          isReadOnly: true
         });
         setLatestVersionContent('');
       } else if (is3DModel) {
-        // For 3D models, download file with credentials and create blob URL
-        // THREE.js loaders don't support credentials, so we fetch the blob first
         try {
           const blob = await fileService.downloadFile(filePath);
           const blobUrl = URL.createObjectURL(blob);
@@ -1278,12 +1102,26 @@ export const FilesPage = () => {
             file: { ...fileWithMetadata, is3DModel: true, type: '3d-model', modelSrc: blobUrl, modelFormat: modelExt, _isBlobUrl: true }, 
             content: '', 
             isLoading: false, 
-            isReadOnly: true // 3D models are always read-only
+            isReadOnly: true
           });
           setLatestVersionContent('');
         } catch (error) {
           console.error('Failed to load 3D model:', error);
-          showNotification('Failed to load 3D model', 'error');
+          showError(`Failed to load 3D model: ${error.message}`);
+        }
+      } else if (isPdf) {
+        try {
+          const pdfBlob = await fileService.downloadFile(filePath);
+          setActiveFile({
+            file: { ...fileWithMetadata, isPdf: true, type: 'pdf', pdfBlob },
+            content: '',
+            isLoading: false,
+            isReadOnly: isReadOnlyForUser
+          });
+          setLatestVersionContent('');
+        } catch (error) {
+          console.error('Failed to load PDF:', error);
+          showError(`Failed to load PDF: ${error.message}`);
         }
       } else if (file.type === 'text') {
         setActiveFile({ file: { ...file, isImage: false, type: 'text' }, content: '', isLoading: false, isReadOnly: isReadOnlyForUser });
@@ -1302,7 +1140,6 @@ export const FilesPage = () => {
             showWarning('Unable to load file content in read-only mode.');
           }
         }
-        
         // Load latest published version for diff comparison
         try {
           const versionsResponse = await fileService.getFileVersions(filePath);
@@ -1329,7 +1166,6 @@ export const FilesPage = () => {
     }
   }, [showError, checkIfReadOnly]);
 
-  // Refresh latest version content for diff comparison (called after version operations)
   const refreshLatestVersionContent = useCallback(async () => {
     if (!activeFile.file?.filePath || activeFile.file.type !== 'text') {
       setLatestVersionContent('');
@@ -1353,9 +1189,7 @@ export const FilesPage = () => {
     }
   }, [activeFile.file]);
   
-  // Real-time notifications via file service
   useEffect(() => {
-    // Set up global notification display function
     window.showNotification = (message, type = 'info') => {
       switch (type) {
         case 'info': showInfo(message); break;
@@ -1371,20 +1205,16 @@ export const FilesPage = () => {
         switch (changeType) {
           case 'shared':
           case 'unshared':
-            // Refresh file tree to show updated sharing status
             loadFileTree(false);
             break;
           case 'created':
-            // New file was created (e.g., via copy), refresh file tree
             loadFileTree(false);
             break;
           case 'deleted':
-            // File was deleted, clear selection and refresh tree
             clearFileSelection();
             loadFileTree(false);
             break;
           case 'renamed':
-            // File was renamed, update active file if needed
             if (data.newFilePath) {
               setActiveFile(prev => ({
                 ...prev,
@@ -1394,7 +1224,6 @@ export const FilesPage = () => {
             loadFileTree(false);
             break;
           case 'moved':
-            // File was moved to a different directory
             if (activeFile.file?.filePath === data.oldFilePath) {
               // If the moved file is currently open, update the active file path
               setActiveFile(prev => ({
@@ -1405,7 +1234,6 @@ export const FilesPage = () => {
             loadFileTree(false);
             break;
           case 'version_published':
-            // Refresh latest version content for diff view
             refreshLatestVersionContent();
             break;
         }
@@ -1413,14 +1241,12 @@ export const FilesPage = () => {
       { showToast: true }
     );
 
-    // Cleanup notifications when component unmounts
     return () => {
       cleanup();
       delete window.showNotification;
     };
   }, [loadFileTree, clearFileSelection, refreshLatestVersionContent]);
   
-  // Handle version loading - completely separate from Yjs
   const handleVersionLoaded = useCallback((versionData) => {
     // Handle refresh signal from version operations (publish/delete)
     if (versionData?.refreshVersionData) {
@@ -1438,7 +1264,6 @@ export const FilesPage = () => {
       return;
     }
     
-    // Set version view state (separate from active file)
     setVersionView({
       originalFile: activeFile.file,
       content: versionData.content,
@@ -1450,7 +1275,6 @@ export const FilesPage = () => {
     showSuccess(`Viewing version ${versionData.versionNumber} (read-only)`);
   }, [activeFile.file, showError, showSuccess, refreshLatestVersionContent]);
 
-  // Handle file download
   const handleFileDownload = useCallback(async () => {
     if (!activeFile.file?.filePath) return;
     
@@ -1467,7 +1291,6 @@ export const FilesPage = () => {
     }
   }, [activeFile.file, showError]);
 
-  // Handle image save - convert blob to base64 and save via file service
   const handleImageSave = useCallback(async ({ blob }) => {
     if (!activeFile.file?.filePath || !blob) {
       showError('Failed to save image');
@@ -1476,27 +1299,21 @@ export const FilesPage = () => {
     
     setIsSavingImage(true);
     try {
-      // Convert blob to base64
       const reader = new FileReader();
       reader.readAsDataURL(blob);
       
       await new Promise((resolve, reject) => {
         reader.onloadend = async () => {
           try {
-            const base64Data = reader.result.split(',')[1]; // Remove data:image/png;base64, prefix
+            const base64Data = reader.result.split(',')[1];
             
             if (!base64Data) {
               throw new Error('Failed to convert image to base64');
             }
             
-            // Update file content via API
             await fileService.updateContent(activeFile.file.filePath, base64Data);
-            
             showSuccess('Image saved successfully');
-            
-            // Reload the image to show updated version
             await loadFileContent(activeFile.file);
-            
             resolve();
           } catch (error) {
             reject(error);
@@ -1511,12 +1328,10 @@ export const FilesPage = () => {
     }
   }, [activeFile.file, showSuccess, showError, loadFileContent]);
 
-  // Handle content changes (now uses Yjs)
   const handleContentChange = useCallback((newContent) => {
     updateContent(newContent);
   }, [updateContent]);
 
-  // Handle file selection from Explorer
   const handleFileSelect = useCallback(async (filePath, node = null) => {
     setVersionView(null);
     setLatestVersionContent('');
@@ -1528,15 +1343,12 @@ export const FilesPage = () => {
 
     const path = fileService.normalizePath(filePath);
     
-    // If node is provided (normal selection), use it directly
     if (node) {
-      // Check if it's a directory
       if (node.type === 'directory') {
         setSelectedDirectory(path);
         return;
       }
 
-      // It's a file - load it
       const fileObject = {
         filePath: path,
         name: fileService.getDisplayName(node) || path.split('/').pop(),
@@ -1547,7 +1359,6 @@ export const FilesPage = () => {
       return;
     }
 
-    // If no node provided (after file operations), try to load file directly
     try {
       const detectedType = fileService.getFileType(path);
       const fileName = path.split('/').pop() || '';
@@ -1564,31 +1375,20 @@ export const FilesPage = () => {
     }
   }, [loadFileContent, clearFileSelection, showError]);
 
-  // Handle file actions from Explorer (main TreeView) and FAB
-  const handleFileAction = useCallback(async (action, resultPath, type, operationData) => {
-    // Always refresh the tree first
+  const handleFileAction = useCallback(async (action, resultPath, type) => {
     await loadFileTree(false);
-    
-    // For file operations that result in a file, select the final file
     if (resultPath && type === 'file' && action !== 'delete') {
       await handleFileSelect(resultPath);
-      // Refresh version content for diff if this is a text file
-      if (type === 'text') {
-        await refreshLatestVersionContent();
-      }
     } else {
-      // For delete or other operations, clear selection
       clearFileSelection();
     }
-  }, [loadFileTree, handleFileSelect, clearFileSelection, refreshLatestVersionContent]);
+  }, [loadFileTree, handleFileSelect, clearFileSelection]);
 
-  // Handle quick action completion from FAB
   const handleQuickActionComplete = useCallback(async (path, type) => {
     await handleFileAction('create', path, type);
     showInfo('Action completed successfully');
   }, [handleFileAction, showInfo]);
 
-  // Initialize file tree on mount
   useEffect(() => {
     loadFileTree(true);
   }, [loadFileTree]);
@@ -1616,12 +1416,11 @@ export const FilesPage = () => {
   }, [versionView, showError]);
 
   const renderRightContent = () => {
-    // If viewing a version, render version view (no Yjs)
     if (versionView) {
       return (
         <Container layout="flex-column" minHeight="100vh" width="100%" gap="none">
-          {/* Version header */}
           <Card
+            className="version-header-card"
             layout="flex" 
             align="center" 
             justify="between" 
@@ -1653,7 +1452,6 @@ export const FilesPage = () => {
             </Container>
           </Card>
 
-          {/* Version Editor - completely separate from Yjs */}
           <Container layout="flex" align="center" justify="center" minHeight="80vh" width="100%" padding="sm">
             <Editor
               key={`version-editor-${versionView.versionNumber}`}
@@ -1666,8 +1464,7 @@ export const FilesPage = () => {
             />
           </Container>
 
-          {/* Version Metadata Footer */}
-          <Card padding="xs" width="100%" backgroundColor="surface" margin="none">
+          <Card className="version-footer-card" padding="xs" width="100%" backgroundColor="surface" margin="none">
             <Container layout="flex" align="center" justify="between" width="100%" padding="none">
               <Container layout="flex" align="center" gap="sm" padding="none">
                 <Icon name="FiInfo" size="xs" color="info" />
@@ -1722,8 +1519,8 @@ export const FilesPage = () => {
 
     return (
       <Container layout="flex-column" minHeight="100vh" width="100%" gap="none">
-        {/* File header */}
         <Card
+          className="file-header-card"
           layout="flex" 
           align="center" 
           justify="between" 
@@ -1732,7 +1529,6 @@ export const FilesPage = () => {
           
         >
           <Container layout="flex" align="center" gap="sm" padding="none">
-            {/* Collaboration status indicator for text files */}
             {activeFile.file.type === 'text' && !activeFile.isReadOnly && (
               <Container layout="flex" align="center" gap="xs">
                 {connectionStatus === 'connected' && (
@@ -1786,17 +1582,22 @@ export const FilesPage = () => {
                     <Typography size="xs" color="primary">3D MODEL</Typography>
                 </Container>
             )}
+            {activeFile.file.type === 'text' && activeFile.file.filePath?.match(/\.docx?$/i) && (
+                <Container layout="flex" align="center" gap="sm">
+                    <Icon name="FiFileText" size="sm" />
+                    <Typography size="xs" color="primary">DOCUMENT</Typography>
+                </Container>
+            )}
+            {activeFile.file.isPdf && (
+                <Container layout="flex" align="center" gap="sm">
+                    <Icon name="FiFileText" size="sm" />
+                    <Typography size="xs" color="primary">PDF</Typography>
+                </Container>
+            )}
             {activeFile.file.isBinary && (
                 <Container layout="flex" align="center" gap="sm">
                     <Icon name="FiFile" size="sm" />
                     <Typography size="xs">BINARY</Typography>
-                </Container>
-            )}
-            {/* Version indicator */}
-            {activeFile.file.isVersion && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="FiGitBranch" size="sm" color="info" />
-                    <Typography size="xs" color="info">Version {activeFile.file.versionNumber}</Typography>
                 </Container>
             )}
             {/* Permission indicator */}
@@ -1819,12 +1620,19 @@ export const FilesPage = () => {
           </Container>
         </Card>
 
-        {/* Editor */}
         <Container layout="flex" align="center" justify="center" minHeight="80vh" width="100%" padding="sm">
           {activeFile.file.type === 'text' ? (
             <Editor
               key={`text-editor-${activeFile.file.filePath}`}
               ref={editorRef}
+              mode={
+                activeFile.file.filePath?.match(/\.docx?$/i)
+                  ? 'document'
+                  : activeFile.file.filePath?.match(/\.(md|mdx|txt)$/i)
+                    ? 'markdown'
+                    : 'code'
+              }
+              filePath={activeFile.file.filePath}
               content={resolvedEditorContent}
               diffContent={latestVersionContent}
               onChange={handleContentChange}
@@ -1905,6 +1713,37 @@ export const FilesPage = () => {
                 );
               })()}
             </Container>
+          ) : activeFile.file.isPdf ? (
+            <PdfViewer
+              key={`pdf-viewer-${activeFile.file.filePath}`}
+              ref={pdfRef}
+              blob={activeFile.file.pdfBlob}
+              fileName={activeFile.file.name}
+              readOnly={activeFile.isReadOnly}
+              onSave={!activeFile.isReadOnly ? async (savedBlob) => {
+                try {
+                  const reader = new FileReader();
+                  reader.readAsDataURL(savedBlob);
+                  await new Promise((resolve, reject) => {
+                    reader.onloadend = async () => {
+                      try {
+                        const base64Data = reader.result.split(',')[1];
+                        await fileService.updateContent(activeFile.file.filePath, base64Data);
+                        showSuccess('PDF saved successfully');
+                        await loadFileContent(activeFile.file);
+                        resolve();
+                      } catch (err) { reject(err); }
+                    };
+                    reader.onerror = reject;
+                  });
+                } catch (err) {
+                  showError(`Failed to save PDF: ${err.message}`);
+                }
+              } : undefined}
+              onError={(msg) => showError(msg)}
+              width="100%"
+              height="80vh"
+            />
           ) : activeFile.file.is3DModel ? (
             <Model3D
               key={`model3d-viewer-${activeFile.file.filePath}`}
@@ -1934,7 +1773,7 @@ export const FilesPage = () => {
           )}
         </Container>
 
-        {/* File Metadata with Actions - positioned as separate section */}
+        {/* File Metadata */}
         <FileMetadata 
           file={activeFile.file}
           isReadOnly={activeFile.isReadOnly}
@@ -1973,7 +1812,6 @@ export const FilesPage = () => {
         {renderRightContent()}
       </Container>
 
-      {/* Explorer FAB */}
       <FloatingActionButton
         icon="FiFolder"
         position="bottom-left"
@@ -2003,7 +1841,6 @@ export const FilesPage = () => {
         aria-label="Open file explorer"
       />
 
-      {/* Quick Actions Floating Action Button */}
       <FloatingActionButton
         icon="FiPlus"
         position="bottom-right"

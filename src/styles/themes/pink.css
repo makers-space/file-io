@@ -106,12 +106,29 @@
   --progress-radius: 9999px;      /* Pill shape */
   --notification-radius: 0.5rem;  /* 8px */
 
+  /* Code Editor Colors - derived from pink palette */
+  --code-background:      #bd4f6c;
+  --code-foreground:      #fce4ec;
+  --code-gutter:          #a84461;
+  --code-line-highlight:  #a84461;
+  --code-selection:       #7a1a35;
+  --code-cursor:          #ff6b81;
+  --code-line-number:     #e899a8;
+  --code-keyword:         #ff6b81;
+  --code-string:          #a49bde;
+  --code-number:          #67b55e;
+  --code-comment:         #d48a9a;
+  --code-type:            #7663f2;
+  --code-function:        #ff6b81;
+  --code-variable:        #fce4ec;
+  --code-operator:        #cc0c49;
+
 }
 
 /* Pink Theme Code Editor Styling */
 .theme-pink .code-viewer-container {
-  background-color: var(--code-editor-bg);
-  border-color: var(--code-editor-border);
+  background-color: var(--code-background);
+  border-color: var(--border-color);
   box-shadow: var(--shadow-md);
 }
 

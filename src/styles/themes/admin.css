@@ -78,6 +78,23 @@
   --font-weight-extra-bold: 800;
   --font-weight-black: 900;
 
+  /* Code Editor Colors - derived from admin palette (dark corporate) */
+  --code-background:      #1a1a1a;
+  --code-foreground:      #96a2b0;
+  --code-gutter:          #252525;
+  --code-line-highlight:  #222222;
+  --code-selection:       #4a3d10;
+  --code-cursor:          #eec643;
+  --code-line-number:     #555f6b;
+  --code-keyword:         #eec643;
+  --code-string:          #83c5be;
+  --code-number:          #f59e0b;
+  --code-comment:         #555f6b;
+  --code-type:            #006d77;
+  --code-function:        #b8a030;
+  --code-variable:        #96a2b0;
+  --code-operator:        #f59e0b;
+
   /* Border Radius System - Small, professional radii */
   --border-radius: 4px;
   --card-radius: 4px;

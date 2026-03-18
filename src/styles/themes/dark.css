@@ -91,6 +91,23 @@
     --font-weight-extra-bold: 800;
     --font-weight-black: 900;
 
+    /* Code Editor Colors - derived from dark palette */
+    --code-background:      #1f2937;
+    --code-foreground:      #c9ddf8;
+    --code-gutter:          #2d3748;
+    --code-line-highlight:  #2d3748;
+    --code-selection:       #264f78;
+    --code-cursor:          #4d9bf9;
+    --code-line-number:     #4a5568;
+    --code-keyword:         #4d9bf9;
+    --code-string:          #e2adf2;
+    --code-number:          #ffd400;
+    --code-comment:         #6b7f9e;
+    --code-type:            #ff8c5a;
+    --code-function:        #79c0ff;
+    --code-variable:        #c9ddf8;
+    --code-operator:        #60a5fa;
+
     /* Border Radius System - Dark theme uses rounded corners */
     --border-radius: 0.5rem; /* 8px */
     --card-radius: 0.75rem; /* 12px */

@@ -76,6 +76,23 @@
   --font-weight-extra-bold: 800;
   --font-weight-black: 900;
 
+  /* Code Editor Colors - derived from minimal palette (monochromatic grays) */
+  --code-background:      #f9fafb;
+  --code-foreground:      #111827;
+  --code-gutter:          #f3f4f6;
+  --code-line-highlight:  #f3f4f6;
+  --code-selection:       #d1d5db;
+  --code-cursor:          #374151;
+  --code-line-number:     #9ca3af;
+  --code-keyword:         #111827;
+  --code-string:          #374151;
+  --code-number:          #374151;
+  --code-comment:         #9ca3af;
+  --code-type:            #1f2937;
+  --code-function:        #1f2937;
+  --code-variable:        #374151;
+  --code-operator:        #6b7280;
+
   /* Border Radius System - Minimal theme uses no border radius */
   --border-radius: 0;
   --card-radius: 0;

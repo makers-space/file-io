@@ -356,27 +356,6 @@
     }
 }
 
-/* Size variants for multi-select */
-.themed-select.select-xs.searchable-select {
-    height: 1.75rem;
-}
-
-.themed-select.select-sm.searchable-select {
-    height: 2rem;
-}
-
-.themed-select.select-md.searchable-select {
-    height: 2.5rem;
-}
-
-.themed-select.select-lg.searchable-select {
-    height: 3rem;
-}
-
-.themed-select.select-xl.searchable-select {
-    height: 3.5rem;
-}
-
 /* Flex fill styles */
 .themed-select.select-flex-fill {
     flex: 1;

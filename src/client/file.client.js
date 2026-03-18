@@ -363,8 +363,8 @@ export const fileService = {
             'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma',
             // Video
             'mp4', 'webm', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'm4v',
-            // Documents
-            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+            // Documents (doc/docx excluded – handled as rich text via Yjs)
+            'pdf', 'xls', 'xlsx', 'ppt', 'pptx',
             // Archives
             'zip', 'rar', '7z', 'tar', 'gz', 'bz2',
             // Executables
@@ -710,6 +710,8 @@ export const fileService = {
             responseType: 'blob'
         });
         
+        // The response interceptor already unwraps response.data, so `response`
+        // here IS the Blob — do not access .data again.
         return response;
     },
 

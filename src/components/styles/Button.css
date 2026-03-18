@@ -159,36 +159,38 @@
 }
 
 /* Size variations - xs/sm/md/lg/xl scale */
+/* NOTE: Heights are set by the responsive system below (line ~400+).
+   These rules set margin/padding/font-size defaults and act as a fallback. */
 .button.themed-button.xs {
-    height: 1.75rem; /* 28px - extra small */
+    height: 1.25rem; /* 20px - matches Input/Select xs mobile base */
     margin: calc(var(--spacing-xs) * 0.5) 0;
     padding: 0 var(--spacing-xs);
     font-size: 0.75rem;
 }
 
 .button.themed-button.sm {
-    height: 2rem; /* 32px - small */
+    height: 1.5rem; /* 24px - matches Input/Select sm mobile base */
     margin: var(--spacing-xs) 0;
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-xs);
 }
 
 .button.themed-button.md {
-    height: 2.5rem; /* 40px - medium (default) */
+    height: 1.875rem; /* 30px - matches Input/Select md mobile base */
     margin: var(--spacing-sm) 0;
     padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
 }
 
 .button.themed-button.lg {
-    height: 3rem; /* 48px - large */
+    height: 2rem; /* 32px - matches Input/Select lg mobile base */
     margin: var(--spacing-md) 0;
     padding: 0 var(--spacing-lg);
     font-size: var(--font-size-base);
 }
 
 .button.themed-button.xl {
-    height: 3.5rem; /* 56px - extra large */
+    height: 2.25rem; /* 36px - matches Input/Select xl mobile base */
     margin: var(--spacing-md) 0;
     padding: 0 var(--spacing-xl);
     font-size: var(--font-size-lg);

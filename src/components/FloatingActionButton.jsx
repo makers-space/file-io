@@ -38,6 +38,7 @@ export const FloatingActionButton = forwardRef(({
     onClick,
     icon = 'FiPlus', // Default icon for the FAB
     badge = null, // Badge text (max 10 characters) to display
+    badgeColor = 'error', // Badge color variant
     position = 'bottom-right', // 'top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'
     theme = null, // Optional theme override
     width = null, // Width value (e.g., '100%', '200px', 'auto')
@@ -613,7 +614,7 @@ export const FloatingActionButton = forwardRef(({
             {/* Badge - positioned absolutely on top-right of FAB */}
             {badge && (
                 <Badge
-                    variant="error"
+                    color={badgeColor}
                     size="sm"
                     className="fab-badge"
                 >

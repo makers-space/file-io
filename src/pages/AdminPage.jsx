@@ -21,8 +21,7 @@ import {
   Select,
   Switch,
   PageLoading,
-  TreeView,
-  Genie
+  TreeView
 } from '../components/Components';
 
 /**
@@ -967,7 +966,7 @@ export const AdminPage = () => {
                 byAlgorithm: fileStatsData.compressionStats.byAlgorithm || [],
                 systemConfig: fileStatsData.compressionStats.systemConfig || {}
               } : null,
-              
+
               // Recent activity - using actual server response
               recentActivity: {
                 recentFiles: fileStatsData?.recentActivity?.recentFiles || 0,
@@ -1952,22 +1951,6 @@ export const AdminPage = () => {
               </Typography>
             </Card>
 
-            <Card padding="md" color="success">
-              <Typography size="sm" color="secondary">Compression</Typography>
-              <Container layout="flex" align="center" gap="sm" marginTop="xs">
-                <Icon name="FiPackage" color="success" />
-                <Container layout="flex-column">
-                  <Typography size="lg" weight="bold">
-                    {adminData.files?.compression?.storageEfficiency || '0.0%'}
-                  </Typography>
-                  <Typography size="xs" color="secondary">Storage efficiency</Typography>
-                </Container>
-              </Container>
-              <Typography size="xs" color="secondary" marginTop="xs">
-                {adminData.files?.compression?.compressedFiles || 0} compressed files
-              </Typography>
-            </Card>
-
             <Card padding="md" color="tertiary">
               <Typography size="sm" color="secondary">Active Users</Typography>
               <Container layout="flex" align="center" gap="sm" marginTop="xs">
@@ -1984,107 +1967,6 @@ export const AdminPage = () => {
               </Typography>
             </Card>
           </Container>
-
-          {/* Compression Statistics */}
-          {adminData.files?.compression?.byAlgorithm?.length > 0 && (
-            <Card padding="lg">
-              <Typography weight="semibold" size="lg" marginBottom="md">
-                File Compression Analytics
-              </Typography>
-              
-              {/* Compression Overview */}
-              <Container layout="grid" columns="4" gap="md" marginBottom="lg">
-                <Container layout="flex-column" gap="xs">
-                  <Typography size="xl" weight="bold" color="success">
-                    {adminData.files?.compression?.compressionRatio || '0.0%'}
-                  </Typography>
-                  <Typography size="xs" color="secondary">Compression Rate</Typography>
-                </Container>
-                <Container layout="flex-column" gap="xs">
-                  <Typography size="xl" weight="bold" color="primary">
-                    {adminData.files?.compression?.storageEfficiency || '0.0%'}
-                  </Typography>
-                  <Typography size="xs" color="secondary">Storage Efficiency</Typography>
-                </Container>
-                <Container layout="flex-column" gap="xs">
-                  <Typography size="xl" weight="bold" color="info">
-                    {(adminData.files?.compression?.compressedFiles || 0).toLocaleString()}
-                  </Typography>
-                  <Typography size="xs" color="secondary">Compressed Files</Typography>
-                </Container>
-                <Container layout="flex-column" gap="xs">
-                  <Typography size="xl" weight="bold" color="warning">
-                    {(() => {
-                      const bytes = adminData.files?.compression?.spaceSaved || 0;
-                      if (bytes === 0) return '0 B';
-                      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-                      const i = Math.floor(Math.log(bytes) / Math.log(1024));
-                      return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-                    })()} 
-                  </Typography>
-                  <Typography size="xs" color="secondary">Space Saved</Typography>
-                </Container>
-              </Container>
-              
-              {/* Algorithm Breakdown */}
-              <Typography weight="semibold" size="md" marginBottom="sm">Algorithm Breakdown</Typography>
-              <Container layout="grid" columns="3" gap="md">
-                {adminData.files?.compression?.byAlgorithm?.map((algorithm, index) => (
-                  <Container key={index} layout="flex-column" gap="xs" padding="md" style={{ border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                    <Typography size="sm" weight="semibold" color="primary">
-                      {algorithm.algorithm?.toUpperCase() || 'UNKNOWN'}
-                    </Typography>
-                    <Container layout="flex" justify="space-between">
-                      <Typography size="xs" color="secondary">Files:</Typography>
-                      <Typography size="xs" weight="medium">{algorithm.fileCount}</Typography>
-                    </Container>
-                    <Container layout="flex" justify="space-between">
-                      <Typography size="xs" color="secondary">Total Size:</Typography>
-                      <Typography size="xs" weight="medium">
-                        {(() => {
-                          const bytes = algorithm.totalSize || 0;
-                          if (bytes === 0) return '0 B';
-                          const sizes = ['B', 'KB', 'MB', 'GB'];
-                          const i = Math.floor(Math.log(bytes) / Math.log(1024));
-                          return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-                        })()} 
-                      </Typography>
-                    </Container>
-                    <Container layout="flex" justify="space-between">
-                      <Typography size="xs" color="secondary">Avg Ratio:</Typography>
-                      <Typography size="xs" weight="medium">
-                        {(algorithm.avgCompressionRatio || 1).toFixed(2)}
-                      </Typography>
-                    </Container>
-                    <Container layout="flex" justify="space-between">
-                      <Typography size="xs" color="secondary">Space Saved:</Typography>
-                      <Typography size="xs" weight="medium" color="success">
-                        {algorithm.avgSpaceSaved || '0.0%'}
-                      </Typography>
-                    </Container>
-                  </Container>
-                ))}
-              </Container>
-              
-              {/* System Configuration */}
-              {adminData.files?.compression?.systemConfig && (
-                <Container layout="flex-column" gap="sm" marginTop="md" padding="md" style={{ backgroundColor: 'var(--color-background-secondary)', borderRadius: '8px' }}>
-                  <Typography size="sm" weight="semibold">System Configuration</Typography>
-                  <Container layout="grid" columns="3" gap="sm">
-                    <Typography size="xs">
-                      <strong>Default:</strong> {adminData.files.compression.systemConfig.defaultAlgorithm || 'gzip'}
-                    </Typography>
-                    <Typography size="xs">
-                      <strong>Level:</strong> {adminData.files.compression.systemConfig.compressionLevel || 6}
-                    </Typography>
-                    <Typography size="xs">
-                      <strong>Auto-compress:</strong> {adminData.files.compression.systemConfig.autoCompress ? 'Enabled' : 'Disabled'}
-                    </Typography>
-                  </Container>
-                </Container>
-              )}
-            </Card>
-          )}
 
           {/* Detailed Analytics */}
           <Container layout="grid" columns="2" gap="lg">

@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '@contexts/ThemeContext';
 import Icon from './Icon';
 import Badge from './Badge';
@@ -102,6 +103,7 @@ export const Select = ({
     const [internalValidation, setInternalValidation] = useState({isValid: true, message: ''});
     const [isTouched, setIsTouched] = useState(false);
     const [badgeContainerHeight, setBadgeContainerHeight] = useState(0);
+    const [dropdownStyle, setDropdownStyle] = useState({});
 
     // Get the display text for the selected value
     const getDisplayText = () => {
@@ -146,11 +148,26 @@ export const Select = ({
         }
     }, [multiSelect, normalizedValue]);
 
+    // Compute portal dropdown position from the container's bounding rect
+    const toggleDropdown = (open) => {
+        if (open && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setDropdownStyle({
+                position: 'fixed',
+                top: rect.bottom,
+                left: rect.left,
+                width: rect.width,
+                zIndex: 'var(--z-select-dropdown, 10000)',
+            });
+        }
+        setIsOpen(open);
+    };
+
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (containerRef.current && !containerRef.current.contains(event.target)) {
-                setIsOpen(false);
+                toggleDropdown(false);
                 setSearchTerm('');
                 setFocusedIndex(-1);
             }
@@ -170,7 +187,7 @@ export const Select = ({
             case 'ArrowDown':
                 e.preventDefault();
                 if (!isOpen) {
-                    setIsOpen(true);
+                    toggleDropdown(true);
                     setFocusedIndex(0);
                 } else {
                     setFocusedIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
@@ -189,20 +206,20 @@ export const Select = ({
                 if (isOpen && focusedIndex >= 0 && filteredOptions[focusedIndex]) {
                     handleOptionSelect(filteredOptions[focusedIndex]);
                 } else if (!isOpen) {
-                    setIsOpen(true);
+                    toggleDropdown(true);
                 }
                 break;
 
             case 'Escape':
                 e.preventDefault();
-                setIsOpen(false);
+                toggleDropdown(false);
                 setSearchTerm('');
                 setFocusedIndex(-1);
                 inputRef.current?.blur();
                 break;
 
             case 'Tab':
-                setIsOpen(false);
+                toggleDropdown(false);
                 setSearchTerm('');
                 setFocusedIndex(-1);
                 break;
@@ -225,7 +242,7 @@ export const Select = ({
             }
         } else {
             newValue = option.value;
-            setIsOpen(false);
+            toggleDropdown(false);
             setSearchTerm('');
             setFocusedIndex(-1);
         }
@@ -261,13 +278,13 @@ export const Select = ({
 
     const handleInputClick = () => {
         if (disabled) return;
-        setIsOpen(!isOpen);
+        toggleDropdown(!isOpen);
     };
 
     const handleSearchChange = (e) => {
         setSearchTerm(e.target.value);
         setFocusedIndex(-1);
-        if (!isOpen) setIsOpen(true);
+        if (!isOpen) openDropdown();
     };
 
     // Validation function for select
@@ -643,12 +660,14 @@ export const Select = ({
                     <Icon name="FiChevronDown" size={getDropdownArrowSize()} color={effectiveColor}/>
                 </div>
 
-                {isOpen && (
+                {isOpen && createPortal(
                     <div
                         ref={listRef}
                         className="select-dropdown"
                         role="listbox"
                         aria-labelledby={label ? `${selectId}-label` : undefined}
+                        style={dropdownStyle}
+                        onMouseDown={e => e.nativeEvent.stopImmediatePropagation()}
                     >
                         {filteredOptions.length === 0 ? (
                             <div
@@ -697,7 +716,7 @@ export const Select = ({
                             })
                         )}
                     </div>
-                )}
+                , document.body)}
             </div>
 
             {(getEffectiveHelpText() || helpText) && (

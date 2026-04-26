@@ -19,6 +19,7 @@ export const LoginPage = () => {
     password: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [shakeSignup, setShakeSignup] = useState(false);
   const { login } = useAuth();
   const { error: showError, success: showSuccess } = useNotification();
 
@@ -49,12 +50,19 @@ export const LoginPage = () => {
       
       if (result.success) {
         showSuccess('Login successful! Welcome back.');
-        navigate('/'); // Navigate to dashboard after successful login
+        navigate('/dashboard');
       } else {
         showError(result.error || 'Login failed. Please check your credentials.');
       }
     } catch (error) {
-      showError(error.message || 'Login failed. Please check your credentials.');
+      const serverMsg = error.response?.data?.message || error.message || '';
+      if (serverMsg === 'Invalid credentials') {
+        showError('No account found with those details. Check your info or sign up below!');
+        setShakeSignup(true);
+        setTimeout(() => setShakeSignup(false), 600);
+      } else {
+        showError(serverMsg || 'Login failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -82,11 +90,6 @@ export const LoginPage = () => {
                 style={{ width: '80%' }}
                 gap="md"
                 padding="none"
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    handleSubmit(e);
-                  }
-                }}
                 onSubmit={handleSubmit}
               >
                 <Input
@@ -117,7 +120,6 @@ export const LoginPage = () => {
                   type="submit"
                   color="primary"
                   disabled={!isFormValid || isLoading}
-                  onClick={handleSubmit}
                   width="100%"
                 >
                   {isLoading ? (
@@ -152,12 +154,21 @@ export const LoginPage = () => {
                   color="tertiary"
                   size="sm"
                   onClick={() => navigate('/signup')}
+                  style={shakeSignup ? { animation: 'shake 0.5s ease-in-out' } : undefined}
                 >
                   Sign Up
                 </Button>
               </Container>
             </Container>
         </Card>
+
+        <style>{`
+          @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 50%, 90% { transform: translateX(-4px); }
+            30%, 70% { transform: translateX(4px); }
+          }
+        `}</style>
     </Page>
   );
 };

@@ -199,9 +199,11 @@
 
 /* Disabled states */
 .tree-node-disabled {
-    opacity: 0.5;
     cursor: not-allowed;
-    pointer-events: none;
+}
+.tree-node-disabled > .tree-node-content > .tree-node-icon,
+.tree-node-disabled > .tree-node-content > .tree-node-label {
+    opacity: 0.5;
 }
 
 /* ===== Tree Hierarchy (Simple Indentation) ===== */
@@ -299,28 +301,21 @@
 
 /* ===== Interactive Elements ===== */
 
-/* Toggle button (expand/collapse) */
+/* Toggle (expand/collapse) — icon only, no button chrome */
 .tree-node-toggle {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 1.5rem;
-    min-height: 1.5rem;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    border-radius: var(--border-radius);
-    color: var(--text-muted);
-    transition: all 0.2s ease;
     flex-shrink: 0;
-    position: relative;
-    z-index: 2; /* Ensure toggle stays above connector lines */
+    cursor: pointer;
+    color: var(--text-muted);
+    line-height: 0;
+    padding: 0;
+    width: max-content;
 }
 
 .tree-node-toggle:hover {
-    background-color: var(--surface-accent-color);
     color: var(--text-color);
-    transform: scale(1.1);
 }
 
 .tree-node-toggle .themed-icon {
@@ -396,8 +391,7 @@
 .tree-view-small .tree-node-toggle,
 .tree-view-sm .tree-node-toggle,
 .tree-view-xs .tree-node-toggle {
-    min-width: 1rem;
-    min-height: 1rem;
+    /* icon sizing is inherited from the icon component itself */
 }
 
 /* Reduce indentation for small variant */
@@ -440,12 +434,10 @@
     font-size: 1.125rem; /* Larger text */
 }
 
-/* Larger toggle for large variant */
 .tree-view-large .tree-node-toggle,
 .tree-view-lg .tree-node-toggle,
 .tree-view-xl .tree-node-toggle {
-    min-width: 2rem;
-    min-height: 2rem;
+    /* icon sizing is inherited from the icon component itself */
 }
 
 /* Increase indentation for large variant */

@@ -111,6 +111,34 @@
     }
 }
 
+/* ===== Responsive grid breakpoints ===== */
+@media (max-width: 640px) {
+    .container.grid-2, .themed-container.grid-2,
+    .container.grid-3, .themed-container.grid-3,
+    .container.grid-4, .themed-container.grid-4,
+    .container.grid-5, .themed-container.grid-5,
+    .container.grid-6, .themed-container.grid-6 {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+    .container.grid-3, .themed-container.grid-3,
+    .container.grid-4, .themed-container.grid-4,
+    .container.grid-5, .themed-container.grid-5,
+    .container.grid-6, .themed-container.grid-6 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 901px) and (max-width: 1200px) {
+    .container.grid-4, .themed-container.grid-4,
+    .container.grid-5, .themed-container.grid-5,
+    .container.grid-6, .themed-container.grid-6 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
 /* ===== Multi-column System ===== */
 .container.columns-2, .themed-container.columns-2 {
     column-count: 2;
@@ -295,6 +323,7 @@
 .container.flex-fill, .themed-container.flex-fill {
     flex: 1 1 0;
     min-width: 0;
+    min-height: 0;
 }
 
 /* Max width utilities */

@@ -136,6 +136,16 @@ api.interceptors.response.use(
         }
 
         if (error.response?.status === 401 && !originalRequest._retry) {
+            // Don't attempt token refresh for auth endpoints (login, signup, etc.)
+            const url = originalRequest.url || '';
+            const isAuthEndpoint = url.includes('/auth/login') ||
+                url.includes('/auth/signup') ||
+                url.includes('/auth/refresh-token');
+
+            if (isAuthEndpoint) {
+                throw error;
+            }
+
             originalRequest._retry = true;
 
             try {
@@ -194,6 +204,18 @@ export const appService = {
 
     async sendTestEmail(emailData) {
         return await api.post('/email/test', emailData);
+    },
+
+    async renderEmailTemplate(templateName, data = {}) {
+        return await api.post('/email/template/render', { template: templateName, data });
+    },
+
+    async clearLogs() {
+        return await api.delete('/logs');
+    },
+
+    async getDetailedHealth() {
+        return await api.get('/health');
     }
 };
 

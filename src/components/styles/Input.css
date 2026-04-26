@@ -15,6 +15,22 @@
     align-items: center;
 }
 
+/* Override browser autofill background — browsers force their own background-color
+   via an internal UA stylesheet that ignores our CSS. The only reliable cross-browser
+   fix is a large inset box-shadow that paints over the forced colour, and an explicit
+   -webkit-text-fill-color to keep text readable. */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus,
+.input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--surface-color, var(--background-color)) inset !important;
+    box-shadow: 0 0 0 1000px var(--surface-color, var(--background-color)) inset !important;
+    -webkit-text-fill-color: var(--text-color) !important;
+    caret-color: var(--text-color);
+    border-color: var(--border-color);
+    transition: background-color 600000s ease-in-out 0s; /* prevent Chrome's autofill animation */
+}
+
 /* Placeholder text styling */
 .input::placeholder {
     color: var(--text-color);

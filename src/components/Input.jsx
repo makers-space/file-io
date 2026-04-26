@@ -30,6 +30,7 @@ export const Input = ({
     icon = '',
     iconPosition = 'left', // 'left', 'right'
     width = null, // Width value (e.g., '100%', '200px', '10rem')
+    minWidth = null, // Minimum width value
     theme = null, // Optional theme override for this input
     justifySelf = null, // CSS justify-self property: 'auto', 'start', 'end', 'center', 'stretch'
     marginTop = null, // 'none', 'xs', 'sm', 'md', 'lg', 'xl' or custom value
@@ -404,7 +405,7 @@ export const Input = ({
                     required={required}
                     data-theme={inputTheme}
                     data-theme-source={theme ? 'local' : 'inherited'}
-                    style={{width}}
+                    style={{width, ...(minWidth ? { minWidth } : {})}}
                     {...ariaAttributes}
                     {...domProps}
                     onFocus={handleFocus}
@@ -483,7 +484,7 @@ export const Input = ({
         return (
             <div
                 className={`input-container input-floating-container variant-${inputVariant} ${getColorClass()} ${getJustifySelfClass()} theme-${inputTheme}`}
-                style={{width, ...getMarginStyle()}} data-theme={inputTheme}
+                style={{width, ...(minWidth ? { minWidth } : {}), ...getMarginStyle()}} data-theme={inputTheme}
                 data-theme-source={theme ? 'local' : 'inherited'}>
                 <div
                     className={`input-field-wrapper ${effectiveIcon ? `has-icon has-icon-${effectiveIconPosition}` : ''} ${getStateClasses()} ${getColorClass()}`}>
@@ -536,7 +537,7 @@ export const Input = ({
     if (type === 'checkbox') {
         return (
             <div className={`checkbox-wrapper input-container ${getColorClass()} ${getJustifySelfClass()} theme-${inputTheme}`}
-                 style={{width, ...getMarginStyle()}} data-theme={inputTheme}
+                 style={{width, ...(minWidth ? { minWidth } : {}), ...getMarginStyle()}} data-theme={inputTheme}
                  data-theme-source={theme ? 'local' : 'inherited'}>
                 <div className="checkbox-input-wrapper">
                     {renderInput()}
@@ -565,7 +566,7 @@ export const Input = ({
     }
     return (
         <div className={`input-container ${getColorClass()} ${getJustifySelfClass()} theme-${inputTheme}`}
-             style={{width, ...getMarginStyle()}} data-theme={inputTheme}
+             style={{width, ...(minWidth ? { minWidth } : {}), ...getMarginStyle()}} data-theme={inputTheme}
              data-theme-source={theme ? 'local' : 'inherited'}>
             {label && (
                 <label

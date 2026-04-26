@@ -373,23 +373,42 @@ const CodeEditorInner = forwardRef(({
         if (!monacoRef.current) return;
         // Defer by one frame so ThemeContext has flushed the new body class
         // and the --code-* CSS custom properties are live before we read them.
-        const raf = requestAnimationFrame(() => applyMonacoTheme(monacoRef.current, currentTheme));
+        const raf = requestAnimationFrame(() => {
+            applyMonacoTheme(monacoRef.current, currentTheme);
+            // Update font to match the new theme's monospace font
+            const monoFont = getComputedStyle(document.body).getPropertyValue('--font-family-monospace').trim();
+            if (monoFont && editorRef.current) {
+                editorRef.current.updateOptions({ fontFamily: monoFont });
+            }
+        });
         return () => cancelAnimationFrame(raf);
     }, [currentTheme]);
     useEffect(() => {
-        if (editorRef.current && content !== editorRef.current.getValue())
-            editorRef.current.setValue(content || '');
+        if (!editorRef.current) return;
+        if (content === editorRef.current.getValue()) return;
+        // Suppress onChange while we apply remote content — prevents the editor
+        // from pushing a stale debounced value back into Yjs.
+        clearTimeout(changeTimerRef.current);
+        suppressChangeRef.current = true;
+        const viewState = editorRef.current.saveViewState();
+        editorRef.current.setValue(content || '');
+        if (viewState) editorRef.current.restoreViewState(viewState);
+        suppressChangeRef.current = false;
     }, [content]);
 
     const handleEditorDidMount = useCallback((editor, monaco) => {
         monacoRef.current = monaco;
         editorRef.current = editor;
         applyMonacoTheme(monaco, currentTheme);
+        // Apply theme monospace font on mount
+        const monoFont = getComputedStyle(document.body).getPropertyValue('--font-family-monospace').trim();
+        if (monoFont) editor.updateOptions({ fontFamily: monoFont });
     }, [currentTheme]);
 
     const changeTimerRef = useRef(null);
+    const suppressChangeRef = useRef(false);
     const handleChange = useCallback((value) => {
-        if (!onChange) return;
+        if (!onChange || suppressChangeRef.current) return;
         clearTimeout(changeTimerRef.current);
         changeTimerRef.current = setTimeout(() => onChange(value), 500);
     }, [onChange]);
@@ -446,15 +465,16 @@ const CodeEditorInner = forwardRef(({
                         readOnly,
                         minimap: { enabled: true },
                         fontSize: 14,
+                        fontFamily: getComputedStyle(document.body).getPropertyValue('--font-family-monospace').trim() || 'monospace',
                         lineNumbers: 'on',
                         scrollBeyondLastLine: false,
+                        padding: { bottom: 8 },
                         wordWrap: 'on',
                         wrappingIndent: 'indent',
                         automaticLayout: true,
                         tabSize: 2,
                         renderLineHighlight: 'all',
                         bracketPairColorization: { enabled: true },
-                        padding: { top: 16, bottom: 16 },
                     }}
                     loading={
                         <Container layout="flex" align="center" justify="center" minHeight={minHeight}>
@@ -1134,7 +1154,22 @@ const DocumentEditorInner = forwardRef(({
         if (lastSetContentRef.current === null) { lastSetContentRef.current = normalized; return; }
         if (normalized === lastSetContentRef.current) return;
         lastSetContentRef.current = normalized;
-        queueMicrotask(() => { if (!editor.isDestroyed) editor.commands.setContent(normalized, false); });
+        queueMicrotask(() => {
+            if (!editor.isDestroyed) {
+                // Clear stale debounce so an old onChange can't push pre-remote
+                // content back into Yjs after we apply the remote update.
+                clearTimeout(changeTimerRef.current);
+                const { from, to } = editor.state.selection;
+                editor.commands.setContent(normalized, false);
+                const maxPos = editor.state.doc.content.size;
+                try {
+                    editor.commands.setTextSelection({
+                        from: Math.min(from, maxPos),
+                        to:   Math.min(to,   maxPos),
+                    });
+                } catch { /* ignore if pos is no longer valid */ }
+            }
+        });
     }, [content, editor]);
 
     useEffect(() => () => clearTimeout(changeTimerRef.current), []);
@@ -1359,9 +1394,12 @@ const MarkdownEditorInner = forwardRef(({
         if (marginBottom !== null) styles.marginBottom = marginBottom === 'none' ? '0' : (marginMap[marginBottom] || marginBottom);
         if (justifySelf)           styles.justifySelf  = justifySelf;
         if (width    !== null)     styles.width        = width;
+        if (height   !== null)     styles.height       = height;
         if (minHeight !== null)    styles.minHeight    = minHeight;
+        if (maxWidth !== null)     styles.maxWidth     = maxWidth;
+        if (maxHeight !== null)    styles.maxHeight    = maxHeight;
         return styles;
-    }, [marginTop, marginBottom, justifySelf, width, minHeight, styleProp]);
+    }, [marginTop, marginBottom, justifySelf, width, height, minHeight, maxWidth, maxHeight, styleProp]);
 
     const defaultImageUploadHandler = useCallback(async (file) => {
         return new Promise((resolve, reject) => {

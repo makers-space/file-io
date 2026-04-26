@@ -1,8 +1,8 @@
-# App Base Web - React Frontend
+# FilesystemOne — Web
 
-> **React Application with Advanced Theming and Complete UI Component Library**
+> **Cloud file system on the web — store, edit, and collaborate on files from your browser. Like Google Docs, but better.**
 
-A comprehensive React web application with an advanced theming system, complete UI component library, and robust API client integration.
+A comprehensive React web application powering FilesystemOne with an advanced theming system, complete UI component library, and robust API client integration.
 
 ## 🌟 Key Features
 - **Dynamic Theming System**: 7 beautiful themes with instant switching
@@ -28,7 +28,7 @@ A comprehensive React web application with an advanced theming system, complete 
 
 1. **Navigate to the web directory**:
    ```bash
-   cd web
+   cd filesystem-one/file-io
    ```
 
 2. **Install dependencies**:

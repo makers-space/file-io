@@ -1,0 +1,38 @@
+/* Ghost-style file cards & list rows */
+
+.file-card.themed-card {
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transition: background-color var(--transition-normal), border-color var(--transition-normal), box-shadow var(--transition-normal), transform var(--transition-normal);
+}
+
+.file-card.themed-card:hover {
+    background-color: color-mix(in srgb, var(--text-color) 6%, transparent);
+    border-color: var(--border-color);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px var(--shadow-color-hover, rgba(0,0,0,0.08));
+}
+
+.file-card.file-card--selected.themed-card {
+    background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    border-color: var(--primary-color);
+}
+
+/* List row ghost style */
+.file-list-row {
+    background-color: transparent;
+    transition: background-color var(--transition-normal);
+}
+
+.file-list-row > div {
+    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+}
+
+.file-list-row:hover {
+    background-color: color-mix(in srgb, var(--text-color) 6%, transparent);
+}
+
+.file-list-row.file-list-row--selected {
+    background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useTheme } from '@contexts/ThemeContext';
 import { Badge, Button, CircularProgress, Container, FloatingActionButton, Icon, Page, Typography } from './Components';
@@ -22,7 +23,7 @@ const getRouteConfig = () => {
     };
 };
 
-const PUBLIC_PAGES = ['/', '/components'];
+const PUBLIC_PAGES = ['/'];
 
 /**
  * Navigation - App navigation component with draggable FAB and Genie integration
@@ -47,28 +48,37 @@ export const Navigation = ({
     const {user, isLoading, logout, hasRole} = useAuth();
     const {currentTheme, switchTheme, availableThemes} = useTheme();
     const [isNavigating, setIsNavigating] = useState(false);
+    const navigate = useNavigate();
 
     // Navigation menu items based on authentication and roles
     const getNavigationItems = () => {
         const items = [];
 
         if (user) {
-            // Dashboard/Home
+            // Dashboard
             items.push({
-                id: 'home',
-                label: 'Home',
+                id: 'dashboard',
+                label: 'Dashboard',
                 icon: 'FiHome',
-                path: '/',
-                roles: ['USER', 'CREATOR', 'ADMIN', 'OWNER'],
+                path: '/dashboard',
                 requireAuth: true
             });
 
+            // Files
             items.push({
-                id: 'components',
-                label: 'Components',
-                icon: 'FiCode',
-                path: '/components',
-                roles: ['USER', 'CREATOR', 'ADMIN', 'OWNER'],
+                id: 'files',
+                label: 'Files',
+                icon: 'FiFolder',
+                path: '/files',
+                requireAuth: true
+            });
+
+            // Settings
+            items.push({
+                id: 'settings',
+                label: 'Settings',
+                icon: 'FiSettings',
+                path: '/settings',
                 requireAuth: true
             });
 
@@ -77,37 +87,19 @@ export const Navigation = ({
                 items.push({
                     id: 'admin',
                     label: 'Admin Panel',
-                    icon: 'FiSettings',
+                    icon: 'FiShield',
                     path: '/admin',
                     roles: ['ADMIN', 'OWNER'],
                     requireAuth: true,
                     badge: 'Admin'
                 });
             }
-
-            // File management
-            items.push({
-                id: 'files',
-                label: 'Files',
-                icon: 'FiFolder',
-                path: '/files',
-                roles: ['USER', 'CREATOR', 'ADMIN', 'OWNER'],
-                requireAuth: true
-            });
         } else {
             items.push({
                 id: 'home-guest',
                 label: 'Home',
                 icon: 'FiHome',
                 path: '/',
-                publicOnly: true
-            });
-
-            items.push({
-                id: 'components-demo',
-                label: 'Explore Components',
-                icon: 'FiGrid',
-                path: '/components',
                 publicOnly: true
             });
 
@@ -137,18 +129,13 @@ export const Navigation = ({
     const navigationItems = getNavigationItems();
 
     const handleNavigation = (path) => {
-        setIsNavigating(true);
-        // Simulate navigation loading
-        setTimeout(() => {
-            window.location.href = path;
-            setIsNavigating(false);
-        }, 200);
+        navigate(path);
     };
 
     const handleLogout = async () => {
         try {
             await logout();
-            window.location.href = '/login';
+            navigate('/login');
         } catch (error) {
             // Silent error handling
         }
@@ -332,14 +319,12 @@ export const RouteAccessControl = ({children, path}) => {
     const isPublicPage = PUBLIC_PAGES.includes(path);
     if (!isAuthPage && !isPublicPage && !user) {
         // Protected page, no user - go to login
-        window.location.href = '/login';
-        return null;
+        return <Navigate to="/login" replace />;
     }
 
     if (isAuthPage && user) {
         // Auth page, but user is logged in - go to dashboard
-        window.location.href = '/';
-        return null;
+        return <Navigate to="/dashboard" replace />;
     }
 
     // Simple role check for admin pages

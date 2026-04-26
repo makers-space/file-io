@@ -156,7 +156,11 @@ const TreeNode = React.memo(({
     // Use appropriate props based on whether there's a Genie
     const nodeProps = useMemo(() => {
         const selectNode = (event) => {
-            if (!isDisabled && onNodeSelect) {
+            if (isDisabled) {
+                if (hasChildren && onNodeExpand) onNodeExpand(node.id, event);
+                return;
+            }
+            if (onNodeSelect) {
                 onNodeSelect(node.id, node, event);
             }
         };
@@ -188,7 +192,7 @@ const TreeNode = React.memo(({
                 selectNode(event);
             }
         };
-    }, [genieConfig, triggerProps, isDisabled, onNodeSelect, node, level, indentPixels]);
+    }, [genieConfig, triggerProps, isDisabled, hasChildren, onNodeExpand, onNodeSelect, node, level, indentPixels]);
 
     const nodeClasses = [
         'tree-node',
@@ -201,10 +205,10 @@ const TreeNode = React.memo(({
 
     const handleExpandClick = useCallback((event) => {
         event.stopPropagation();
-        if (hasChildren && !isDisabled && onNodeExpand) {
+        if (hasChildren && onNodeExpand) {
             onNodeExpand(node.id, event);
         }
-    }, [hasChildren, isDisabled, onNodeExpand, node.id]);
+    }, [hasChildren, onNodeExpand, node.id]);
 
     const {style: nodeStyle, ...eventProps} = nodeProps;
 
@@ -224,19 +228,20 @@ const TreeNode = React.memo(({
             >
                 {/* Expand/Collapse Icon */}
                 {hasChildren && showIcons && (
-                    <button
+                    <span
                         className="tree-node-toggle"
                         onClick={handleExpandClick}
-                        onMouseDown={(e) => e.preventDefault()}
-                        disabled={isDisabled}
                         aria-expanded={isExpanded}
                         aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                        role="button"
+                        tabIndex={isDisabled ? -1 : 0}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleExpandClick(e)}
                     >
                         <Icon
                             name={isExpanded ? collapseIcon : expandIcon}
                             size={resolvedIconSize}
                         />
-                    </button>
+                    </span>
                 )}
 
                 {/* Node Icon */}

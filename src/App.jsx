@@ -4,14 +4,18 @@ import { ThemeProvider } from '@contexts/ThemeContext';
 import { AuthProvider } from '@contexts/AuthContext';
 import { NotificationProvider } from '@contexts/NotificationContext';
 
+import { PreferencesProvider } from '@contexts/PreferencesContext';
+
 // Import all pages
-import ComponentDemo from './pages/ComponentDemo';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import AdminPage from './pages/AdminPage';
+import DashboardPage from './pages/DashboardPage';
 import FilesPage from './pages/FilesPage';
+import GroupDetailPage from './pages/GroupDetailPage';
+import SettingsPage from './pages/SettingsPage';
+import AdminPage from './pages/AdminPage';
 
 // Import Navigation and NotificationDisplay components
 import { Navigation, NotificationDisplay, RouteAccessControl } from '@components/Components';
@@ -21,6 +25,13 @@ function AppRouter() {
   return (
     <>
       <Routes>
+        {/* Public routes */}
+        <Route path="/" element={
+          <RouteAccessControl path="/">
+            <HomePage />
+          </RouteAccessControl>
+        } />
+
         {/* Authentication routes */}
         <Route path="/login" element={
           <RouteAccessControl path="/login">
@@ -38,20 +49,25 @@ function AppRouter() {
           </RouteAccessControl>
         } />
 
-        {/* Application routes - access control handled by RouteAccessControl */}
-        <Route path="/" element={
-          <RouteAccessControl path="/">
-            <HomePage />
+        {/* Protected application routes */}
+        <Route path="/dashboard" element={
+          <RouteAccessControl path="/dashboard">
+            <DashboardPage />
           </RouteAccessControl>
         } />
-        <Route path="/components" element={
-          <RouteAccessControl path="/components">
-            <ComponentDemo />
-          </RouteAccessControl>
-        } />
-        <Route path="/files" element={
+        <Route path="/files/*" element={
           <RouteAccessControl path="/files">
             <FilesPage />
+          </RouteAccessControl>
+        } />
+        <Route path="/groups/:groupId" element={
+          <RouteAccessControl path="/groups/:groupId">
+            <GroupDetailPage />
+          </RouteAccessControl>
+        } />
+        <Route path="/settings" element={
+          <RouteAccessControl path="/settings">
+            <SettingsPage />
           </RouteAccessControl>
         } />
         <Route path="/admin" element={
@@ -60,18 +76,24 @@ function AppRouter() {
           </RouteAccessControl>
         } />
 
-        {/* Fallback redirects */}
-        <Route path="/dashboard" element={<Navigate to="/" replace />} />
+        {/* Legacy / redirect routes */}
+        <Route path="/drive" element={<Navigate to="/files" replace />} />
+        <Route path="/editor" element={<Navigate to="/files" replace />} />
+        <Route path="/groups" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/people" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/profile/:userId" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/contact" element={<Navigate to="/" replace />} />
+        <Route path="/components" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      
+
       {/* Global Navigation FAB */}
-      <Navigation 
+      <Navigation
         position="top-right"
         draggable={true}
         size="md"
       />
-      
+
       {/* Global Notification Display */}
       <NotificationDisplay position="top-right" />
     </>
@@ -81,10 +103,12 @@ function AppRouter() {
 function App() {
   return (
     <Router>
-      <ThemeProvider> {/* Global theme provider - manages app-wide theme */}
+      <ThemeProvider>
         <NotificationProvider>
           <AuthProvider>
-            <AppRouter />
+              <PreferencesProvider>
+                <AppRouter />
+              </PreferencesProvider>
           </AuthProvider>
         </NotificationProvider>
       </ThemeProvider>
@@ -93,3 +117,4 @@ function App() {
 }
 
 export default App;
+

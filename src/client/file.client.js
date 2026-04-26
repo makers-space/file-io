@@ -668,13 +668,18 @@ export const fileService = {
         const normalizedPath = this.normalizePath(targetPath);
         const formData = new FormData();
         
-        // Append files
-        Array.from(files).forEach((file, index) => {
-            formData.append('files', file);
+        // Append files and capture relative paths explicitly (browsers may strip
+        // path separators from filenames, so we send paths as a separate field)
+        const relativePaths = [];
+        Array.from(files).forEach((file) => {
+            const relativePath = file.webkitRelativePath || file.name;
+            relativePaths.push(relativePath);
+            formData.append('files', file, relativePath);
         });
-        
+
         // Append metadata
-        formData.append('targetPath', normalizedPath);
+        formData.append('relativePaths', JSON.stringify(relativePaths));
+        formData.append('basePath', normalizedPath);
         if (overwrite) {
             formData.append('overwrite', 'true');
         }
@@ -695,6 +700,19 @@ export const fileService = {
         }
 
         return await api.post('/files/upload', formData, config);
+    },
+
+    /**
+     * Extract a zip file into a target directory
+     * @param {string} filePath - Path of the zip file to extract
+     * @param {string} targetPath - Directory to extract into
+     * @returns {Promise<Object>} Extraction results
+     */
+    async extractZip(filePath, targetPath = '/') {
+        return await api.post('/files/extract-zip', {
+            filePath: this.normalizePath(filePath),
+            targetPath: this.normalizePath(targetPath)
+        });
     },
 
     /**
@@ -764,25 +782,43 @@ export const fileService = {
             // Get authentication token for WebSocket connection
             const authToken = await this.getAuthToken();
             
-            // Create WebSocket provider with authentication
             // WebsocketProvider(baseUrl, roomName, doc) connects to baseUrl/roomName
             // Server extracts docName from URL: req.url.slice(1).split('?')[0]
-            // For URL '/yjs/dirname/filename', server gets 'yjs/dirname/filename'
-            const docName = this.getDocumentName(normalizedPath); // Returns 'yjs/dirname/filename'
-            const baseWsUrl = connectionConfig.wsUrl.replace('/yjs', ''); // 'ws://localhost:8080'
+            const docName = this.getDocumentName(normalizedPath);
+            const baseWsUrl = connectionConfig.wsUrl.replace('/yjs', '');
             
-            // Create WebSocket provider with document name as roomName
             const providerOptions = {
                 connect: true,
+                params: authToken ? { token: authToken } : {},
                 ...options
             };
             
-            // Add auth token to WebSocket connection params if available
-            if (authToken) {
-                providerOptions.params = { token: authToken };
-            }
-            
             const provider = new WebsocketProvider(baseWsUrl, docName, ydoc, providerOptions);
+
+            // Refresh the auth token before every reconnection attempt.
+            // y-websocket re-reads provider.params when building the URL for
+            // each new WebSocket, so updating params.token is sufficient.
+            // We synchronously pause auto-reconnect, fetch a fresh token,
+            // then resume — avoiding races with the internal setTimeout.
+            provider.on('connection-close', (event) => {
+                const code = event?.code;
+                // Permanent failures — don't retry
+                if (code === 4403 || code === 4404) return;
+
+                // Pause the built-in reconnect (synchronous, runs before
+                // the internal setTimeout checks shouldConnect)
+                provider.shouldConnect = false;
+
+                this.getAuthToken().then(freshToken => {
+                    if (freshToken) {
+                        provider.params.token = freshToken;
+                        provider.connect();
+                    }
+                    // If no token (user logged out), stay disconnected
+                }).catch(() => {
+                    // Token refresh failed — stay disconnected
+                });
+            });
 
             // Get text content for collaborative editing
             const ytext = ydoc.getText('content');
@@ -875,16 +911,16 @@ export const fileService = {
     // =============================================================================
 
     /**
-     * Publish a file version
+     * Save a new file version
      * @param {string} filePath - File path
      * @param {string} message - Version message
-     * @returns {Promise<object>} Publish response
+     * @returns {Promise<object>} Save version response
      */
-    async publishFileVersion(filePath, message = 'Published version') {
+    async saveFileVersion(filePath, message = 'Version saved') {
         const normalizedPath = this.normalizePath(filePath);
         const encodedPath = encodeURIComponent(normalizedPath);
         
-        return await api.post(`/files/${encodedPath}/publish`, {
+        return await api.post(`/files/${encodedPath}/versions`, {
             message
         });
     },
@@ -1035,7 +1071,7 @@ export const fileService = {
             { event: 'file:shared', action: 'shared', icon: '🤝' },
             { event: 'file:unshared', action: 'unshared', icon: '🚫' },
             { event: 'directory:created', action: 'directory_created', icon: '📁' },
-            { event: 'version:published', action: 'version_published', icon: '📦' }
+            { event: 'version:saved', action: 'version_saved', icon: '🔖' }
         ];
 
         const eventCallbacks = [];
@@ -1076,6 +1112,31 @@ export const fileService = {
         };
     },
 
+    // ==================== COMMENT OPERATIONS ====================
+
+    async createComment(fileId, body, parentComment = null, groupId = null) {
+        return await api.post('/files/comments', { fileId, body, parentComment, groupId });
+    },
+
+    async getFileComments(fileId, params = {}) {
+        return await api.get(`/files/comments/file/${fileId}`, { params });
+    },
+
+    async getCommentCount(fileId, groupId = null) {
+        return await api.get(`/files/comments/file/${fileId}/count`, { params: groupId ? { groupId } : {} });
+    },
+
+    async getReplies(commentId, params = {}) {
+        return await api.get(`/files/comments/${commentId}/replies`, { params });
+    },
+
+    async updateComment(commentId, body) {
+        return await api.patch(`/files/comments/${commentId}`, { body });
+    },
+
+    async deleteComment(commentId) {
+        return await api.delete(`/files/comments/${commentId}`);
+    },
 
 };
 

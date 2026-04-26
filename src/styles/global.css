@@ -71,7 +71,7 @@ body {
   --z-modal: 1050;
   --z-popover: 1060;
   --z-tooltip: 1070;
-  --z-select-dropdown: 10000; /* Select dropdowns above all regular components */
+  --z-select-dropdown: 1000000; /* Select dropdowns above all regular components */
   --z-fab: 100000; /* Floating Action Buttons */
   --z-genie: 999999; /* Genie overlays (highest priority) */  /* Transitions */
   --transition-fast: 50ms ease;
@@ -257,9 +257,7 @@ body {
     .genie-container,
     .page-header,
     .file-header-card,
-    .file-metadata-bar,
-    .version-header-card,
-    .version-footer-card {
+    .file-metadata-bar {
         display: none !important;
     }
 

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
-import { useNotification } from '@contexts/NotificationContext';
 import {
     Page,
     Container,
@@ -9,8 +8,7 @@ import {
     Input,
     Button,
     Typography,
-    Icon,
-    Select
+    Icon
 } from '@components/Components';
 
 export const SignupPage = () => {
@@ -21,52 +19,40 @@ export const SignupPage = () => {
         username: '',
         email: '',
         password: '',
-        confirmPassword: '',
-        roles: ['USER']
+        confirmPassword: ''
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [fieldErrors, setFieldErrors] = useState({});
     const { signup } = useAuth();
-    const { error: showError, success: showSuccess } = useNotification();
 
-    const roleOptions = [
-        { value: 'USER', label: 'User' },
-        { value: 'CREATOR', label: 'Creator' },
-        { value: 'ADMIN', label: 'Admin' },
-        { value: 'OWNER', label: 'Owner' }
-    ];
+    // Parse "Validation error: field: message, field2: message2" from server
+    const parseFieldErrors = (message) => {
+        if (!message) return {};
+        const cleaned = message.replace(/^Validation error:\s*/i, '');
+        const result = {};
+        const parts = cleaned.split(/,\s*(?=[a-zA-Z][\w.]*:\s)/);
+        parts.forEach(part => {
+            const colonIdx = part.indexOf(': ');
+            if (colonIdx !== -1) {
+                const field = part.substring(0, colonIdx).trim();
+                const msg = part.substring(colonIdx + 2).trim();
+                result[field] = msg;
+            }
+        });
+        return result;
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
-    const handleRoleChange = (selectedValue) => {
-        setFormData(prev => ({
-            ...prev,
-            roles: selectedValue || []
-        }));
-    };
-
-    const validateForm = () => {
-        // Check if all required fields are filled
-        const requiredFields = ['firstName', 'lastName', 'username', 'email', 'password', 'confirmPassword'];
-        
-        for (const field of requiredFields) {
-            if (!formData[field]) {
-                showError(`Please fill in all required fields`);
-                return false;
-            }
+        setFormData(prev => ({ ...prev, [name]: value }));
+        // Clear any server-side field error when user edits that field
+        if (fieldErrors[name]) {
+            setFieldErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
         }
-        return true;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        if (!validateForm()) return;
 
         setIsLoading(true);
 
@@ -74,16 +60,15 @@ export const SignupPage = () => {
             const signupData = { ...formData };
             delete signupData.confirmPassword;
 
-            const result = await signup(signupData);
-            
-            if (result.success) {
-                showSuccess('Account created successfully! Welcome aboard.');
-                navigate('/'); // Navigate to dashboard after successful signup
-            } else {
-                showError(result.error || 'Signup failed. Please try again.');
-            }
+            await signup(signupData);
+            // AuthContext already called showSuccess and set the user
+            navigate('/dashboard');
         } catch (error) {
-            showError(error.message || 'Signup failed. Please try again.');
+            // AuthContext already showed the toast; also surface errors inline on inputs
+            const parsed = parseFieldErrors(error.response?.data?.message);
+            if (Object.keys(parsed).length > 0) {
+                setFieldErrors(parsed);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -135,6 +120,8 @@ export const SignupPage = () => {
                                     required
                                     icon="FaUser"
                                     autoComplete="given-name"
+                                    validationState={fieldErrors.firstName ? 'error' : 'default'}
+                                    helpText={fieldErrors.firstName || ''}
                                 />
 
                                 <Input
@@ -147,6 +134,8 @@ export const SignupPage = () => {
                                     required
                                     icon="FaUser"
                                     autoComplete="family-name"
+                                    validationState={fieldErrors.lastName ? 'error' : 'default'}
+                                    helpText={fieldErrors.lastName || ''}
                                 />
 
                                 {/* Username and Email */}
@@ -160,6 +149,8 @@ export const SignupPage = () => {
                                     required
                                     icon="FaAt"
                                     autoComplete="username"
+                                    validationState={fieldErrors.username ? 'error' : 'default'}
+                                    helpText={fieldErrors.username || ''}
                                 />
 
                                 <Input
@@ -172,20 +163,10 @@ export const SignupPage = () => {
                                     required
                                     icon="FaEnvelope"
                                     autoComplete="email"
+                                    validationState={fieldErrors.email ? 'error' : 'default'}
+                                    helpText={fieldErrors.email || ''}
                                 />
                             </Container>
-                              {/* Role Selection */}
-                            <Select
-                                name="roles"
-                                label="Account Type"
-                                multiSelect={true}
-                                options={roleOptions}
-                                value={formData.roles}
-                                onChange={handleRoleChange}
-                                required
-                                width="75%"
-                            />
-
                             {/* Password Fields */}
                             <Container layout="flex" gap="xs" padding="none">
                             <Input
@@ -198,6 +179,8 @@ export const SignupPage = () => {
                                 required
                                 icon="FaLock"
                                 autoComplete="new-password"
+                                validationState={fieldErrors.password ? 'error' : 'default'}
+                                helpText={fieldErrors.password || ''}
                             />
 
                             <Input

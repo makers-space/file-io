@@ -50,7 +50,6 @@ export const AuthProvider = ({ children }) => {
             showSuccess('Login successful');
             return response;
         } catch (error) {
-            showError(error.response?.data?.message || 'Login failed');
             throw error;
         } finally {
             setIsLoading(false);
@@ -118,6 +117,16 @@ export const AuthProvider = ({ children }) => {
         return user?.roles?.includes(role) || false;
     };
 
+    // Reload the current user profile from the server
+    const reloadUser = async () => {
+        try {
+            const response = await authService.getUserProfile();
+            setUser(response.user || response);
+        } catch {
+            // non-critical
+        }
+    };
+
     const value = {
         user,
         isLoading,
@@ -127,6 +136,7 @@ export const AuthProvider = ({ children }) => {
         forgotPassword,
         resetPassword,
         hasRole,
+        reloadUser,
         isAdmin: () => hasRole('ADMIN'),
         isOwner: () => hasRole('OWNER'),
     };

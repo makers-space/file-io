@@ -264,6 +264,15 @@
         font-weight: var(--font-weight-semibold);
     }
 
+    /* Highlighted text (==text==) */
+
+    mark {
+        background-color: var(--secondary-color);
+        color: var(--text-contrast-color);
+        border-radius: 2px;
+        padding: 0 2px;
+    }
+
     /* Horizontal rules */
 
     hr {
@@ -1075,6 +1084,8 @@
 /* ── Inline formatting ───────────────────────────────────────────────────── */
 
 .docx-editor-content mark {
+    background-color: var(--secondary-color);
+    color: var(--text-contrast-color);
     border-radius: 2px;
     padding: 0 2px;
 }

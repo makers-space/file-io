@@ -2048,7 +2048,7 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   const allIds = useMemo(() => files.map(f => f._id).filter(Boolean), [files]);
 
   return (
-    <Container layout="flex-column" width="100%" height="100vh" gap="none" style={{ padding: '5vh' }}>
+    <Container layout="flex-column" width="100%" height="100vh" gap="none" style={{ padding: '5vmin' }}>
       {/* Breadcrumb bar */}
       <Card padding="sm" width="100%" backgroundColor="surface" style={{ borderBottom: '1px solid var(--border-color)', borderRadius: 0 }}>
         <Container layout="flex" align="center" gap="xs" wrap>
@@ -2714,7 +2714,7 @@ export const FilesPage = () => {
           : 'code';
 
       return (
-        <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vh' }}>
+        <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
           <Card
             className="file-header-card"
             layout="flex"
@@ -2841,7 +2841,7 @@ export const FilesPage = () => {
     }
 
     return (
-      <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vh' }}>
+      <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
         <Card
           className="file-header-card"
           layout="flex" 

@@ -135,8 +135,9 @@ const HomePage = () => {
                 layout="flex-column"
                 align="center"
                 justify="center"
+                wrap={false}
                 padding="xl"
-                style={{ minHeight: '92vh', textAlign: 'center', maxWidth: '860px', margin: '0 auto', position: 'relative' }}
+                style={{ minHeight: '100dvh', flexShrink: 0, width: '100%', maxWidth: '860px', margin: '0 auto', position: 'relative', textAlign: 'center' }}
             >
                 {/* Ambient glow */}
                 <div style={{

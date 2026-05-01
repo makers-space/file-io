@@ -105,7 +105,7 @@ const FilesTab = ({ navigate, userId }) => {
             <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
                 {f.fileName || f.filePath?.split('/').pop() || 'Untitled'}
             </Typography>
-            <Typography size="xxs" color="secondary">
+            <Typography size="xs" color="secondary">
                 {timeAgo(f.updatedAt)}
             </Typography>
         </Container>
@@ -362,65 +362,28 @@ const SocialTab = ({ userId, navigate }) => {
         );
     }
 
-    return (
-        <Container layout="flex-column" gap="sm" width="100%" wrap={false}>
-            {/* Pending Requests */}
-            {pendingRequests.length > 0 && (
-                <>
-                    <Container layout="flex" align="center" gap="xs">
-                        <Typography size="sm" weight="semibold">
-                            <Icon name="FiUserPlus" size="xs" /> Pending Requests
-                        </Typography>
-                        <Badge size="xs" color="warning">{pendingRequests.length}</Badge>
-                    </Container>
-                    <Container layout="flex-column" gap="xs" style={{ maxHeight: '160px', overflowY: 'auto' }}>
-                        {pendingRequests.map(u => {
-                            const uid = u._id || u.id;
-                            return (
-                                <Container key={uid} layout="flex" align="center" gap="sm" padding="xs">
-                                    <Icon name="FiUser" size="sm" />
-                                    <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
-                                        <Typography size="sm" weight="medium">{u.username || u.email}</Typography>
-                                        {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
-                                    </Container>
-                                    <Container layout="flex" gap="xs">
-                                        <Button size="xs" variant="primary" onClick={() => handleRespond(uid, 'accept')} disabled={!!responding[uid]}>
-                                            {responding[uid] === 'accept' ? <CircularProgress size="xs" /> : 'Accept'}
-                                        </Button>
-                                        <Button size="xs" variant="ghost" onClick={() => handleRespond(uid, 'reject')} disabled={!!responding[uid]}>
-                                            Decline
-                                        </Button>
-                                    </Container>
-                                </Container>
-                            );
-                        })}
-                    </Container>
-                    <Divider margin="xs" />
-                </>
-            )}
-
-            {/* Find & Connect */}
-            <Typography size="sm" weight="semibold">
-                <Icon name="FiSearch" size="xs" /> Find People
-            </Typography>
+    // Find People genie content — rendered inside a Button genie dropdown
+    const findPeopleGenie = (
+        <Container layout="flex-column" gap="sm" padding="md" style={{ width: '280px' }}>
+            <Typography size="sm" weight="semibold">Find People</Typography>
             <Input
-                placeholder="Search by name, username or email…"
+                placeholder="Name, username or email…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(typeof e === 'string' ? e : e?.target?.value ?? '')}
                 width="100%"
                 icon="FiSearch"
             />
             {isSearching && (
-                <Container layout="flex" align="center" gap="xs" padding="xs">
+                <Container layout="flex" align="center" gap="xs" padding="none">
                     <CircularProgress size="xs" />
                     <Typography size="xs" color="secondary">Searching…</Typography>
                 </Container>
             )}
             {!isSearching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-                <Typography size="xs" color="secondary" padding="xs">No users found</Typography>
+                <Typography size="xs" color="secondary">No users found</Typography>
             )}
             {!isSearching && searchResults.length > 0 && (
-                <Container layout="flex-column" gap="xs" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                     {searchResults.map(u => {
                         const uid = u._id || u.id;
                         const statusInfo = getStatusLabel(connectionStatuses[uid]);
@@ -429,7 +392,7 @@ const SocialTab = ({ userId, navigate }) => {
                             <Container key={uid} layout="flex" align="center" gap="sm" padding="xs">
                                 <Icon name="FiUser" size="sm" />
                                 <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
-                                    <Typography size="sm" weight="medium">{u.username || u.email}</Typography>
+                                    <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
                                     {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
                                 </Container>
                                 {statusInfo ? (
@@ -444,24 +407,86 @@ const SocialTab = ({ userId, navigate }) => {
                     })}
                 </Container>
             )}
+            {sentRequests.length > 0 && (
+                <>
+                    <Divider margin="xs" />
+                    <Typography size="xs" weight="semibold" color="secondary">Sent Requests</Typography>
+                    <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                        {sentRequests.map(u => (
+                            <Container key={u._id || u.id} layout="flex" align="center" gap="sm" padding="xs">
+                                <Icon name="FiUser" size="xs" color="secondary" />
+                                <Typography size="xs" color="secondary" flexFill style={{ minWidth: 0 }}>{u.username || u.email}</Typography>
+                                <Badge size="xs" color="warning">Pending</Badge>
+                            </Container>
+                        ))}
+                    </Container>
+                </>
+            )}
+        </Container>
+    );
 
-            <Divider margin="xs" />
+    return (
+        <Container layout="flex-column" gap="sm" width="100%" wrap={false}>
 
-            {/* Connections */}
-            <Typography size="sm" weight="semibold">
-                <Icon name="FiUserCheck" size="xs" /> Connections ({connections.length})
-            </Typography>
+            {/* ── Connections header with Find People genie ── */}
+            <Container layout="flex" align="center" justify="between" padding="none" gap="sm" width="100%">
+                <Container layout="flex" align="center" gap="xs" padding="none">
+                    <Icon name="FiUserCheck" size="sm" />
+                    <Typography size="sm" weight="semibold">Connections ({connections.length})</Typography>
+                    {pendingRequests.length > 0 && (
+                        <Badge size="xs" color="warning">{pendingRequests.length} pending</Badge>
+                    )}
+                </Container>
+                <Button
+                    size="xs"
+                    color="secondary"
+                    genie={findPeopleGenie}
+                    genieTrigger="click"
+                >
+                    <Icon name="FiSearch" size="xs" /> Find People
+                </Button>
+            </Container>
+
+            {/* ── Pending requests (compact inline) ── */}
+            {pendingRequests.length > 0 && (
+                <Card padding="sm">
+                    <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '140px', overflowY: 'auto' }}>
+                        {pendingRequests.map(u => {
+                            const uid = u._id || u.id;
+                            return (
+                                <Container key={uid} layout="flex" align="center" gap="sm" padding="none">
+                                    <Icon name="FiUserPlus" size="xs" color="warning" />
+                                    <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
+                                        <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
+                                        {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
+                                    </Container>
+                                    <Container layout="flex" gap="xs" padding="none">
+                                        <Button size="xs" color="primary" onClick={() => handleRespond(uid, 'accept')} disabled={!!responding[uid]}>
+                                            {responding[uid] === 'accept' ? <CircularProgress size="xs" /> : 'Accept'}
+                                        </Button>
+                                        <Button size="xs" color="secondary" onClick={() => handleRespond(uid, 'reject')} disabled={!!responding[uid]}>
+                                            Decline
+                                        </Button>
+                                    </Container>
+                                </Container>
+                            );
+                        })}
+                    </Container>
+                </Card>
+            )}
+
+            {/* ── Connections list ── */}
             {connections.length === 0 ? (
-                <Typography size="xs" color="secondary" padding="sm">
-                    No connections yet. Share files with others to connect!
+                <Typography size="xs" color="secondary" style={{ padding: '4px 2px' }}>
+                    No connections yet. Use Find People to connect with others.
                 </Typography>
             ) : (
-                <Container layout="flex-column" gap="2px" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                <Container layout="flex-column" gap="2px" padding="none" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                     {connections.map(u => (
                         <Container key={u._id} layout="flex" align="center" gap="sm" padding="xs">
                             <Icon name="FiUser" size="sm" />
                             <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
-                                <Typography size="sm" weight="medium">{u.username || u.email}</Typography>
+                                <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
                                 {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
                             </Container>
                         </Container>
@@ -471,19 +496,20 @@ const SocialTab = ({ userId, navigate }) => {
 
             <Divider margin="xs" />
 
-            {/* Groups */}
-            <Container layout="flex" justify="between" align="center">
-                <Typography size="sm" weight="semibold">
-                    <Icon name="FiUsers" size="xs" /> Groups ({groups.length})
-                </Typography>
-                <Container layout="flex" gap="xs">
-                    <Button size="xs" variant="ghost" onClick={handleDiscover}>
+            {/* ── Groups ── */}
+            <Container layout="flex" justify="between" align="center" padding="none">
+                <Container layout="flex" align="center" gap="xs" padding="none">
+                    <Icon name="FiUsers" size="sm" />
+                    <Typography size="sm" weight="semibold">Groups ({groups.length})</Typography>
+                </Container>
+                <Container layout="flex" gap="xs" padding="none">
+                    <Button size="xs" color="secondary" onClick={handleDiscover}>
                         <Icon name="FiCompass" size="xs" />
                         {showDiscover ? 'Hide' : 'Discover'}
                     </Button>
                     <Button size="xs" color="primary" onClick={() => { setShowCreateGroup(p => !p); setShowDiscover(false); }}>
                         <Icon name={showCreateGroup ? 'FiChevronUp' : 'FiPlus'} size="xs" />
-                        {showCreateGroup ? 'Cancel' : 'New Group'}
+                        {showCreateGroup ? 'Cancel' : 'New'}
                     </Button>
                 </Container>
             </Container>
@@ -491,8 +517,7 @@ const SocialTab = ({ userId, navigate }) => {
             {/* Create group inline form */}
             {showCreateGroup && (
                 <Card padding="md">
-                    <Container layout="flex-column" gap="sm">
-                        <Typography size="sm" weight="medium">Create a group</Typography>
+                    <Container layout="flex-column" gap="sm" padding="none">
                         <Input
                             placeholder="Group name *"
                             value={createGroupForm.name}
@@ -513,12 +538,7 @@ const SocialTab = ({ userId, navigate }) => {
                             value={createGroupForm.privacy}
                             onChange={val => setCreateGroupForm(p => ({ ...p, privacy: val }))}
                         />
-                        <Button
-                            size="sm"
-                            color="primary"
-                            onClick={handleCreateGroup}
-                            disabled={isCreatingGroup || !createGroupForm.name.trim()}
-                        >
+                        <Button size="sm" color="primary" onClick={handleCreateGroup} disabled={isCreatingGroup || !createGroupForm.name.trim()}>
                             {isCreatingGroup ? <CircularProgress size="xs" /> : <><Icon name="FiUsers" size="xs" />Create Group</>}
                         </Button>
                     </Container>
@@ -527,7 +547,7 @@ const SocialTab = ({ userId, navigate }) => {
 
             {/* Discover public groups */}
             {showDiscover && (
-                <Container layout="flex-column" gap="xs">
+                <Container layout="flex-column" gap="xs" padding="none">
                     {isDiscovering && (
                         <Container layout="flex" align="center" gap="xs" padding="xs">
                             <CircularProgress size="xs" />
@@ -539,21 +559,16 @@ const SocialTab = ({ userId, navigate }) => {
                     )}
                     {discoverResults.map(g => (
                         <Container key={g._id} layout="flex" align="center" justify="between" gap="sm" padding="xs">
-                            <Container layout="flex" align="center" gap="sm">
-                                <Container style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Container layout="flex" align="center" gap="sm" padding="none">
+                                <Container style={{ width: '22px', height: '22px', borderRadius: '6px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                     <Icon name="FiUsers" size="xs" color="surface" />
                                 </Container>
-                                <Container layout="flex-column" gap="none">
-                                    <Typography size="sm" weight="medium">{g.name}</Typography>
+                                <Container layout="flex-column" gap="none" padding="none">
+                                    <Typography size="xs" weight="medium">{g.name}</Typography>
                                     <Typography size="xxs" color="secondary">{g.memberCount || g.members?.length || 0} members</Typography>
                                 </Container>
                             </Container>
-                            <Button
-                                size="xs"
-                                color="primary"
-                                onClick={() => handleJoinGroup(g)}
-                                disabled={joiningGroup === g._id}
-                            >
+                            <Button size="xs" color="primary" onClick={() => handleJoinGroup(g)} disabled={joiningGroup === g._id}>
                                 {joiningGroup === g._id ? <CircularProgress size="xs" /> : 'Join'}
                             </Button>
                         </Container>
@@ -567,51 +582,24 @@ const SocialTab = ({ userId, navigate }) => {
                     No groups yet — create one or discover public groups
                 </Typography>
             ) : (
-                <Container layout="flex-column" gap="xs" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                     {groups.map(g => (
                         <Container
                             key={g._id} layout="flex" align="center" gap="sm" padding="xs"
                             style={{ cursor: 'pointer', borderRadius: '4px' }}
                             onClick={() => navigate(`/groups/${g._id}`)}
                         >
-                            <Container
-                                style={{
-                                    width: '28px', height: '28px', borderRadius: '6px',
-                                    background: 'var(--primary)', display: 'flex',
-                                    alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                                }}
-                            >
+                            <Container style={{ width: '26px', height: '26px', borderRadius: '6px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Icon name="FiUsers" size="xs" color="surface" />
                             </Container>
                             <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
-                                <Typography size="sm" weight="medium">{g.name}</Typography>
-                                <Typography size="xxs" color="secondary">
-                                    {g.memberCount || g.members?.length || 0} members
-                                </Typography>
+                                <Typography size="xs" weight="medium">{g.name}</Typography>
+                                <Typography size="xxs" color="secondary">{g.memberCount || g.members?.length || 0} members</Typography>
                             </Container>
                             {g.privacy === 'private' && <Badge size="xs" color="secondary">Private</Badge>}
                         </Container>
                     ))}
                 </Container>
-            )}
-
-            {/* Sent Requests */}
-            {sentRequests.length > 0 && (
-                <>
-                    <Divider margin="xs" />
-                    <Typography size="sm" weight="semibold">
-                        <Icon name="FiSend" size="xs" /> Sent Requests ({sentRequests.length})
-                    </Typography>
-                    <Container layout="flex-column" gap="2px" style={{ maxHeight: '120px', overflowY: 'auto' }}>
-                        {sentRequests.map(u => (
-                            <Container key={u._id || u.id} layout="flex" align="center" gap="sm" padding="xs">
-                                <Icon name="FiUser" size="sm" color="secondary" />
-                                <Typography size="sm" color="secondary">{u.username || u.email}</Typography>
-                                <Badge size="xs" color="warning">Pending</Badge>
-                            </Container>
-                        ))}
-                    </Container>
-                </>
             )}
         </Container>
     );
@@ -721,8 +709,8 @@ const DashboardPage = () => {
                 </Container>
 
                 {/* ── Footer Stats Bar ── */}
-                <Card padding="md" width="100%" height="5vh">
-                    <Container layout="flex" align="center" justify="between" width="100%" height="100%" padding="none">
+                <Card padding="md" width="100%" style={{ minHeight: '40px', flexShrink: 0 }}>
+                    <Container layout="flex" align="center" justify="between" width="100%" height="100%" padding="none" style={{ padding: '0 16px' }}>
                         <Container layout="flex" align="center" gap="sm" padding="none">
                             <Icon name="FiHardDrive" size="xs" color="secondary" />
                             <Typography size="xs" color="secondary">

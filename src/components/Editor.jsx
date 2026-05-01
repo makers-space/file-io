@@ -18,6 +18,7 @@ import {
     diffSourcePlugin,
     DiffSourceToggleWrapper,
     headingsPlugin,
+    HighlightToggle,
     imagePlugin,
     InsertCodeBlock,
     InsertImage,
@@ -30,6 +31,7 @@ import {
     MDXEditor,
     quotePlugin,
     Separator,
+    StrikeThroughSupSubToggles,
     tablePlugin,
     thematicBreakPlugin,
     toolbarPlugin,
@@ -1338,6 +1340,99 @@ Editor.displayName = 'Editor';
 
 export default Editor;
 
+// ── Emoji shortcode → unicode map ──────────────────────────────────────────
+const EMOJI_MAP = {
+  // Faces & emotions
+  smile: '😄', grin: '😁', joy: '😂', rofl: '🤣', blush: '😊',
+  heart_eyes: '😍', kissing_heart: '😘', wink: '😉', stuck_out_tongue: '😛',
+  thinking: '🤔', smirk: '😏', neutral_face: '😐', unamused: '😒',
+  roll_eyes: '🙄', flushed: '😳', weary: '😩', sob: '😭', cry: '😢',
+  angry: '😠', rage: '😡', scream: '😱', skull: '💀', ghost: '👻',
+  sunglasses: '😎', nerd_face: '🤓', sleeping: '😴', mask: '😷',
+  sweat: '😓', sweat_smile: '😅', innocent: '😇', clown_face: '🤡',
+  robot: '🤖', cowboy_hat_face: '🤠', partying_face: '🥳', monocle_face: '🧐',
+  // Hands & gestures
+  wave: '👋', '+1': '👍', thumbsup: '👍', '-1': '👎', thumbsdown: '👎',
+  clap: '👏', raised_hands: '🙌', pray: '🙏', muscle: '💪', v: '✌️',
+  ok_hand: '👌', point_right: '👉', point_left: '👈', point_up: '☝️',
+  point_down: '👇', crossed_fingers: '🤞', handshake: '🤝', writing_hand: '✍️',
+  // Hearts & love
+  heart: '❤️', orange_heart: '🧡', yellow_heart: '💛', green_heart: '💚',
+  blue_heart: '💙', purple_heart: '💜', black_heart: '🖤', broken_heart: '💔',
+  sparkling_heart: '💖', two_hearts: '💕', revolving_hearts: '💞',
+  // Stars, fire & celebration
+  fire: '🔥', star: '⭐', star2: '🌟', sparkles: '✨', zap: '⚡',
+  tada: '🎉', confetti_ball: '🎊', balloon: '🎈', gift: '🎁', trophy: '🏆',
+  // Symbols & status
+  checkmark: '✅', x: '❌', warning: '⚠️', question: '❓', exclamation: '❗',
+  check: '✔️', copyright: '©️', registered: '®️', tm: '™️', recycle: '♻️',
+  '100': '💯', sos: '🆘', new: '🆕', ok: '🆗', up: '🆙', cool: '🆒',
+  // Nature & weather
+  sunny: '☀️', cloud: '☁️', rainbow: '🌈', snowflake: '❄️', umbrella: '☂️',
+  ocean: '🌊', droplet: '💧', seedling: '🌱', rose: '🌹', cherry_blossom: '🌸',
+  sunflower: '🌻', four_leaf_clover: '🍀', maple_leaf: '🍁', mushroom: '🍄',
+  // Animals
+  dog: '🐶', cat: '🐱', bear: '🐻', panda_face: '🐼', fox_face: '🦊',
+  lion: '🦁', unicorn: '🦄', penguin: '🐧', bird: '🐦', frog: '🐸',
+  snake: '🐍', bug: '🐛', bee: '🐝', butterfly: '🦋', fish: '🐟',
+  whale: '🐳', octopus: '🐙', turtle: '🐢', rabbit: '🐰', pig: '🐷',
+  // Food & drink
+  pizza: '🍕', hamburger: '🍔', fries: '🍟', hotdog: '🌭', taco: '🌮',
+  sushi: '🍣', ramen: '🍜', ice_cream: '🍦', cake: '🎂', cookie: '🍪',
+  doughnut: '🍩', candy: '🍬', chocolate_bar: '🍫', apple: '🍎',
+  banana: '🍌', grapes: '🍇', strawberry: '🍓', coffee: '☕', tea: '🍵',
+  beer: '🍺', wine_glass: '🍷', champagne: '🍾',
+  // Tech & objects
+  computer: '💻', iphone: '📱', camera: '📷', email: '📧', mailbox: '📫',
+  bell: '🔔', lock: '🔒', key: '🔑', bulb: '💡', book: '📖', books: '📚',
+  moneybag: '💰', money_with_wings: '💸', pencil: '✏️', memo: '📝',
+  calendar: '📅', pushpin: '📌', link: '🔗', paperclip: '📎', scissors: '✂️',
+  trash: '🗑️', wrench: '🔧', hammer: '🔨', gear: '⚙️', microscope: '🔬',
+  telescope: '🔭', rocket: '🚀', airplane: '✈️', car: '🚗', house: '🏠',
+  earth_americas: '🌎', earth_africa: '🌍', earth_asia: '🌏',
+  globe_with_meridians: '🌐', map: '🗺️',
+  // Music & entertainment
+  musical_note: '🎵', notes: '🎶', microphone: '🎤', headphones: '🎧',
+  guitar: '🎸', tv: '📺', video_game: '🎮', art: '🎨', movie_camera: '🎥',
+};
+
+/**
+ * Preprocess extended markdown syntax that MDXEditor doesn't natively support.
+ * Handles: emoji shortcodes, heading IDs, footnotes, superscript (^text^),
+ * subscript (~text~), and definition lists (term\n: def).
+ * Note: transformations are applied on import — saved content reflects the
+ * normalized form (e.g. <sup>/<sub> tags instead of ^/~ syntax).
+ */
+function preprocessMarkdown(md) {
+  if (!md) return md;
+
+  // 1. Emoji shortcodes :name: → unicode character
+  md = md.replace(/:([a-z0-9_+\-]+):/g, (match, name) => EMOJI_MAP[name] ?? match);
+
+  // 2. Strip pandoc/kramdown heading IDs {#custom-id}
+  md = md.replace(/^(#{1,6}[^\n]*?)\s*\{#[a-zA-Z0-9_-]+\}/gm, '$1');
+
+  // 3. Footnote definitions [^id]: text → block quote (process before inline refs)
+  md = md.replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, '> **[^$1]**: $2');
+
+  // 4. Inline footnote references [^id] → superscript
+  md = md.replace(/\[\^([^\]\n]+)\]/g, '<sup>[$1]</sup>');
+
+  // 5. Superscript ^text^ (skip ^^ double-caret)
+  md = md.replace(/(?<!\^)\^([^\^\n]+)\^(?!\^)/g, '<sup>$1</sup>');
+
+  // 6. Subscript ~text~ (skip ~~ used for strikethrough)
+  md = md.replace(/(?<!~)~(?!~)([^~\n]+?)~(?!~)/g, '<sub>$1</sub>');
+
+  // 7. Definition lists: plain term line followed by ": definition" line(s)
+  md = md.replace(
+    /^(?![#>*\-+]|\d+\.|\s)([^\n:][^\n]*)\n((?:[ \t]*: [^\n]+\n?)+)/gm,
+    (_, term, defs) => `**${term.trim()}**\n${defs.replace(/^[ \t]*: /gm, '')}`,
+  );
+
+  return md;
+}
+
 const MarkdownEditorInner = forwardRef(({
     className = '',
     onChange = null,
@@ -1370,13 +1465,14 @@ const MarkdownEditorInner = forwardRef(({
 }, ref) => {
     const effectiveTheme = useTheme();
     const editorRef = useRef(null);
-    const effectiveContent = content || '';
+    const effectiveContent = preprocessMarkdown(content || '');
 
     useEffect(() => {
         if (editorRef.current && content !== undefined) {
+            const processed = preprocessMarkdown(content);
             const currentContent = editorRef.current.getMarkdown();
-            if (content !== currentContent) {
-                editorRef.current.setMarkdown(content);
+            if (processed !== currentContent) {
+                editorRef.current.setMarkdown(processed);
             }
         }
     }, [content]);
@@ -1428,10 +1524,13 @@ const MarkdownEditorInner = forwardRef(({
         codeBlockPlugin({ defaultCodeBlockLanguage: 'js' }),
         codeMirrorPlugin({
             codeBlockLanguages: {
+                '': 'Plain Text',
                 js: 'JavaScript', jsx: 'JavaScript (React)', ts: 'TypeScript',
                 tsx: 'TypeScript (React)', html: 'HTML', css: 'CSS',
                 json: 'JSON', md: 'Markdown', txt: 'Plain Text',
-                bash: 'Bash', python: 'Python', sql: 'SQL', yml: 'YAML',
+                bash: 'Bash', sh: 'Shell', python: 'Python', py: 'Python',
+                sql: 'SQL', yml: 'YAML', yaml: 'YAML', ruby: 'Ruby',
+                go: 'Go', rust: 'Rust', c: 'C', cpp: 'C++', java: 'Java',
             },
             autoLoadLanguageSupport: true,
         }),
@@ -1441,7 +1540,9 @@ const MarkdownEditorInner = forwardRef(({
                     <UndoRedo />
                     <Separator />
                     <BoldItalicUnderlineToggles />
+                    <StrikeThroughSupSubToggles />
                     <CodeToggle />
+                    <HighlightToggle />
                     <Separator />
                     <BlockTypeSelect />
                     <Separator />
@@ -1499,7 +1600,7 @@ const MarkdownEditorInner = forwardRef(({
                 placeholder={placeholder}
                 contentEditableClassName={contentEditableClassName}
                 plugins={plugins}
-                suppressHtmlProcessing={true}
+                suppressHtmlProcessing={false}
             />
         </div>
     );

@@ -664,7 +664,7 @@ const DashboardPage = () => {
                 gap="none"
                 width="100%"
                 height="100%"
-                style={{ padding: '8vh', display: 'flex', flexDirection: 'column' }}
+                style={{ padding: '8vmin', display: 'flex', flexDirection: 'column' }}
             >
                 {/* ── Main scrollable content area ── */}
                 <Container layout="flex-column" gap="sm" flexFill overflow="auto" padding="none" wrap={false} width="100%">

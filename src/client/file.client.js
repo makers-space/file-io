@@ -664,9 +664,10 @@ export const fileService = {
      * @param {boolean} overwrite - Whether to overwrite existing files
      * @returns {Promise<object>} Upload response
      */
-    async uploadFiles(files, targetPath = '/', onProgress = null, overwrite = false) {
+    async uploadFiles(files, targetPath = '/', onProgress = null, overwrite = false, options = {}) {
         const normalizedPath = this.normalizePath(targetPath);
         const formData = new FormData();
+        const { textImports = null } = options;
         
         // Append files and capture relative paths explicitly (browsers may strip
         // path separators from filenames, so we send paths as a separate field)
@@ -680,6 +681,9 @@ export const fileService = {
         // Append metadata
         formData.append('relativePaths', JSON.stringify(relativePaths));
         formData.append('basePath', normalizedPath);
+        if (textImports) {
+            formData.append('textImports', JSON.stringify(textImports));
+        }
         if (overwrite) {
             formData.append('overwrite', 'true');
         }

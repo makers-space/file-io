@@ -167,7 +167,116 @@ import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from
 import { StarterKit } from '@tiptap/starter-kit';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import { FontFamily } from '@tiptap/extension-font-family';
+import { FontFamily as _FontFamily } from '@tiptap/extension-font-family';
+
+// Canonical font substitutions: Linux/LibreOffice/macOS font names → fonts
+// available on Windows (and widely available on all platforms).
+const DOCX_FONT_SUBS = {
+    // Liberation family (metric-compatible RedHat replacements)
+    'Liberation Sans':              'Arial',
+    'Liberation Sans Narrow':       'Arial Narrow',
+    'Liberation Serif':             'Times New Roman',
+    'Liberation Mono':              'Courier New',
+    // DejaVu family
+    'DejaVu Sans':                  'Verdana',
+    'DejaVu Sans Condensed':        'Verdana',
+    'DejaVu Sans Mono':             'Courier New',
+    'DejaVu Serif':                 'Georgia',
+    'DejaVu Serif Condensed':       'Georgia',
+    // Nimbus / URW PostScript family
+    'Nimbus Sans L':                'Arial',
+    'Nimbus Sans':                  'Arial',
+    'Nimbus Roman No9 L':           'Times New Roman',
+    'Nimbus Roman':                 'Times New Roman',
+    'Nimbus Mono L':                'Courier New',
+    'Nimbus Mono':                  'Courier New',
+    'URW Bookman L':                'Book Antiqua',
+    'URW Bookman':                  'Book Antiqua',
+    'URW Gothic L':                 'Century Gothic',
+    'URW Gothic':                   'Century Gothic',
+    'URW Palladio L':               'Palatino Linotype',
+    'URW Palladio':                 'Palatino Linotype',
+    'URW Chancery L':               'Palatino Linotype',
+    // GNU FreeFont
+    'FreeSans':                     'Arial',
+    'FreeSerif':                    'Times New Roman',
+    'FreeMono':                     'Courier New',
+    // Bitstream fonts
+    'Bitstream Charter':            'Georgia',
+    'Bitstream Vera Sans':          'Verdana',
+    'Bitstream Vera Sans Mono':     'Courier New',
+    'Bitstream Vera Serif':         'Georgia',
+    'Charter':                      'Georgia',
+    // Linux Libertine / Biolinum (common in academic DOCX)
+    'Linux Libertine':              'Times New Roman',
+    'Linux Libertine O':            'Times New Roman',
+    'Linux Libertine G':            'Times New Roman',
+    'Linux Biolinum':               'Arial',
+    'Linux Biolinum O':             'Arial',
+    'Linux Biolinum G':             'Arial',
+    // macOS system fonts that may appear in DOCX from Mac users
+    'Helvetica':                    'Arial',
+    'Helvetica Neue':               'Arial',
+    'Gill Sans':                    'Trebuchet MS',
+    'Gill Sans MT':                 'Trebuchet MS',
+    'Optima':                       'Segoe UI',
+    'Futura':                       'Century Gothic',
+    'Hoefler Text':                 'Times New Roman',
+    'Lucida Grande':                'Tahoma',
+    'Geneva':                       'Verdana',
+    'Palatino':                     'Palatino Linotype',
+    'New York':                     'Georgia',
+    'SF Pro':                       'Segoe UI',
+    'SF Pro Text':                  'Segoe UI',
+    'SF Pro Display':               'Segoe UI',
+    'SF Mono':                      'Courier New',
+    'Menlo':                        'Consolas',
+    'Monaco':                       'Courier New',
+    // Legacy / alternate PostScript names
+    'Times':                        'Times New Roman',
+    'Courier':                      'Courier New',
+    'Arial MT':                     'Arial',
+    'Helvetica-Bold':               'Arial',
+};
+
+// Weight/style keywords that Word and LibreOffice embed directly in the
+// font-family name (e.g. "Montserrat Medium", "Calibri Light").
+// Strip them so browsers can match the base typeface.
+// "Narrow", "Condensed", "Expanded" are intentionally excluded — those are
+// distinct faces with their own metrics (e.g. "Arial Narrow" must stay intact).
+const FONT_WEIGHT_SUFFIX_RE = /\s+(Thin|Extra\s?Light|Ultra\s?Light|Light|Regular|Normal|Medium|Semi\s?Bold|Demi\s?Bold|Bold|Extra\s?Bold|Ultra\s?Bold|Black|Heavy)\s*$/i;
+
+const normFont = (raw) => {
+    if (!raw) return null;
+    const name = raw.split(',')[0].trim().replace(/^["']|["']$/g, '').trim();
+    if (!name) return null;
+    // Direct substitution first
+    if (DOCX_FONT_SUBS[name]) return DOCX_FONT_SUBS[name];
+    // Strip weight suffix embedded in the name (e.g. "Montserrat Medium" → "Montserrat")
+    const stripped = name.replace(FONT_WEIGHT_SUFFIX_RE, '').trim();
+    if (stripped !== name) {
+        if (DOCX_FONT_SUBS[stripped]) return DOCX_FONT_SUBS[stripped];
+        return stripped;
+    }
+    return name;
+};
+
+// FontFamily extended to normalise substitute font names at parse time.
+const FontFamily = _FontFamily.extend({
+    addGlobalAttributes() {
+        return [{
+            types: this.options.types,
+            attributes: {
+                fontFamily: {
+                    default: null,
+                    parseHTML: (el) => normFont(el.style.fontFamily) || null,
+                    renderHTML: (attrs) => attrs.fontFamily
+                        ? { style: `font-family: ${attrs.fontFamily}` } : {},
+                },
+            },
+        }];
+    },
+});
 import { Highlight } from '@tiptap/extension-highlight';
 import { Image as TiptapImage } from '@tiptap/extension-image';
 import { Link } from '@tiptap/extension-link';
@@ -254,6 +363,48 @@ const ResizableImage = TiptapImage.extend({
     addNodeView() { return ReactNodeViewRenderer(ResizableImageView); },
 });
 
+const styleAttr = {
+    default: null,
+    parseHTML: element => element.getAttribute('style') || null,
+    renderHTML: attributes => attributes.style ? { style: attributes.style } : {},
+};
+
+const StyledTable = Table.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            style: styleAttr,
+        };
+    },
+});
+
+const StyledTableRow = TableRow.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            style: styleAttr,
+        };
+    },
+});
+
+const StyledTableCell = TableCell.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            style: styleAttr,
+        };
+    },
+});
+
+const StyledTableHeader = TableHeader.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            style: styleAttr,
+        };
+    },
+});
+
 const FontSize = Extension.create({
     name: 'fontSize',
     addGlobalAttributes() {
@@ -283,7 +434,14 @@ const FontSize = Extension.create({
 
 const cssAttr = (prop, cssProp, key) => ({
     default: null,
-    parseHTML: el => el.style[prop] || null,
+    parseHTML: el => {
+        const raw = el.style[prop];
+        // Normalise font substitutes at parse time so stored content always
+        // contains a canonical name that the browser can render (e.g. 'Arial'
+        // rather than 'Liberation Sans' from LibreOffice-created DOCX files).
+        if (prop === 'fontFamily') return normFont(raw) || null;
+        return raw || null;
+    },
     renderHTML: a => { const v = a[key || prop]; return v ? { style: `${cssProp}: ${v}` } : {}; },
 });
 
@@ -660,7 +818,17 @@ const DocumentToolbar = ({ editor }) => {
 
     // TipTap wraps multi-word font names in CSS quotes ("Times New Roman").
     // Strip them so the value matches the plain strings in FONT_FAMILIES.
-    const rawFont = editor.getAttributes('textStyle').fontFamily || '';
+    // Also fall back to the paragraph-level paraFontFamily attribute (set by
+    // ParagraphFormatting) when no inline TextStyle mark carries a font —
+    // this covers imported DOCX content where font is on the <p> node not a <span>.
+    const rawFont = editor.getAttributes('textStyle').fontFamily
+        || editor.getAttributes('paragraph').paraFontFamily
+        || editor.getAttributes('heading').paraFontFamily
+        || '';
+    // Strip any CSS quotes TipTap may wrap around multi-word names.
+    // (Parse-time normalization in the FontFamily extension and cssAttr means
+    // substitute names like 'Liberation Sans' are already converted to 'Arial'
+    // before reaching here — this just strips residual quotes.)
     const currentFont = rawFont.replace(/^["']|["']$/g, '');
 
     // For font size: prefer the explicit textStyle mark attribute (strip px
@@ -1123,10 +1291,10 @@ const DocumentEditorInner = forwardRef(({
                 autolink: true,
                 HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
             }),
-            Table.configure({ resizable: true }),
-            TableRow,
-            TableCell,
-            TableHeader,
+            StyledTable.configure({ resizable: true }),
+            StyledTableRow,
+            StyledTableCell,
+            StyledTableHeader,
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
             Underline,
         ],

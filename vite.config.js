@@ -9,7 +9,6 @@ export default defineConfig({
     port: 8083
   },
   optimizeDeps: {
-    include: ['mammoth'],
     // Exclude the PDF.js worker from Vite's pre-bundling so the
     // `new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url)`
     // pattern in PdfViewer resolves correctly at runtime.

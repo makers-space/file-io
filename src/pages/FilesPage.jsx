@@ -189,96 +189,49 @@ const buildDocxUploadImports = async (files) => {
   return imports.some(Boolean) ? imports : null;
 };
 
-const useYjsDocument = (file) => {
-  const [content, setContent] = useState('');
-  const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'connecting', 'connected', 'disconnected', 'error'
+const useFileViewer = (filePath, user) => {
+  const [state, setState] = useState({
+    status: 'idle',           // 'idle' | 'loading' | 'ready' | 'error'
+    viewerType: null,         // null | 'directory' | 'text' | 'image' | 'video' | 'audio' | 'pdf' | '3d' | 'binary'
+    metadata: null,
+    isReadOnly: true,
+    errorMessage: null,
+    content: '',
+    connectionStatus: 'disconnected',
+    imageSrc: null,
+    streamingSrc: null,
+    pdfBlob: null,
+    modelSrc: null,
+    modelFormat: null,
+  });
+
   const connectionRef = useRef(null);
+  const seededRef = useRef(null);
+  const blobUrlsRef = useRef([]);
+  const pathRef = useRef(filePath);
+  pathRef.current = filePath;
+
   const { error: showError } = useNotification();
-  const filePath = file?.filePath;
-  const isTextFile = file?.type === 'text';
 
-  useEffect(() => {
-    if (!filePath || !isTextFile) {
-      setContent('');
-      setConnectionStatus('disconnected');
-      return;
-    }
+  const checkReadOnly = useCallback((metadata) => {
+    if (!user || !metadata) return true;
+    const userId = String(user._id || user.id);
+    if (String(metadata.owner) === userId) return false;
+    const writeUsers = metadata.permissions?.write || [];
+    return !writeUsers.some(wu => String(wu) === userId);
+  }, [user]);
 
-    let mounted = true;
-    const connectToDoc = async () => {
-      setConnectionStatus('connecting');
-      try {
-        const connection = await fileService.connectToDocument(filePath);
-        
-        if (!mounted) return;
-        
-        connectionRef.current = connection;
-        const initialContent = connection.ytext.toString();
-        setContent(initialContent);
-
-        if (connection.provider) {
-          connection.provider.on('status', (event) => {
-            if (mounted) {
-              setConnectionStatus(event.status === 'connected' ? 'connected' : 'connecting');
-            }
-          });
-
-          connection.provider.on('sync', (synced) => {
-            if (mounted && synced) {
-              setConnectionStatus('connected');
-            }
-          });
-
-          // Stop reconnecting for permanent authorization failures.
-          // Auth token expiry (1008) is handled by the transport layer
-          // in connectToDocument which refreshes the token and retries.
-          connection.provider.on('connection-close', (event) => {
-            if (event.code === 4403 || event.code === 4404) {
-              connection.provider.shouldConnect = false;
-              connection.provider.disconnect();
-              if (mounted) {
-                setConnectionStatus('error');
-              }
-            }
-          });
-        }
-
-        const observer = (event, transaction) => {
-          if (transaction.origin !== 'editor-change') {
-            const newContent = connection.ytext.toString();
-            setContent(newContent);
-          }
-        };
-        connection.ytext.observe(observer);
-        connection.observer = observer;
-
-        if (mounted) {
-          setConnectionStatus('connected');
-        }
-      } catch (err) {
-        if (mounted) {
-          setConnectionStatus('error');
-          showError(`Failed to connect to document: ${err.message}`);
-        }
-      }
-    };
-
-    connectToDoc();
-
-    return () => {
-      mounted = false;
-      if (connectionRef.current) {
-        if (connectionRef.current.observer) {
-          connectionRef.current.ytext.unobserve(connectionRef.current.observer);
-        }
-        fileService.disconnectFromDocument(filePath).catch((err) => {
-          showError(`Failed to disconnect from document: ${err.message}`);
-        });
-        connectionRef.current = null;
-      }
-      setConnectionStatus('disconnected');
-    };
-  }, [filePath, isTextFile, showError]);
+  const getViewerType = useCallback((metadata, fp) => {
+    if (!metadata || !fp) return null;
+    if (metadata.type === 'directory') return 'directory';
+    if (fp.match(/\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|tiff|tif)$/i)) return 'image';
+    if (fp.match(/\.(mp4|webm|avi|mov|wmv|flv)$/i)) return 'video';
+    if (fp.match(/\.(mp3|wav)$/i)) return 'audio';
+    if (fp.match(/\.(obj|gltf|glb|fbx|stl|dae|3ds|blend|ply|3mf|usdz|usda|usdc|vrm|vox|c4d)$/i)) return '3d';
+    if (fp.match(/\.pdf$/i)) return 'pdf';
+    if (metadata.type === 'text') return 'text';
+    return 'binary';
+  }, []);
 
   const updateContent = useCallback((newContent) => {
     const ytext = connectionRef.current?.ytext;
@@ -286,25 +239,170 @@ const useYjsDocument = (file) => {
       showError('No collaborative connection available. Please refresh the page.');
       return;
     }
-    // Diff-based update: only touch the characters that actually changed.
-    // A full delete+insert causes Yjs CRDT to duplicate content when two
-    // clients write simultaneously (both inserts survive the merge).
     const oldText = ytext.toString();
     if (newContent === oldText) return;
-
     let start = 0;
     while (start < oldText.length && start < newContent.length && oldText[start] === newContent[start]) start++;
     let oldEnd = oldText.length;
     let newEnd = newContent.length;
     while (oldEnd > start && newEnd > start && oldText[oldEnd - 1] === newContent[newEnd - 1]) { oldEnd--; newEnd--; }
-
     ytext.doc.transact(() => {
       if (oldEnd > start) ytext.delete(start, oldEnd - start);
       if (newEnd > start) ytext.insert(start, newContent.slice(start, newEnd));
     }, 'editor-change');
   }, [showError]);
 
-  return { content, updateContent, connectionStatus };
+  useEffect(() => {
+    if (!filePath) {
+      setState(prev => prev.status === 'idle' ? prev : {
+        status: 'idle', viewerType: null, metadata: null, isReadOnly: true, errorMessage: null,
+        content: '', connectionStatus: 'disconnected',
+        imageSrc: null, streamingSrc: null, pdfBlob: null, modelSrc: null, modelFormat: null,
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setState({
+      status: 'loading', viewerType: null, metadata: null, isReadOnly: true, errorMessage: null,
+      content: '', connectionStatus: 'disconnected',
+      imageSrc: null, streamingSrc: null, pdfBlob: null, modelSrc: null, modelFormat: null,
+    });
+
+    const load = async () => {
+      try {
+        const bootstrap = await fileService.getFileOpenBootstrap(filePath);
+        if (cancelled) return;
+
+        const metadata = bootstrap?.metadata;
+        if (!metadata) throw new Error('File not found or access denied');
+
+        const viewerType = getViewerType(metadata, filePath);
+        const isReadOnly = checkReadOnly(metadata);
+        const initialContent = bootstrap.initialContent || '';
+
+        if (viewerType === 'directory') {
+          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'directory', metadata, isReadOnly: false }));
+          return;
+        }
+
+        if (viewerType === 'text') {
+          const connection = await fileService.connectToDocument(filePath);
+          if (cancelled) {
+            fileService.disconnectFromDocument(filePath).catch(() => {});
+            return;
+          }
+          connectionRef.current = connection;
+          if (!cancelled) setState(s => ({
+            ...s, status: 'ready', viewerType: 'text', metadata, isReadOnly,
+            content: '', connectionStatus: 'connecting',
+          }));
+
+          const seedIfEmpty = () => {
+            if (cancelled || seededRef.current === filePath) return;
+            if (!initialContent.trim() || connection.ytext.toString().trim()) return;
+            seededRef.current = filePath;
+            connection.ytext.doc.transact(() => {
+              connection.ytext.insert(0, initialContent);
+            }, 'bootstrap-seed');
+            if (!cancelled) setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
+          };
+
+          const observer = (_, transaction) => {
+            if (transaction.origin !== 'editor-change' && !cancelled) {
+              setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
+            }
+          };
+          connection.ytext.observe(observer);
+          connectionRef.current.observer = observer;
+
+          if (connection.provider) {
+            connection.provider.on('status', (event) => {
+              if (!cancelled) setState(s => s.viewerType === 'text'
+                ? { ...s, connectionStatus: event.status === 'connected' ? 'connected' : 'connecting' }
+                : s);
+            });
+            connection.provider.on('sync', (synced) => {
+              if (synced && !cancelled) {
+                seedIfEmpty();
+                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected' } : s);
+              }
+            });
+            connection.provider.on('connection-close', (event) => {
+              if ((event.code === 4403 || event.code === 4404) && !cancelled) {
+                connection.provider.shouldConnect = false;
+                connection.provider.disconnect();
+                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'error' } : s);
+              }
+            });
+          } else {
+            seedIfEmpty();
+            if (!cancelled) setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected' } : s);
+          }
+          return;
+        }
+
+        if (viewerType === 'image') {
+          const blob = await fileService.downloadFile(filePath);
+          if (cancelled) return;
+          const imageSrc = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(imageSrc);
+          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'image', metadata, isReadOnly, imageSrc }));
+          return;
+        }
+
+        if (viewerType === 'video' || viewerType === 'audio') {
+          const streamingSrc = fileService.getStreamingUrl(filePath);
+          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType, metadata, isReadOnly: true, streamingSrc }));
+          return;
+        }
+
+        if (viewerType === 'pdf') {
+          const blob = await fileService.downloadFile(filePath);
+          if (cancelled) return;
+          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'pdf', metadata, isReadOnly, pdfBlob: blob }));
+          return;
+        }
+
+        if (viewerType === '3d') {
+          const blob = await fileService.downloadFile(filePath);
+          if (cancelled) return;
+          const modelSrc = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(modelSrc);
+          const modelFormat = filePath.split('.').pop()?.toLowerCase() || 'glb';
+          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: '3d', metadata, isReadOnly: true, modelSrc, modelFormat }));
+          return;
+        }
+
+        // Binary
+        if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'binary', metadata, isReadOnly: true }));
+
+      } catch (err) {
+        if (!cancelled) {
+          setState(s => ({ ...s, status: 'error', errorMessage: err.response?.data?.message || err.message || 'Failed to load file' }));
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+      if (connectionRef.current) {
+        if (connectionRef.current.observer) {
+          connectionRef.current.ytext.unobserve(connectionRef.current.observer);
+        }
+        fileService.disconnectFromDocument(filePath).catch(() => {});
+        connectionRef.current = null;
+      }
+      for (const url of blobUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      blobUrlsRef.current = [];
+    };
+  }, [filePath, checkReadOnly, getViewerType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { ...state, updateContent, pathRef };
 };
 
 const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
@@ -1517,7 +1615,7 @@ export const QuickActions = ({ targetPath, fileTree, onActionComplete }) => {
   }
 
   const actionProps = {
-    targetPath: '/',
+    targetPath: targetPath,
     fileTree,
     onSuccess: handleSuccess,
     onCancel: handleClose
@@ -2376,74 +2474,31 @@ export const FilesPage = () => {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
   const userRoot = user?.username ? '/' + user.username : '/';
   const [fileTree, setFileTree] = useState({});
-  const [activeFile, setActiveFile] = useState({
-    file: null,
-    isLoading: false,
-    isReadOnly: false,
-  });
-  const [accessError, setAccessError] = useState(false);
   const driveRefreshRef = useRef(null);
-  const activeFileRef = useRef(activeFile.file);
-  activeFileRef.current = activeFile.file;
-
-  const urlLooksLikeFile = useMemo(() => {
-    const urlPath = location.pathname.replace(/^\/files\/?/, '');
-    const name = urlPath.split('/').pop() || '';
-    return name.includes('.');
-  }, [location.pathname]);
-  
-  useEffect(() => {
-    return () => {
-      if (activeFile?.file?._isBlobUrl && activeFile?.file?.modelSrc) {
-        URL.revokeObjectURL(activeFile.file.modelSrc);
-      }
-      if (activeFile?.file?.imageSrc && activeFile?.file?.imageSrc.startsWith('blob:')) {
-        URL.revokeObjectURL(activeFile.file.imageSrc);
-      }
-    };
-  }, [activeFile?.file?.modelSrc, activeFile?.file?.imageSrc]);
-  
   const [versionView, setVersionView] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [latestVersionContent, setLatestVersionContent] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
-  
-  const { content: fileContent, connectionStatus, updateContent } = useYjsDocument(activeFile.file);
-  
-  // Guard: clear raw binary DOCX content ("PK...") that was mistakenly written into Yjs.
-  const docxGuardedRef = useRef(null);
-  useEffect(() => {
-    const filePath = activeFile.file?.filePath;
-    if (docxGuardedRef.current !== filePath) docxGuardedRef.current = null;
-    if (!filePath?.match(/\.docx?$/i) || connectionStatus !== 'connected' || docxGuardedRef.current) return;
-    docxGuardedRef.current = filePath;
-    if (fileContent?.startsWith('PK')) {
-      console.warn('[FilesPage] Raw binary DOCX in Yjs — clearing. Re-upload the file.', filePath);
-      updateContent('');
-    }
-  }, [activeFile.file?.filePath, connectionStatus, fileContent, updateContent]);
+  const [isSavingImage, setIsSavingImage] = useState(false);
+  const [isStarred, setIsStarred] = useState(false);
 
-  const docxHydratedRef = useRef(null);
-  useEffect(() => {
-    const filePath = activeFile.file?.filePath;
-    if (docxHydratedRef.current !== filePath) docxHydratedRef.current = null;
-    if (!filePath?.match(/\.docx$/i) || connectionStatus !== 'connected' || docxHydratedRef.current) return;
-    if ((fileContent || '').trim()) return;
-
-    docxHydratedRef.current = filePath;
-    console.warn('[FilesPage] DOCX opened with empty collaborative content', filePath);
-  }, [activeFile.file?.filePath, connectionStatus, fileContent]);
-  
   const editorRef = useRef(null);
   const imageRef = useRef(null);
   const pdfRef = useRef(null);
-  const [isSavingImage, setIsSavingImage] = useState(false);
-  const [isStarred, setIsStarred] = useState(false);
-  
+
   const { success: showSuccess, error: showError, warning: showWarning, info: showInfo } = useNotification();
 
+  // ─── Derive active path directly from URL (no state needed) ───────────────
+  const rawUrlPath = location.pathname.replace(/^\/files\/?/, '');
+  const activePath = rawUrlPath ? '/' + decodeURIComponent(rawUrlPath) : null;
+  const looksLikeFile = (activePath?.split('/').pop() || '').includes('.');
+
+  // ─── File viewer hook — owns loading, Yjs, blob lifecycle ─────────────────
+  const viewer = useFileViewer(isLoading ? null : activePath, user);
+
+  // ─── Starred state ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const fileId = activeFile.file?._id;
+    const fileId = viewer.metadata?._id;
     if (!fileId) { setIsStarred(false); return; }
     (async () => {
       try {
@@ -2453,10 +2508,10 @@ export const FilesPage = () => {
         setIsStarred(starred.some(f => (f._id || f.id) === fileId));
       } catch { setIsStarred(false); }
     })();
-  }, [activeFile.file?._id]);
+  }, [viewer.metadata?._id]);
 
   const handleToggleStar = useCallback(async () => {
-    const fileId = activeFile.file?._id;
+    const fileId = viewer.metadata?._id;
     if (!fileId) return;
     try {
       const { default: userService } = await import('../client/user.client');
@@ -2470,25 +2525,15 @@ export const FilesPage = () => {
     } catch (err) {
       showError(err?.response?.data?.message || 'Failed to update star');
     }
-  }, [activeFile.file?._id, isStarred, showError]);
-  
+  }, [viewer.metadata?._id, isStarred, showError]);
+
   const clearFileSelection = useCallback(() => {
-    setActiveFile({ file: null, isLoading: false, isReadOnly: false });
-    const currentFile = activeFileRef.current;
-    const parentPath = currentFile
-      ? (fileService.getParentPath(currentFile.filePath) || userRoot)
+    const currentPath = viewer.pathRef.current;
+    const parentPath = currentPath
+      ? (fileService.getParentPath(currentPath) || userRoot)
       : userRoot;
     navigate('/files' + parentPath, { replace: true });
-  }, [navigate, userRoot]);
-
-  const checkIfReadOnly = useCallback((metadata) => {
-    if (!user || !metadata) return true;
-    const userId = String(user._id || user.id);
-    const ownerId = String(metadata.owner);
-    if (ownerId === userId) return false;
-    const writeUsers = metadata.permissions?.write || [];
-    return !writeUsers.some(writeUserId => String(writeUserId) === userId);
-  }, [user]);
+  }, [navigate, userRoot, viewer.pathRef]);
 
   const loadFileTree = useCallback(async (showLoadingState = true) => {
     try {
@@ -2505,123 +2550,18 @@ export const FilesPage = () => {
     }
   }, [showError, showWarning]);
 
-  const loadFileContent = useCallback(async (file, prefetchedMetadata) => {
-    if (!file?.filePath) {
-      showError('Invalid file path');
-      return;
-    }
-
-    setVersionView(null);
-    setLatestVersionContent('');
-    setAccessError(false);
-    setActiveFile({ file: null, isLoading: true, isReadOnly: false });
-
-    try {
-      const filePath = file.filePath;
-      const isImage = filePath.match(/\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|tiff|tif)$/i);
-      const isVideo = filePath.match(/\.(mp4|webm|avi|mov|wmv|flv)$/i);
-      const isAudio = filePath.match(/\.(mp3|wav)$/i);
-      const is3DModel = filePath.match(/\.(obj|gltf|glb|fbx|stl|dae|3ds|blend|ply|3mf|usdz|usda|usdc|vrm|vox|c4d)$/i);
-      const isPdf = filePath.match(/\.pdf$/i);
-      
-      // Single metadata fetch — used for type resolution and permissions.
-      // If the URL effect already fetched metadata (extensionless paths), reuse it.
-      // If metadata fails (404 = file doesn't exist, 403/400 = no access), abort.
-      let metadata = prefetchedMetadata || null;
-      if (!metadata) {
-        try {
-          metadata = await fileService.getMetadata(filePath);
-        } catch (metadataError) {
-          console.warn('[FilesPage] Failed to fetch metadata:', metadataError);
-          setActiveFile({ file: null, isLoading: false, isReadOnly: false });
-          setAccessError(true);
-          return;
-        }
-      }
-
-      let fileWithMetadata = metadata ? { ...file, ...metadata } : file;
-      const isReadOnlyForUser = checkIfReadOnly(metadata);
-
-      if (isImage) {
-        const imageBlob = await fileService.downloadFile(filePath);
-        const imageSrc = URL.createObjectURL(imageBlob);
-        
-        setActiveFile({ 
-          file: { ...fileWithMetadata, isImage: true, type: 'image', imageSrc }, 
-          isLoading: false, 
-          isReadOnly: isReadOnlyForUser 
-        });
-      } else if (isVideo) {
-        const videoSrc = fileService.getStreamingUrl(filePath);
-        
-        setActiveFile({ 
-          file: { ...fileWithMetadata, isVideo: true, type: 'video', videoSrc }, 
-          isLoading: false, 
-          isReadOnly: true
-        });
-      } else if (isAudio) {
-        const audioSrc = fileService.getStreamingUrl(filePath);
-        setActiveFile({ 
-          file: { ...fileWithMetadata, isAudio: true, type: 'audio', audioSrc }, 
-          isLoading: false, 
-          isReadOnly: true
-        });
-      } else if (is3DModel) {
-        try {
-          const blob = await fileService.downloadFile(filePath);
-          const blobUrl = URL.createObjectURL(blob);
-          
-          const modelExt = filePath.split('.').pop()?.toLowerCase() || 'glb';
-          setActiveFile({ 
-            file: { ...fileWithMetadata, is3DModel: true, type: '3d-model', modelSrc: blobUrl, modelFormat: modelExt, _isBlobUrl: true }, 
-            isLoading: false, 
-            isReadOnly: true
-          });
-        } catch (error) {
-          console.error('Failed to load 3D model:', error);
-          showError(`Failed to load 3D model: ${error.message}`);
-        }
-      } else if (isPdf) {
-        try {
-          const pdfBlob = await fileService.downloadFile(filePath);
-          setActiveFile({
-            file: { ...fileWithMetadata, isPdf: true, type: 'pdf', pdfBlob },
-            isLoading: false,
-            isReadOnly: isReadOnlyForUser
-          });
-        } catch (error) {
-          console.error('Failed to load PDF:', error);
-          showError(`Failed to load PDF: ${error.message}`);
-        }
-      } else if (file.type === 'text') {
-        // Text content arrives via the Yjs WebSocket (useYjsDocument).
-        // No HTTP content fetch needed — even for read-only users the Yjs
-        // provider delivers the document.  Version diff is loaded lazily
-        // via refreshLatestVersionContent when the user asks for it.
-        setActiveFile({ file: { ...fileWithMetadata, isImage: false, type: 'text' }, isLoading: false, isReadOnly: isReadOnlyForUser });
-      } else {
-        setActiveFile({ file: { ...fileWithMetadata, isImage: false, isBinary: true, type: 'binary' }, isLoading: false, isReadOnly: true });
-      }
-    } catch (error) {
-      showError(`Failed to load file: ${error.message}`);
-      setActiveFile({ file: null, isLoading: false, isReadOnly: false });
-    }
-  }, [showError, checkIfReadOnly]);
-
   const refreshLatestVersionContent = useCallback(async () => {
-    const currentFile = activeFileRef.current;
-    if (!currentFile?.filePath || currentFile.type !== 'text') {
+    const currentPath = viewer.pathRef.current;
+    if (!currentPath || viewer.viewerType !== 'text') {
       setLatestVersionContent('');
       return;
     }
-
     try {
-      const versionsResponse = await fileService.getFileVersions(currentFile.filePath);
+      const versionsResponse = await fileService.getFileVersions(currentPath);
       const versions = versionsResponse.versions || [];
-      
       if (versions.length > 0) {
         const latestVersion = versions[versions.length - 1];
-        const versionData = await fileService.loadFileVersion(currentFile.filePath, latestVersion.version);
+        const versionData = await fileService.loadFileVersion(currentPath, latestVersion.version);
         setLatestVersionContent(versionData.content || '');
       } else {
         setLatestVersionContent('');
@@ -2630,8 +2570,9 @@ export const FilesPage = () => {
       console.warn('Failed to refresh latest version for diff:', error);
       setLatestVersionContent('');
     }
-  }, []);
-  
+  }, [viewer.pathRef, viewer.viewerType]);
+
+  // ─── Notifications ─────────────────────────────────────────────────────────
   useEffect(() => {
     window.showNotification = (message, type = 'info') => {
       switch (type) {
@@ -2645,34 +2586,28 @@ export const FilesPage = () => {
 
     const cleanup = fileService.onFileNotification(
       (changeType, data) => {
+        const currentPath = viewer.pathRef.current;
         switch (changeType) {
           case 'shared':
           case 'unshared':
-            loadFileTree(false);
-            break;
           case 'created':
             loadFileTree(false);
             break;
           case 'deleted':
-            clearFileSelection();
+            if (currentPath) {
+              const parentPath = fileService.getParentPath(currentPath) || userRoot;
+              navigate('/files' + parentPath, { replace: true });
+            }
             loadFileTree(false);
             break;
           case 'renamed':
-            if (data.newFilePath && activeFileRef.current?.filePath === data.oldFilePath) {
-              setActiveFile(prev => prev.file ? ({
-                ...prev,
-                file: { ...prev.file, filePath: data.newFilePath, fileName: data.newFileName }
-              }) : prev);
+            if (data.newFilePath && currentPath === data.oldFilePath) {
               navigate('/files' + data.newFilePath, { replace: true });
             }
             loadFileTree(false);
             break;
           case 'moved':
-            if (data.newFilePath && activeFileRef.current?.filePath === data.oldFilePath) {
-              setActiveFile(prev => prev.file ? ({
-                ...prev,
-                file: { ...prev.file, filePath: data.newFilePath }
-              }) : prev);
+            if (data.newFilePath && currentPath === data.oldFilePath) {
               navigate('/files' + data.newFilePath, { replace: true });
             }
             loadFileTree(false);
@@ -2689,75 +2624,66 @@ export const FilesPage = () => {
       cleanup();
       delete window.showNotification;
     };
-  }, [loadFileTree, clearFileSelection, refreshLatestVersionContent, navigate]);
+  }, [loadFileTree, refreshLatestVersionContent, navigate, showInfo, showSuccess, showWarning, showError, userRoot]); // eslint-disable-line react-hooks/exhaustive-deps
   
   const handleVersionLoaded = useCallback((versionData) => {
-    // Handle refresh signal from version operations (save/delete)
     if (versionData?.refreshVersionData) {
       refreshLatestVersionContent();
       return;
     }
-    
     if (!versionData?.content) {
       showError('Invalid version data');
       return;
     }
-    
-    if (!activeFile.file) {
+    if (!viewer.metadata) {
       showError('No active file to load version for');
       return;
     }
-    
     setVersionView({
-      originalFile: activeFile.file,
+      originalFile: { ...viewer.metadata, name: viewer.metadata.fileName },
       content: versionData.content,
       versionNumber: versionData.versionNumber,
       versionMessage: versionData.versionMessage,
-      name: `${activeFile.file.name.replace(/\s*\(Version \d+\)/, '')} (Version ${versionData.versionNumber})`
+      name: `${viewer.metadata.fileName.replace(/\s*\(Version \d+\)/, '')} (Version ${versionData.versionNumber})`
     });
-    
     showSuccess(`Viewing version ${versionData.versionNumber} (read-only)`);
-  }, [activeFile.file, showError, showSuccess, refreshLatestVersionContent]);
+  }, [viewer.metadata, showError, showSuccess, refreshLatestVersionContent]);
 
   const handleFileDownload = useCallback(async () => {
-    if (!activeFile.file?.filePath) return;
-    
+    const fp = viewer.metadata?.filePath;
+    const name = viewer.metadata?.fileName;
+    if (!fp) return;
     try {
-      const blob = await fileService.downloadFile(activeFile.file.filePath);
+      const blob = await fileService.downloadFile(fp);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = activeFile.file.name;
+      a.download = name;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
       showError(`Failed to download file: ${error.message}`);
     }
-  }, [activeFile.file, showError]);
+  }, [viewer.metadata, showError]);
 
   const handleImageSave = useCallback(async ({ blob }) => {
-    if (!activeFile.file?.filePath || !blob) {
+    const fp = viewer.metadata?.filePath;
+    if (!fp || !blob) {
       showError('Failed to save image');
       return;
     }
-    
     setIsSavingImage(true);
     try {
       const reader = new FileReader();
       reader.readAsDataURL(blob);
-      
       await new Promise((resolve, reject) => {
         reader.onloadend = async () => {
           try {
             const base64Data = reader.result.split(',')[1];
-            
-            if (!base64Data) {
-              throw new Error('Failed to convert image to base64');
-            }
-            
-            await fileService.updateContent(activeFile.file.filePath, base64Data);
+            if (!base64Data) throw new Error('Failed to convert image to base64');
+            await fileService.updateContent(fp, base64Data);
             showSuccess('Image saved successfully');
-            await loadFileContent(activeFile.file);
+            navigate('/files' + fp, { replace: true });
             resolve();
           } catch (error) {
             reject(error);
@@ -2770,7 +2696,7 @@ export const FilesPage = () => {
     } finally {
       setIsSavingImage(false);
     }
-  }, [activeFile.file, showSuccess, showError, loadFileContent]);
+  }, [viewer.metadata, showSuccess, showError, navigate]);
 
   const navigateToPath = useCallback((filePath) => {
     if (!filePath) {
@@ -2796,71 +2722,13 @@ export const FilesPage = () => {
     loadFileTree(true);
   }, [loadFileTree]);
 
-  // ─── Single URL effect ─────────────────────────────────────────────
-  // URL is the sole source of truth.  When the URL changes we decide
-  // whether to show DriveView (directory) or a file viewer.
-  //  • Has a file extension  → treat as file → loadFileContent
-  //  • No extension          → ask server (getMetadata).
-  //       directory → DriveView (no-op: it reads the URL itself)
-  //       file      → loadFileContent
-  //  • Empty path            → DriveView at root
-  // Everything that wants to navigate just calls navigate().
-  useEffect(() => {
-    const urlPath = location.pathname.replace(/^\/files\/?/, '');
-    const filePath = urlPath ? '/' + decodeURIComponent(urlPath) : '';
-    const fileName = filePath.split('/').pop() || '';
-    const hasExtension = fileName.includes('.');
-
-    // 1. If a file viewer is open but the URL no longer matches → close it
-    if (activeFile.file && filePath !== activeFile.file.filePath) {
-      setActiveFile({ file: null, isLoading: false, isReadOnly: false });
-      return; // effect will re-run on the state change
-    }
-
-    // 2. Already viewing the correct file, already loading, or access denied → nothing to do
-    if (activeFile.file?.filePath === filePath || activeFile.isLoading || accessError) return;
-
-    // 3. No path → DriveView handles showing the user root
-    if (!filePath) return;
-
-    // 4. Wait for file tree to finish loading before resolving URLs
-    if (isLoading) return;
-
-    // 5. Path has a file extension → definitely a file
-    if (hasExtension) {
-      loadFileContent({ filePath, name: fileName, type: fileService.getFileType(filePath) });
-      return;
-    }
-
-    // 6. No extension → ask the server whether this is a file or directory
-    let cancelled = false;
-    (async () => {
-      try {
-        const metadata = await fileService.getMetadata(filePath);
-        if (cancelled) return;
-        if (metadata?.type === 'directory') {
-          // DriveView is already mounted and syncs to URL — nothing to do
-          return;
-        }
-        // It's an extensionless file — pass metadata to avoid a second fetch
-        loadFileContent({ filePath, name: fileName, type: metadata?.type || 'text' }, metadata);
-      } catch {
-        // Metadata failed — path doesn't exist or no access
-        if (!cancelled) setAccessError(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [location.pathname, isLoading, activeFile.file?.filePath, activeFile.isLoading, accessError]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleVersionDownload = useCallback(async () => {
     if (!versionView) return;
-    
     try {
       const blob = await fileService.downloadFileVersion(
-        versionView.originalFile.filePath, 
+        versionView.originalFile.filePath,
         versionView.versionNumber
       );
-      
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const baseName = versionView.originalFile.name.replace(/\.[^/.]+$/, '');
@@ -2948,8 +2816,8 @@ export const FilesPage = () => {
         </Container>
       );
     }
-    
-    if (activeFile.isLoading || (!activeFile.file && !accessError && urlLooksLikeFile)) {
+
+    if (viewer.status === 'loading' && looksLikeFile) {
       return (
         <Container layout="flex" align="center" justify="center" minHeight="100vh" width="100%">
           <Container layout="flex-column" align="center" gap="md">
@@ -2960,13 +2828,13 @@ export const FilesPage = () => {
       );
     }
 
-    if (accessError) {
+    if (viewer.status === 'error') {
       return (
         <Container layout="flex" align="center" justify="center" minHeight="100vh" width="100%">
           <Container layout="flex-column" align="center" gap="lg">
             <Typography
               size="4xl"
-              font="monospace"  
+              font="monospace"
               weight="bold"
               color="primary"
               animation="glitch"
@@ -2978,7 +2846,7 @@ export const FilesPage = () => {
               size="lg"
               color="secondary"
               animation="slide"
-              animationConfig={{ direction: 'bottom', "splitBy":"words" }}
+              animationConfig={{ direction: 'bottom', "splitBy": "words" }}
               animationDelay={150}
               animationDuration={1200}
             >
@@ -2987,10 +2855,7 @@ export const FilesPage = () => {
             <Button
               color="primary"
               size="md"
-              onClick={() => {
-                setAccessError(false);
-                navigate('/files' + userRoot, { replace: true });
-              }}
+              onClick={() => navigate('/files' + userRoot, { replace: true })}
             >
               <Icon name="FiArrowLeft" size="xs" />
               Back to My Files
@@ -3000,7 +2865,7 @@ export const FilesPage = () => {
       );
     }
 
-    if (!activeFile.file) {
+    if (!viewer.metadata || viewer.viewerType === null || viewer.viewerType === 'directory') {
       return (
         <DriveView
           onRefresh={driveRefreshRef}
@@ -3010,22 +2875,24 @@ export const FilesPage = () => {
       );
     }
 
+    const { viewerType, metadata, isReadOnly, content, connectionStatus, updateContent, imageSrc, streamingSrc, pdfBlob, modelSrc, modelFormat } = viewer;
+    const editorMode = activePath?.match(/\.docx?$/i) ? 'document' : activePath?.match(/\.(md|mdx|txt)$/i) ? 'markdown' : 'code';
+
     return (
       <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
         <Card
           className="file-header-card"
-          layout="flex" 
-          align="center" 
-          justify="between" 
+          layout="flex"
+          align="center"
+          justify="between"
           padding="sm"
           width="100%"
-          
         >
           <Container layout="flex" align="center" gap="sm" padding="none">
             <Button size="sm" variant="ghost" onClick={clearFileSelection} title="Back to files">
               <Icon name="FiArrowLeft" size="xs" />
             </Button>
-            {activeFile.file.type === 'text' && !activeFile.isReadOnly && (
+            {viewerType === 'text' && !isReadOnly && (
               <Container layout="flex" align="center" gap="xs">
                 {connectionStatus === 'connected' && (
                   <>
@@ -3053,65 +2920,63 @@ export const FilesPage = () => {
                 )}
               </Container>
             )}
+            {viewerType === 'image' && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="TbImageInPicture" size="sm" />
+                <Typography size="xs" color="primary">IMAGE</Typography>
+              </Container>
+            )}
+            {viewerType === 'video' && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="FiVideo" size="sm" />
+                <Typography size="xs" color="primary">VIDEO</Typography>
+              </Container>
+            )}
+            {viewerType === 'audio' && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="FiMusic" size="sm" />
+                <Typography size="xs" color="primary">AUDIO</Typography>
+              </Container>
+            )}
+            {viewerType === '3d' && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="FiBox" size="sm" />
+                <Typography size="xs" color="primary">3D MODEL</Typography>
+              </Container>
+            )}
+            {viewerType === 'text' && activePath?.match(/\.docx?$/i) && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="FiFileText" size="sm" />
+                <Typography size="xs" color="primary">DOCUMENT</Typography>
+              </Container>
+            )}
+            {viewerType === 'pdf' && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="FiFileText" size="sm" />
+                <Typography size="xs" color="primary">PDF</Typography>
+              </Container>
+            )}
+            {viewerType === 'binary' && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name={activePath?.match(/\.zip$/i) ? 'FiArchive' : 'FiFile'} size="sm" />
+                <Typography size="xs">{activePath?.match(/\.zip$/i) ? 'ZIP ARCHIVE' : 'BINARY'}</Typography>
+              </Container>
+            )}
+            {isReadOnly && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="FiLock" size="sm" color="warning" />
+                <Typography size="xs" color="warning">READ-only</Typography>
+              </Container>
+            )}
+          </Container>
 
-            {activeFile.file.isImage && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="TbImageInPicture" size="sm" />
-                    <Typography size="xs" color="primary">IMAGE</Typography>
-                </Container>
-            )}
-            {activeFile.file.isVideo && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="FiVideo" size="sm" />
-                    <Typography size="xs" color="primary">VIDEO</Typography>
-                </Container>
-            )}
-            {activeFile.file.isAudio && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="FiMusic" size="sm" />
-                    <Typography size="xs" color="primary">AUDIO</Typography>
-                </Container>
-            )}
-            {activeFile.file.is3DModel && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="FiBox" size="sm" />
-                    <Typography size="xs" color="primary">3D MODEL</Typography>
-                </Container>
-            )}
-            {activeFile.file.type === 'text' && activeFile.file.filePath?.match(/\.docx?$/i) && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="FiFileText" size="sm" />
-                    <Typography size="xs" color="primary">DOCUMENT</Typography>
-                </Container>
-            )}
-            {activeFile.file.isPdf && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="FiFileText" size="sm" />
-                    <Typography size="xs" color="primary">PDF</Typography>
-                </Container>
-            )}
-            {activeFile.file.isBinary && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name={activeFile.file.filePath?.match(/\.zip$/i) ? 'FiArchive' : 'FiFile'} size="sm" />
-                    <Typography size="xs">{activeFile.file.filePath?.match(/\.zip$/i) ? 'ZIP ARCHIVE' : 'BINARY'}</Typography>
-                </Container>
-            )}
-            {/* Permission indicator */}
-            {activeFile.isReadOnly && (
-                <Container layout="flex" align="center" gap="sm">
-                    <Icon name="FiLock" size="sm" color="warning" />
-                    <Typography size="xs" color="warning">READ-only</Typography>
-                </Container>
-            )}
-            </Container>
-
-            <Typography weight="semibold">{activeFile.file.name}</Typography>
-            <Container layout="flex" align="center" gap="sm">
-            {activeFile.isReadOnly && (
+          <Typography weight="semibold">{metadata.fileName}</Typography>
+          <Container layout="flex" align="center" gap="sm">
+            {isReadOnly && (
               <Typography size="xs" color="warning">Read-only access</Typography>
             )}
             <Typography size="xs">
-              {activeFile.file.filePath}
+              {metadata.filePath}
             </Typography>
             <Button size="sm" variant="ghost" onClick={handleToggleStar} title={isStarred ? 'Unstar file' : 'Star file'}>
               <Icon name={isStarred ? 'FiStar' : 'FiStar'} size="xs" color={isStarred ? 'warning' : 'secondary'} style={isStarred ? { fill: 'currentColor' } : {}} />
@@ -3120,56 +2985,48 @@ export const FilesPage = () => {
         </Card>
 
         <Container layout="flex" align="center" justify="center" flexFill width="100%" height="100%" padding="sm" overflow="auto">
-          {activeFile.file.type === 'text' ? (
+          {viewerType === 'text' ? (
             <Editor
-              key={`text-editor-${activeFile.file.filePath}`}
+              key={`text-editor-${metadata.filePath}`}
               ref={editorRef}
-              mode={
-                activeFile.file.filePath?.match(/\.docx?$/i)
-                  ? 'document'
-                  : activeFile.file.filePath?.match(/\.(md|mdx|txt)$/i)
-                    ? 'markdown'
-                    : 'code'
-              }
-              filePath={activeFile.file.filePath}
-              content={fileContent}
+              mode={editorMode}
+              filePath={metadata.filePath}
+              content={content}
               diffContent={latestVersionContent}
               onChange={updateContent}
-              placeholder={activeFile.isReadOnly ? "This file is read-only for you" : "Start typing..."}
-              showToolbar={!activeFile.isReadOnly}
-              readOnly={activeFile.isReadOnly}
+              placeholder={isReadOnly ? "This file is read-only for you" : "Start typing..."}
+              showToolbar={!isReadOnly}
+              readOnly={isReadOnly}
               width="100%"
               height="100%"
               minHeight="100%"
             />
-          ) : activeFile.file.isImage ? (
+          ) : viewerType === 'image' ? (
             <Container layout="flex" align="center" justify="center" width="100%">
               <Image
                 ref={imageRef}
-                key={`image-viewer-${activeFile.file.filePath}`}
-                src={activeFile.file.imageSrc}
-                alt={activeFile.file.name}
-                editable={!activeFile.isReadOnly}
+                key={`image-viewer-${metadata.filePath}`}
+                src={imageSrc}
+                alt={metadata.fileName}
+                editable={!isReadOnly}
                 size="xl"
                 fit="contain"
-                fileName={activeFile.file.name.split('.')[0]}
+                fileName={metadata.fileName.split('.')[0]}
                 onSave={handleImageSave}
                 allowDownload={true}
                 controlsPlacement="bottom-right"
               />
             </Container>
-          ) : activeFile.file.isVideo ? (
+          ) : viewerType === 'video' ? (
             <Container layout="flex" align="center" justify="center" width="100%">
               {(() => {
-                const metadata = activeFile.file.mediaMetadata;
-                const posterUrl = metadata?.thumbnailId ? 
-                  `${baseUrl}/files/${encodeURIComponent(activeFile.file.filePath)}/thumbnail` : 
-                  null;
-                
+                const posterUrl = metadata.mediaMetadata?.thumbnailId
+                  ? `${baseUrl}/files/${encodeURIComponent(metadata.filePath)}/thumbnail`
+                  : null;
                 return (
                   <Video
-                    key={`video-player-${activeFile.file.filePath}`}
-                    src={activeFile.file.videoSrc}
+                    key={`video-player-${metadata.filePath}`}
+                    src={streamingSrc}
                     crossOrigin="use-credentials"
                     controls={true}
                     autoPlay={false}
@@ -3183,25 +3040,22 @@ export const FilesPage = () => {
                 );
               })()}
             </Container>
-          ) : activeFile.file.isAudio ? (
+          ) : viewerType === 'audio' ? (
             <Container layout="flex" align="center" justify="center" width="100%">
               {(() => {
-                const metadata = activeFile.file.mediaMetadata;
-                const title = metadata?.title || activeFile.file.name.replace(/\.[^/.]+$/, '');
-                const artist = metadata?.artist || null;
-                const album = metadata?.album || null;
-                const coverUrl = metadata?.coverArtId ? 
-                  `${baseUrl}/files/${encodeURIComponent(activeFile.file.filePath)}/cover` : 
-                  null;
-                
+                const meta = metadata.mediaMetadata;
+                const title = meta?.title || metadata.fileName.replace(/\.[^/.]+$/, '');
+                const coverUrl = meta?.coverArtId
+                  ? `${baseUrl}/files/${encodeURIComponent(metadata.filePath)}/cover`
+                  : null;
                 return (
                   <Audio
-                    key={`audio-player-${activeFile.file.filePath}`}
-                    src={activeFile.file.audioSrc}
+                    key={`audio-player-${metadata.filePath}`}
+                    src={streamingSrc}
                     crossOrigin="use-credentials"
                     title={title}
-                    artist={artist}
-                    album={album}
+                    artist={meta?.artist || null}
+                    album={meta?.album || null}
                     cover={coverUrl}
                     autoPlay={false}
                     loop={false}
@@ -3213,14 +3067,14 @@ export const FilesPage = () => {
                 );
               })()}
             </Container>
-          ) : activeFile.file.isPdf ? (
+          ) : viewerType === 'pdf' ? (
             <PdfViewer
-              key={`pdf-viewer-${activeFile.file.filePath}`}
+              key={`pdf-viewer-${metadata.filePath}`}
               ref={pdfRef}
-              blob={activeFile.file.pdfBlob}
-              fileName={activeFile.file.name}
-              readOnly={activeFile.isReadOnly}
-              onSave={!activeFile.isReadOnly ? async (savedBlob) => {
+              blob={pdfBlob}
+              fileName={metadata.fileName}
+              readOnly={isReadOnly}
+              onSave={!isReadOnly ? async (savedBlob) => {
                 try {
                   const reader = new FileReader();
                   reader.readAsDataURL(savedBlob);
@@ -3228,9 +3082,9 @@ export const FilesPage = () => {
                     reader.onloadend = async () => {
                       try {
                         const base64Data = reader.result.split(',')[1];
-                        await fileService.updateContent(activeFile.file.filePath, base64Data);
+                        await fileService.updateContent(metadata.filePath, base64Data);
                         showSuccess('PDF saved successfully');
-                        await loadFileContent(activeFile.file);
+                        navigate('/files' + metadata.filePath, { replace: true });
                         resolve();
                       } catch (err) { reject(err); }
                     };
@@ -3244,12 +3098,12 @@ export const FilesPage = () => {
               width="100%"
               height="100%"
             />
-          ) : activeFile.file.is3DModel ? (
+          ) : viewerType === '3d' ? (
             <Model3D
-              key={`model3d-viewer-${activeFile.file.filePath}`}
-              src={activeFile.file.modelSrc}
-              format={activeFile.file.modelFormat}
-              alt={activeFile.file.name}
+              key={`model3d-viewer-${metadata.filePath}`}
+              src={modelSrc}
+              format={modelFormat}
+              alt={metadata.fileName}
               controls={true}
               autoRotate={false}
               autoRotateSpeed={1}
@@ -3263,7 +3117,7 @@ export const FilesPage = () => {
           ) : (
             <Container layout="flex" align="center" justify="center" flexFill>
               <Container layout="flex-column" align="center" gap="md">
-                {activeFile.file.filePath?.match(/\.zip$/i) ? (
+                {metadata.filePath?.match(/\.zip$/i) ? (
                   <>
                     <Icon name="FiArchive" size="48" />
                     <Typography size="lg">Zip Archive</Typography>
@@ -3276,11 +3130,10 @@ export const FilesPage = () => {
                         size="md"
                         disabled={isExtracting}
                         onClick={async () => {
-                          const filePath = activeFile.file.filePath;
-                          const parentPath = fileService.getParentPath(filePath) || '/';
+                          const parentPath = fileService.getParentPath(metadata.filePath) || '/';
                           setIsExtracting(true);
                           try {
-                            const result = await fileService.extractZip(filePath, parentPath);
+                            const result = await fileService.extractZip(metadata.filePath, parentPath);
                             const count = result.extracted?.length || 0;
                             showSuccess(`Extracted ${count} item(s) into ${result.targetPath}`);
                             await loadFileTree(false);
@@ -3321,13 +3174,12 @@ export const FilesPage = () => {
           )}
         </Container>
 
-        {/* File Metadata */}
-        <FileMetadata 
-          file={activeFile.file}
-          isReadOnly={activeFile.isReadOnly}
+        <FileMetadata
+          file={{ ...metadata, name: metadata.fileName, isImage: viewerType === 'image' }}
+          isReadOnly={isReadOnly}
           onDownload={handleFileDownload}
           onVersionLoaded={handleVersionLoaded}
-          onSave={activeFile.file.isImage ? async () => {
+          onSave={viewerType === 'image' ? async () => {
             if (imageRef.current?.save) {
               await imageRef.current.save();
             }
@@ -3351,8 +3203,8 @@ export const FilesPage = () => {
 
   return (
     <Page layout="flex" padding="none">
-      <Container 
-        layout="flex-column" 
+      <Container
+        layout="flex-column"
         padding="none"
         minHeight="100%"
         flexFill
@@ -3372,7 +3224,7 @@ export const FilesPage = () => {
             <Container minWidth="320px">
               <FileBrowser
                 fileTree={fileTree}
-                currentPath={activeFile.file?.filePath || userRoot}
+                currentPath={viewer.metadata?.filePath || userRoot}
                 onPathSelect={navigateToPath}
                 getNodeGenie={(node) => ({
                   trigger: 'contextmenu',
@@ -3405,7 +3257,11 @@ export const FilesPage = () => {
         genie={{
           content: () => (
             <QuickActions
-              targetPath={activeFile.file?.filePath || userRoot}
+              targetPath={
+                viewer.viewerType === 'directory'
+                  ? viewer.metadata?.filePath
+                  : (viewer.metadata ? fileService.getParentPath(viewer.metadata.filePath) : null) || userRoot
+              }
               fileTree={fileTree}
               onActionComplete={async (path, type) => {
                 await handleFileAction('create', path, type);

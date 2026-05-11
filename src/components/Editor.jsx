@@ -29,7 +29,9 @@ import {
     listsPlugin,
     ListsToggle,
     MDXEditor,
+    markdownSourceEditorValue$,
     quotePlugin,
+    realmPlugin,
     Separator,
     StrikeThroughSupSubToggles,
     tablePlugin,
@@ -38,6 +40,8 @@ import {
     UndoRedo,
 } from '@mdxeditor/editor';
 
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import MonacoEditor, { loader } from '@monaco-editor/react';
 loader.init(); // pre-warm Monaco bundle
 
@@ -1567,12 +1571,21 @@ const EMOJI_MAP = {
 /**
  * Preprocess extended markdown syntax that MDXEditor doesn't natively support.
  * Handles: emoji shortcodes, heading IDs, footnotes, superscript (^text^),
- * subscript (~text~), and definition lists (term\n: def).
- * Note: transformations are applied on import — saved content reflects the
- * normalized form (e.g. <sup>/<sub> tags instead of ^/~ syntax).
+ * subscript (~text~), definition lists (term\n: def), and math ($$...$$).
+ * Block math ($$...$$) is converted to ```math code fences so MDXEditor can
+ * render them via MathCodeEditor. postprocessMarkdown converts them back on save.
  */
 function preprocessMarkdown(md) {
   if (!md) return md;
+
+  // Extract $$...$$ block math first (before any other transform) so that
+  // LaTeX syntax like x^3 + y^3 is never touched by the superscript regex.
+  const mathBlocks = [];
+  md = md.replace(/^\$\$([\s\S]*?)\$\$[ \t]*$/gm, (_, latex) => {
+    const idx = mathBlocks.length;
+    mathBlocks.push(latex.trim());
+    return `\x00MATH${idx}\x00`;
+  });
 
   // 1. Emoji shortcodes :name: → unicode character
   md = md.replace(/:([a-z0-9_+\-]+):/g, (match, name) => EMOJI_MAP[name] ?? match);
@@ -1598,8 +1611,86 @@ function preprocessMarkdown(md) {
     (_, term, defs) => `**${term.trim()}**\n${defs.replace(/^[ \t]*: /gm, '')}`,
   );
 
+  // 8. Restore math blocks as ```math code fences (rendered by MathCodeEditor)
+  md = md.replace(/\x00MATH(\d+)\x00/g, (_, idx) =>
+    '```math\n' + mathBlocks[parseInt(idx, 10)] + '\n```'
+  );
+
   return md;
 }
+
+/**
+ * Reverse ```math code fences back to $$...$$ so the file stores standard
+ * LaTeX block math. Called on every onChange before reaching the caller.
+ */
+function postprocessMarkdown(md) {
+  if (!md) return md;
+  md = md.replace(/^```math\n([\s\S]*?)\n```\s*$/gm,
+    (_, latex) => `$$\n${latex}\n$$`);
+  return md;
+}
+
+/**
+ * Custom code-block editor for language="math".
+ * Renders KaTeX in display mode; click to edit the raw LaTeX.
+ */
+// Realm plugin that makes the source/diff view show $$...$$ instead of
+// the internal ```math code fence representation.
+const mathSourceViewPlugin = realmPlugin({
+    init(realm) {
+        realm.changeWith(markdownSourceEditorValue$, markdownSourceEditorValue$,
+            (_, md) => postprocessMarkdown(md));
+    },
+});
+
+const MathCodeEditor = ({ code, onChange, readOnly }) => {
+    const katexRef = useRef(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [draft, setDraft] = useState(code);
+
+    useEffect(() => { setDraft(code); }, [code]);
+
+    useEffect(() => {
+        if (!isEditing && katexRef.current) {
+            try {
+                katex.render(draft || ' ', katexRef.current, {
+                    displayMode: true,
+                    throwOnError: false,
+                });
+            } catch { /* ignore */ }
+        }
+    }, [draft, isEditing]);
+
+    if (isEditing && !readOnly) {
+        return (
+            <div style={{ padding: '8px 16px' }}>
+                <textarea
+                    value={draft}
+                    autoFocus
+                    rows={Math.max(2, (draft.match(/\n/g) || []).length + 1)}
+                    style={{
+                        fontFamily: 'monospace', fontSize: '13px',
+                        width: '100%', resize: 'vertical', padding: '6px',
+                        boxSizing: 'border-box', background: 'transparent',
+                        color: 'inherit', border: '1px solid var(--border-color, #444)',
+                        borderRadius: '4px',
+                    }}
+                    onChange={e => { setDraft(e.target.value); onChange(e.target.value); }}
+                    onBlur={() => setIsEditing(false)}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div
+            ref={katexRef}
+            style={{ padding: '12px 16px', cursor: readOnly ? 'default' : 'pointer', textAlign: 'center' }}
+            onClick={readOnly ? undefined : () => setIsEditing(true)}
+            title={readOnly ? undefined : 'Click to edit LaTeX'}
+        />
+    );
+};
 
 const MarkdownEditorInner = forwardRef(({
     className = '',
@@ -1639,7 +1730,7 @@ const MarkdownEditorInner = forwardRef(({
         if (editorRef.current && content !== undefined) {
             const processed = preprocessMarkdown(content);
             const currentContent = editorRef.current.getMarkdown();
-            if (processed !== currentContent) {
+            if (processed.trim() !== currentContent.trim()) {
                 editorRef.current.setMarkdown(processed);
             }
         }
@@ -1689,7 +1780,14 @@ const MarkdownEditorInner = forwardRef(({
             imageAutocompleteSuggestions: [],
         }),
         tablePlugin(),
-        codeBlockPlugin({ defaultCodeBlockLanguage: 'js' }),
+        codeBlockPlugin({
+            defaultCodeBlockLanguage: 'js',
+            codeBlockEditorDescriptors: [{
+                match: (language) => language === 'math',
+                priority: 100,
+                Editor: MathCodeEditor,
+            }],
+        }),
         codeMirrorPlugin({
             codeBlockLanguages: {
                 '': 'Plain Text',
@@ -1725,6 +1823,7 @@ const MarkdownEditorInner = forwardRef(({
             )),
         })] : []),
         diffSourcePlugin({ viewMode: 'rich-text', diffMarkdown: diffContent || '' }),
+        mathSourceViewPlugin,
     ], [showToolbar, toolbarPosition, customToolbar, imageUploadHandler, defaultImageUploadHandler, diffContent]);
 
     const contentEditableClassName = ['themed-editor-content', contentClassName].filter(Boolean).join(' ');
@@ -1732,7 +1831,7 @@ const MarkdownEditorInner = forwardRef(({
     const combinedClasses = ['themed-editor', `themed-editor-${editorTheme}`, 'mdxeditor', className]
         .filter(Boolean).join(' ');
 
-    const handleChange = useCallback((value) => { onChange?.(value); }, [onChange]);
+    const handleChange = useCallback((value) => { onChange?.(postprocessMarkdown(value)); }, [onChange]);
 
     React.useImperativeHandle(ref, () => ({
         getMarkdown:    () => editorRef.current?.getMarkdown(),

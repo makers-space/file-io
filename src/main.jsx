@@ -5,6 +5,8 @@ import App from './App';
 import './styles/global.css';
 // Import MDX Editor styles first
 import '@mdxeditor/editor/style.css';
+// Import KaTeX styles for math rendering
+import 'katex/dist/katex.min.css';
 // Import component layout styles bundle
 import './components/styles/components.css';
 

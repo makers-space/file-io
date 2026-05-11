@@ -441,6 +441,17 @@ export const fileService = {
     },
 
     /**
+     * Get bootstrap payload for opening a path in the Files page.
+     * Returns metadata and, for text files, initial content.
+     * @param {string} filePath - Absolute file path
+     * @returns {Promise<object>} Open bootstrap payload
+     */
+    async getFileOpenBootstrap(filePath) {
+        const encodedPath = encodeURIComponent(this.normalizePath(filePath));
+        return await api.get(`/files/${encodedPath}/open`);
+    },
+
+    /**
      * Get file content (for binary files - text files use Yjs)
      * @param {string} filePath - Absolute file path
      * @returns {Promise<object>} File content response

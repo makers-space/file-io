@@ -550,14 +550,9 @@ const CodeEditorInner = forwardRef(({
     useEffect(() => {
         if (!editorRef.current) return;
         if (content === editorRef.current.getValue()) return;
-        // Suppress onChange while we apply remote content — prevents the editor
-        // from pushing a stale debounced value back into Yjs.
-        clearTimeout(changeTimerRef.current);
-        suppressChangeRef.current = true;
         const viewState = editorRef.current.saveViewState();
         editorRef.current.setValue(content || '');
         if (viewState) editorRef.current.restoreViewState(viewState);
-        suppressChangeRef.current = false;
     }, [content]);
 
     const handleEditorDidMount = useCallback((editor, monaco) => {
@@ -570,9 +565,8 @@ const CodeEditorInner = forwardRef(({
     }, [currentTheme]);
 
     const changeTimerRef = useRef(null);
-    const suppressChangeRef = useRef(false);
     const handleChange = useCallback((value) => {
-        if (!onChange || suppressChangeRef.current) return;
+        if (!onChange) return;
         clearTimeout(changeTimerRef.current);
         changeTimerRef.current = setTimeout(() => onChange(value), 500);
     }, [onChange]);
@@ -1330,9 +1324,6 @@ const DocumentEditorInner = forwardRef(({
         lastSetContentRef.current = normalized;
         queueMicrotask(() => {
             if (!editor.isDestroyed) {
-                // Clear stale debounce so an old onChange can't push pre-remote
-                // content back into Yjs after we apply the remote update.
-                clearTimeout(changeTimerRef.current);
                 const { from, to } = editor.state.selection;
                 editor.commands.setContent(normalized, false);
                 const maxPos = editor.state.doc.content.size;
@@ -1831,7 +1822,9 @@ const MarkdownEditorInner = forwardRef(({
     const combinedClasses = ['themed-editor', `themed-editor-${editorTheme}`, 'mdxeditor', className]
         .filter(Boolean).join(' ');
 
-    const handleChange = useCallback((value) => { onChange?.(postprocessMarkdown(value)); }, [onChange]);
+    const handleChange = useCallback((value) => {
+        onChange?.(postprocessMarkdown(value));
+    }, [onChange]);
 
     React.useImperativeHandle(ref, () => ({
         getMarkdown:    () => editorRef.current?.getMarkdown(),

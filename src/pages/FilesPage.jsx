@@ -206,7 +206,6 @@ const useFileViewer = (filePath, user) => {
   });
 
   const connectionRef = useRef(null);
-  const seededRef = useRef(null);
   const blobUrlsRef = useRef([]);
   const pathRef = useRef(filePath);
   pathRef.current = filePath;
@@ -271,15 +270,12 @@ const useFileViewer = (filePath, user) => {
 
     const load = async () => {
       try {
-        const bootstrap = await fileService.getFileOpenBootstrap(filePath);
+        const metadata = await fileService.getMetadata(filePath);
         if (cancelled) return;
-
-        const metadata = bootstrap?.metadata;
         if (!metadata) throw new Error('File not found or access denied');
 
         const viewerType = getViewerType(metadata, filePath);
         const isReadOnly = checkReadOnly(metadata);
-        const initialContent = bootstrap.initialContent || '';
 
         if (viewerType === 'directory') {
           if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'directory', metadata, isReadOnly: false }));
@@ -289,24 +285,16 @@ const useFileViewer = (filePath, user) => {
         if (viewerType === 'text') {
           const connection = await fileService.connectToDocument(filePath);
           if (cancelled) {
-            fileService.disconnectFromDocument(filePath).catch(() => {});
             return;
           }
           connectionRef.current = connection;
           if (!cancelled) setState(s => ({
             ...s, status: 'ready', viewerType: 'text', metadata, isReadOnly,
-            content: '', connectionStatus: 'connecting',
+            content: connection.ytext.toString(),
+            connectionStatus: connection.provider
+              ? ((connection.provider.synced || connection.provider.wsconnected) ? 'connected' : 'connecting')
+              : 'connected',
           }));
-
-          const seedIfEmpty = () => {
-            if (cancelled || seededRef.current === filePath) return;
-            if (!initialContent.trim() || connection.ytext.toString().trim()) return;
-            seededRef.current = filePath;
-            connection.ytext.doc.transact(() => {
-              connection.ytext.insert(0, initialContent);
-            }, 'bootstrap-seed');
-            if (!cancelled) setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
-          };
 
           const observer = (_, transaction) => {
             if (transaction.origin !== 'editor-change' && !cancelled) {
@@ -317,27 +305,39 @@ const useFileViewer = (filePath, user) => {
           connectionRef.current.observer = observer;
 
           if (connection.provider) {
-            connection.provider.on('status', (event) => {
-              if (!cancelled) setState(s => s.viewerType === 'text'
-                ? { ...s, connectionStatus: event.status === 'connected' ? 'connected' : 'connecting' }
-                : s);
-            });
-            connection.provider.on('sync', (synced) => {
-              if (synced && !cancelled) {
-                seedIfEmpty();
-                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected' } : s);
+            const statusHandler = (event) => {
+              if (!cancelled) {
+                const nextStatus = event.status === 'connected'
+                  ? 'connected'
+                  : event.status === 'disconnected'
+                    ? 'disconnected'
+                    : 'connecting';
+                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: nextStatus } : s);
               }
-            });
-            connection.provider.on('connection-close', (event) => {
+            };
+            const syncHandler = (synced) => {
+              if (synced && !cancelled) {
+                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected', content: connection.ytext.toString() } : s);
+              }
+            };
+            const closeHandler = (event) => {
               if ((event.code === 4403 || event.code === 4404) && !cancelled) {
                 connection.provider.shouldConnect = false;
                 connection.provider.disconnect();
                 setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'error' } : s);
               }
-            });
+            };
+
+            connection.provider.on('status', statusHandler);
+            connection.provider.on('sync', syncHandler);
+            connection.provider.on('connection-close', closeHandler);
+            connectionRef.current.providerHandlers = {
+              statusHandler,
+              syncHandler,
+              closeHandler,
+            };
           } else {
-            seedIfEmpty();
-            if (!cancelled) setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected' } : s);
+            if (!cancelled) setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected', content: connection.ytext.toString() } : s);
           }
           return;
         }
@@ -389,10 +389,16 @@ const useFileViewer = (filePath, user) => {
     return () => {
       cancelled = true;
       if (connectionRef.current) {
+        const connection = connectionRef.current;
         if (connectionRef.current.observer) {
           connectionRef.current.ytext.unobserve(connectionRef.current.observer);
         }
-        fileService.disconnectFromDocument(filePath).catch(() => {});
+        if (connection.provider && connection.providerHandlers) {
+          const { statusHandler, syncHandler, closeHandler } = connection.providerHandlers;
+          if (statusHandler) connection.provider.off('status', statusHandler);
+          if (syncHandler) connection.provider.off('sync', syncHandler);
+          if (closeHandler) connection.provider.off('connection-close', closeHandler);
+        }
         connectionRef.current = null;
       }
       for (const url of blobUrlsRef.current) {
@@ -2494,7 +2500,7 @@ export const FilesPage = () => {
   const looksLikeFile = (activePath?.split('/').pop() || '').includes('.');
 
   // ─── File viewer hook — owns loading, Yjs, blob lifecycle ─────────────────
-  const viewer = useFileViewer(isLoading ? null : activePath, user);
+  const viewer = useFileViewer(activePath, user);
 
   // ─── Starred state ─────────────────────────────────────────────────────────
   useEffect(() => {

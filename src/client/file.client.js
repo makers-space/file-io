@@ -441,17 +441,6 @@ export const fileService = {
     },
 
     /**
-     * Get bootstrap payload for opening a path in the Files page.
-     * Returns metadata and, for text files, initial content.
-     * @param {string} filePath - Absolute file path
-     * @returns {Promise<object>} Open bootstrap payload
-     */
-    async getFileOpenBootstrap(filePath) {
-        const encodedPath = encodeURIComponent(this.normalizePath(filePath));
-        return await api.get(`/files/${encodedPath}/open`);
-    },
-
-    /**
      * Get file content (for binary files - text files use Yjs)
      * @param {string} filePath - Absolute file path
      * @returns {Promise<object>} File content response
@@ -785,9 +774,17 @@ export const fileService = {
     async connectToDocument(filePath, options = {}) {
         const normalizedPath = this.normalizePath(filePath);
         
-        // Always disconnect from any existing connection first
-        if (documentProviders.has(normalizedPath)) {
-            await this.disconnectFromDocument(normalizedPath);
+        // Reuse existing connection for this path instead of tearing it down.
+        const existingConnection = documentProviders.get(normalizedPath);
+        if (existingConnection) {
+            try {
+                if (existingConnection.provider && existingConnection.provider.shouldConnect !== false) {
+                    existingConnection.provider.connect();
+                }
+            } catch {
+                // Best-effort reconnect; return existing connection either way.
+            }
+            return existingConnection;
         }
 
         try {

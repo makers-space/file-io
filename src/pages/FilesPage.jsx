@@ -241,9 +241,19 @@ const useFileViewer = (filePath) => {
     // diffs against an empty ytext and propagates a wipe to every other
     // window once sync completes.  This is the classic "2nd window opens →
     // both windows go blank" race.
-    if (conn.provider && !conn.provider.synced) return;
+    if (conn.provider && !conn.provider.synced) {
+      // eslint-disable-next-line no-console
+      console.warn('[Yjs] updateContent BLOCKED (provider not synced yet)', { len: newContent?.length });
+      return;
+    }
     const oldText = ytext.toString();
     if (newContent === oldText) return;
+    // Diagnostic: log any large delete that would wipe content.  Helps spot
+    // editor-on-mount onChange firing with '' against a synced ytext.
+    if (oldText.length > 50 && (!newContent || newContent.length < oldText.length / 2)) {
+      // eslint-disable-next-line no-console
+      console.warn('[Yjs] updateContent LARGE DELETE', { oldLen: oldText.length, newLen: newContent?.length || 0, newPreview: (newContent || '').slice(0, 80) });
+    }
     let start = 0;
     while (start < oldText.length && start < newContent.length && oldText[start] === newContent[start]) start++;
     let oldEnd = oldText.length;
@@ -276,6 +286,13 @@ const useFileViewer = (filePath) => {
       const initialStatus = connection.provider
         ? ((connection.provider.synced || connection.provider.wsconnected) ? 'connected' : 'connecting')
         : 'connected';
+      // eslint-disable-next-line no-console
+      console.info('[Yjs] setupText: connection ready', {
+        filePath,
+        initialYtextLen: connection.ytext.toString().length,
+        synced: connection.provider?.synced,
+        wsconnected: connection.provider?.wsconnected,
+      });
       setReady({
         viewerType: 'text', metadata, isReadOnly,
         content: connection.ytext.toString(),
@@ -286,6 +303,9 @@ const useFileViewer = (filePath) => {
 
       const onYUpdate = (_, transaction) => {
         if (transaction.origin === 'editor-change' || cancelled) return;
+        const newLen = connection.ytext.toString().length;
+        // eslint-disable-next-line no-console
+        console.info('[Yjs] remote ytext update', { newLen, origin: String(transaction.origin) });
         setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
       };
       const onStatus = (e) => {

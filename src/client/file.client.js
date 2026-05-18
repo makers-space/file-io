@@ -781,11 +781,20 @@ export const fileService = {
     async connectToDocument(filePath, options = {}) {
         const normalizedPath = this.normalizePath(filePath);
 
-        // One provider per file.  Concurrent callers (StrictMode double-invoke)
-        // share the same connection; the matching disconnectFromDocument call
-        // tears it down once it is no longer needed.
+        // One provider per file.  Concurrent callers (StrictMode double-invoke,
+        // route remounts, etc.) share the same connection; the matching
+        // disconnectFromDocument call decrements the refcount, and the actual
+        // teardown is deferred so a fast remount within the same tick reuses
+        // the live ydoc instead of destroying it and losing the sync state.
         const existing = documentProviders.get(normalizedPath);
-        if (existing) return existing;
+        if (existing) {
+            existing._refCount = (existing._refCount || 0) + 1;
+            if (existing._pendingTeardown) {
+                clearTimeout(existing._pendingTeardown);
+                existing._pendingTeardown = null;
+            }
+            return existing;
+        }
 
         const ydoc = new Y.Doc();
         const authToken = await this.getAuthToken();
@@ -836,6 +845,8 @@ export const fileService = {
             connected: false,
             lastSync: null,
             _tokenRefreshTimer: tokenRefreshTimer,
+            _refCount: 1,
+            _pendingTeardown: null,
         };
 
         provider.on('status', (event) => {
@@ -859,30 +870,44 @@ export const fileService = {
     async disconnectFromDocument(filePath) {
         const normalizedPath = this.normalizePath(filePath);
         const connection = documentProviders.get(normalizedPath);
-        
-        if (connection) {
+        if (!connection) return;
+
+        // Reference-counted teardown.  Multiple components (or StrictMode's
+        // double-invocation of effects, or a route remount that fires before
+        // the previous cleanup completes) can hold the same connection; only
+        // the LAST release should actually tear it down.  The teardown is
+        // also deferred by a tick so a re-connect within the same task
+        // resurrects the live ydoc instead of losing all sync state.
+        connection._refCount = Math.max(0, (connection._refCount || 1) - 1);
+        if (connection._refCount > 0) return;
+
+        if (connection._pendingTeardown) {
+            clearTimeout(connection._pendingTeardown);
+        }
+        connection._pendingTeardown = setTimeout(() => {
+            // If a reconnect grabbed us in the meantime, _refCount is back > 0
+            // and we must NOT tear down.
+            if (connection._refCount > 0) return;
             try {
-                // Clear proactive token-refresh timer
                 if (connection._tokenRefreshTimer) {
                     clearInterval(connection._tokenRefreshTimer);
                 }
-                // Clean up WebSocket provider
                 if (connection.provider) {
                     connection.provider.disconnect();
                     connection.provider.destroy();
                 }
-                
-                // Clean up Yjs document
                 if (connection.ydoc) {
                     connection.ydoc.destroy();
                 }
-            } catch (error) {
+            } catch {
                 // Ignore disconnect errors
             }
-            
-            // Always remove from cache, even if cleanup failed
-            documentProviders.delete(normalizedPath);
-        }
+            // Only remove from cache if we still own this entry (a reconnect
+            // would have replaced it if it had been evicted).
+            if (documentProviders.get(normalizedPath) === connection) {
+                documentProviders.delete(normalizedPath);
+            }
+        }, 250);
     },
 
     // =============================================================================

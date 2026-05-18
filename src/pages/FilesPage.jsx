@@ -308,14 +308,32 @@ const useFileViewer = (filePath) => {
         console.info('[Yjs] remote ytext update', { newLen, origin: String(transaction.origin) });
         setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
       };
+      // Lower-level: log EVERY ydoc update, regardless of whether the
+      // 'content' Y.Text changed.  This catches the case where sync arrives
+      // but writes to a different key, or arrives but applies a no-op.
+      const onDocUpdate = (update, origin) => {
+        if (cancelled) return;
+        // eslint-disable-next-line no-console
+        console.info('[Yjs] ydoc update', {
+          updateBytes: update?.length,
+          origin: origin?.constructor?.name || String(origin),
+          ytextLen: connection.ytext.toString().length,
+          shareKeys: Array.from(connection.ydoc.share.keys()),
+        });
+      };
+      connection.ydoc.on('update', onDocUpdate);
       const onStatus = (e) => {
         if (cancelled) return;
+        // eslint-disable-next-line no-console
+        console.info('[Yjs] provider status', { status: e.status });
         const next = e.status === 'connected' ? 'connected'
           : e.status === 'disconnected' ? 'disconnected'
           : 'connecting';
         setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: next } : s);
       };
       const onSync = (synced) => {
+        // eslint-disable-next-line no-console
+        console.info('[Yjs] provider sync event', { synced, ytextLen: connection.ytext.toString().length });
         if (!synced || cancelled) return;
         setState(s => s.viewerType === 'text'
           ? { ...s, connectionStatus: 'connected', content: connection.ytext.toString() }
@@ -335,6 +353,7 @@ const useFileViewer = (filePath) => {
 
       connectionRef.current._cleanup = () => {
         try { connection.ytext.unobserve(onYUpdate); } catch { /* ignore */ }
+        try { connection.ydoc.off('update', onDocUpdate); } catch { /* ignore */ }
         try { connection.provider?.off('status', onStatus); } catch { /* ignore */ }
         try { connection.provider?.off('sync', onSync); } catch { /* ignore */ }
         try { connection.provider?.off('connection-close', onClose); } catch { /* ignore */ }

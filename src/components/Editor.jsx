@@ -1185,7 +1185,113 @@ const DocumentToolbar = ({ editor }) => {
             </Button>
 
             <Button size="xs" color="secondary" className="docx-toolbar-btn"
-                onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+                selected={editor.isActive('table')}
+                genie={{
+                    trigger: 'click',
+                    variant: 'popover',
+                    padding: 'sm',
+                    content: (() => {
+                        const inTable = editor.isActive('table');
+                        const cellAttrs = inTable ? editor.getAttributes('tableCell') : {};
+                        const cellBg = (() => {
+                            const m = (cellAttrs.style || '').match(/background-color:\s*([^;]+)/i);
+                            return m ? m[1].trim() : '';
+                        })();
+                        const setCellBg = (color) => {
+                            // Merge background-color into the cell/header style attribute
+                            // without clobbering other inline styles the user may have set.
+                            const apply = (typeName) => {
+                                const current = editor.getAttributes(typeName).style || '';
+                                const stripped = current
+                                    .split(';')
+                                    .map(s => s.trim())
+                                    .filter(s => s && !/^background-color\s*:/i.test(s))
+                                    .join('; ');
+                                const next = color
+                                    ? `${stripped ? stripped + '; ' : ''}background-color: ${color}`
+                                    : stripped;
+                                editor.chain().focus().updateAttributes(typeName, { style: next || null }).run();
+                            };
+                            apply('tableCell');
+                            apply('tableHeader');
+                        };
+                        const CELL_COLORS = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa', '#e9d5ff', '#fecaca', '#374151'];
+                        return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
+                                <Button size="xs" color="secondary"
+                                    onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+                                    <Icon name="FiGrid" size="xs" /> Insert table
+                                </Button>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                                    <Button size="xs" color="secondary" disabled={!inTable}
+                                        onClick={() => editor.chain().focus().addColumnBefore().run()}>
+                                        <Icon name="FiChevronsLeft" size="xs" /> Col before
+                                    </Button>
+                                    <Button size="xs" color="secondary" disabled={!inTable}
+                                        onClick={() => editor.chain().focus().addColumnAfter().run()}>
+                                        Col after <Icon name="FiChevronsRight" size="xs" />
+                                    </Button>
+                                    <Button size="xs" color="secondary" disabled={!inTable}
+                                        onClick={() => editor.chain().focus().addRowBefore().run()}>
+                                        <Icon name="FiChevronsUp" size="xs" /> Row before
+                                    </Button>
+                                    <Button size="xs" color="secondary" disabled={!inTable}
+                                        onClick={() => editor.chain().focus().addRowAfter().run()}>
+                                        <Icon name="FiChevronsDown" size="xs" /> Row after
+                                    </Button>
+                                    <Button size="xs" color="error" disabled={!inTable}
+                                        onClick={() => editor.chain().focus().deleteColumn().run()}>
+                                        <Icon name="FiMinusSquare" size="xs" /> Del col
+                                    </Button>
+                                    <Button size="xs" color="error" disabled={!inTable}
+                                        onClick={() => editor.chain().focus().deleteRow().run()}>
+                                        <Icon name="FiMinusSquare" size="xs" /> Del row
+                                    </Button>
+                                </div>
+                                <Button size="xs" color="secondary" disabled={!inTable}
+                                    onClick={() => editor.chain().focus().toggleHeaderRow().run()}>
+                                    <Icon name="FiColumns" size="xs" /> Toggle header row
+                                </Button>
+                                <Button size="xs" color="secondary" disabled={!inTable}
+                                    onClick={() => editor.chain().focus().toggleHeaderColumn().run()}>
+                                    <Icon name="FiColumns" size="xs" /> Toggle header col
+                                </Button>
+                                <Button size="xs" color="secondary" disabled={!inTable}
+                                    onClick={() => editor.chain().focus().mergeOrSplit().run()}>
+                                    <Icon name="FiMaximize2" size="xs" /> Merge / split
+                                </Button>
+                                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '6px' }}>
+                                    <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '4px' }}>Cell background</div>
+                                    <div className="docx-color-grid">
+                                        {CELL_COLORS.map((c) => (
+                                            <button key={c} type="button" className="docx-color-swatch"
+                                                style={{ background: c, outline: cellBg.toLowerCase() === c.toLowerCase() ? '2px solid var(--primary-color)' : 'none' }}
+                                                title={c} disabled={!inTable}
+                                                onClick={() => setCellBg(c)} />
+                                        ))}
+                                        <label className="docx-color-swatch docx-color-custom" title="Custom cell color">
+                                            <Icon name="FiDroplet" size="xs" />
+                                            <input type="color"
+                                                value={/^#[0-9a-f]{6}$/i.test(cellBg) ? cellBg : '#374151'}
+                                                disabled={!inTable}
+                                                onChange={(e) => setCellBg(e.target.value)}
+                                            />
+                                        </label>
+                                        <button type="button" className="docx-color-swatch docx-color-reset"
+                                            title="Clear cell color" disabled={!inTable}
+                                            onClick={() => setCellBg('')}>
+                                            <Icon name="FiX" size="xs" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <Button size="xs" color="error" disabled={!inTable}
+                                    onClick={() => editor.chain().focus().deleteTable().run()}>
+                                    <Icon name="FiTrash2" size="xs" /> Delete table
+                                </Button>
+                            </div>
+                        );
+                    })(),
+                }}>
                 <Icon name="FiGrid" />
             </Button>
 
@@ -1281,6 +1387,7 @@ const DocumentEditorInner = forwardRef(({
     minHeight  = '500px',
     onFocus    = null,
     onBlur     = null,
+    filePath   = '',
 }, ref) => {
     const { currentTheme } = useTheme();
     const changeTimerRef = useRef(null);
@@ -1342,12 +1449,15 @@ const DocumentEditorInner = forwardRef(({
         ],
         content: stripLeadingEmptyParas(content) || '',
         editable: !readOnly,
-        onUpdate: ({ editor: ed }) => {
+        onUpdate: ({ editor: ed, transaction }) => {
             if (!onChange) return;
+            // Critical: TipTap's setEditable() and other state-only operations
+            // dispatch transactions that fire `update` but do NOT change the doc.
+            // Without this guard, every setEditable call (mount + readOnly changes)
+            // would push the editor's normalized HTML into ytext, corrupting it.
+            if (!transaction?.docChanged) return;
             clearTimeout(changeTimerRef.current);
-            changeTimerRef.current = setTimeout(() => {
-                onChange(ed.getHTML());
-            }, 300);
+            changeTimerRef.current = setTimeout(() => onChange(ed.getHTML()), 300);
         },
         onFocus: ({ editor: ed, event }) => onFocus?.(ed, event),
         onBlur:  ({ editor: ed, event }) => onBlur?.(ed, event),
@@ -1363,13 +1473,20 @@ const DocumentEditorInner = forwardRef(({
     useEffect(() => {
         if (!editor) return;
         const normalized = stripLeadingEmptyParas(content) || '';
-        if (lastSetContentRef.current === null) { lastSetContentRef.current = normalized; return; }
+        if (lastSetContentRef.current === null) {
+            lastSetContentRef.current = normalized;
+            return;
+        }
         if (normalized === lastSetContentRef.current) return;
         lastSetContentRef.current = normalized;
         queueMicrotask(() => {
             if (!editor.isDestroyed) {
                 const { from, to } = editor.state.selection;
-                editor.commands.setContent(normalized, false);
+                // TipTap v3: setContent(content, options) — second arg MUST be an object.
+                // Passing `false` is ignored and emitUpdate defaults to true, which would
+                // fire onUpdate → debounced onChange → push editor's normalized HTML back into
+                // ytext, causing content duplication on every server-driven content swap.
+                editor.commands.setContent(normalized, { emitUpdate: false });
                 const maxPos = editor.state.doc.content.size;
                 try {
                     editor.commands.setTextSelection({
@@ -1385,7 +1502,7 @@ const DocumentEditorInner = forwardRef(({
 
     useImperativeHandle(ref, () => ({
         getHTML:  () => editor?.getHTML() || '',
-        setHTML:  (html) => editor?.commands.setContent(html || '', false),
+        setHTML:  (html) => editor?.commands.setContent(html || '', { emitUpdate: false }),
         getJSON:  () => editor?.getJSON(),
         save:     async () => editor?.getHTML() || '',
         focus:    () => editor?.commands.focus(),

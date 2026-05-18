@@ -664,7 +664,7 @@ export const fileService = {
         const normalizedPath = this.normalizePath(targetPath);
         const formData = new FormData();
         const { textImports = null } = options;
-        
+
         // Append files and capture relative paths explicitly (browsers may strip
         // path separators from filenames, so we send paths as a separate field)
         const relativePaths = [];
@@ -699,7 +699,8 @@ export const fileService = {
             };
         }
 
-        return await api.post('/files/upload', formData, config);
+        const response = await api.post('/files/upload', formData, config);
+        return response;
     },
 
     /**
@@ -785,7 +786,9 @@ export const fileService = {
         // share the same connection; the matching disconnectFromDocument call
         // tears it down once it is no longer needed.
         const existing = documentProviders.get(normalizedPath);
-        if (existing) return existing;
+        if (existing) {
+            return existing;
+        }
 
         const ydoc = new Y.Doc();
         const authToken = await this.getAuthToken();
@@ -859,7 +862,7 @@ export const fileService = {
     async disconnectFromDocument(filePath) {
         const normalizedPath = this.normalizePath(filePath);
         const connection = documentProviders.get(normalizedPath);
-        
+
         if (connection) {
             try {
                 // Clear proactive token-refresh timer

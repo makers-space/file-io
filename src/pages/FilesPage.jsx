@@ -92,11 +92,10 @@ const renderDocxBlobToEditableHtml = async (blob) => {
     // properties TipTap understands.
     const STYLE_PROPS = [
       'font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration',
-      'text-decoration-style', 'text-align', 'color', 'background-color',
+      'text-decoration-style', 'text-align',
       'line-height', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
       'text-indent', 'vertical-align', 'display', 'width', 'height', 'min-width',
-      'min-height', 'border', 'border-top', 'border-right', 'border-bottom',
-      'border-left', 'border-collapse', 'padding', 'padding-top', 'padding-right',
+      'min-height', 'border-collapse', 'padding', 'padding-top', 'padding-right',
       'padding-bottom', 'padding-left', 'float', 'list-style-type', 'white-space',
       'word-spacing', 'letter-spacing',
     ];
@@ -173,6 +172,7 @@ const buildDocxUploadImports = async (files) => {
 
     try {
       const html = await renderDocxBlobToEditableHtml(file);
+      // eslint-disable-next-line no-console
       return {
         kind: 'docx-html',
         content: html,

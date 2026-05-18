@@ -229,11 +229,19 @@ const useFileViewer = (filePath) => {
   // Manual char-diff bridge into the shared Y.Text — used by markdown and
   // document editors.  Code mode bypasses this entirely via native MonacoBinding.
   const updateContent = useCallback((newContent) => {
-    const ytext = connectionRef.current?.ytext;
+    const conn = connectionRef.current;
+    const ytext = conn?.ytext;
     if (!ytext) {
       showError('No collaborative connection available. Please refresh the page.');
       return;
     }
+    // Block edits until the WebsocketProvider has completed its initial
+    // sync with the server.  Otherwise the editor's on-mount onChange (which
+    // fires with empty/placeholder content before remote state has arrived)
+    // diffs against an empty ytext and propagates a wipe to every other
+    // window once sync completes.  This is the classic "2nd window opens →
+    // both windows go blank" race.
+    if (conn.provider && !conn.provider.synced) return;
     const oldText = ytext.toString();
     if (newContent === oldText) return;
     let start = 0;
@@ -2956,6 +2964,8 @@ export const FilesPage = () => {
               content={content}
               diffContent={latestVersionContent}
               onChange={updateContent}
+              ytext={collabYText}
+              provider={collabProvider}
               placeholder={isReadOnly ? "This file is read-only for you" : "Start typing..."}
               showToolbar={!isReadOnly}
               readOnly={isReadOnly}

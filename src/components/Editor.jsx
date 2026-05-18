@@ -43,6 +43,7 @@ import {
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import MonacoEditor, { loader } from '@monaco-editor/react';
+import { MonacoBinding } from 'y-monaco';
 loader.init(); // pre-warm Monaco bundle
 
 // ---------------------------------------------------------------------------
@@ -526,10 +527,17 @@ const CodeEditorInner = forwardRef(({
     width      = '100%',
     height     = null,
     minHeight  = '500px',
+    // Native YJS collaboration: when ytext is provided, MonacoBinding
+    // wires the editor model directly to the shared Y.Text.  In that path
+    // `content`/`onChange` are ignored — the binding is the source of truth.
+    ytext      = null,
+    provider   = null,
 }, ref) => {
     const { currentTheme } = useTheme();
     const monacoRef    = useRef(null);
     const editorRef    = useRef(null);
+    const bindingRef   = useRef(null);
+    const collaborative = !!ytext;
 
     const language = useMemo(() => detectLanguage(filePath), [filePath]);
 
@@ -547,13 +555,18 @@ const CodeEditorInner = forwardRef(({
         });
         return () => cancelAnimationFrame(raf);
     }, [currentTheme]);
+
+    // Non-collab path: manually sync prop -> editor value.  In the collab
+    // path MonacoBinding owns the model and we must NOT setValue() (it
+    // would clobber the shared state).
     useEffect(() => {
+        if (collaborative) return;
         if (!editorRef.current) return;
         if (content === editorRef.current.getValue()) return;
         const viewState = editorRef.current.saveViewState();
         editorRef.current.setValue(content || '');
         if (viewState) editorRef.current.restoreViewState(viewState);
-    }, [content]);
+    }, [content, collaborative]);
 
     const handleEditorDidMount = useCallback((editor, monaco) => {
         monacoRef.current = monaco;
@@ -562,14 +575,45 @@ const CodeEditorInner = forwardRef(({
         // Apply theme monospace font on mount
         const monoFont = getComputedStyle(document.body).getPropertyValue('--font-family-monospace').trim();
         if (monoFont) editor.updateOptions({ fontFamily: monoFont });
-    }, [currentTheme]);
+
+        // Native YJS collaboration via y-monaco.  Binds Monaco's text model
+        // directly to the shared Y.Text — multi-user cursors, no manual diffs,
+        // no setValue/onChange round-trip, no debounced char-by-char syncing.
+        if (collaborative) {
+            try {
+                const model = editor.getModel();
+                if (model) {
+                    bindingRef.current = new MonacoBinding(
+                        ytext,
+                        model,
+                        new Set([editor]),
+                        provider?.awareness ?? null,
+                    );
+                }
+            } catch (err) {
+                // Falling back is not possible from inside the binding —
+                // surface so the dev sees the issue and the manual diff
+                // bridge can still run via the onChange path next time.
+                // eslint-disable-next-line no-console
+                console.error('MonacoBinding failed to attach', err);
+            }
+        }
+    }, [currentTheme, collaborative, ytext, provider]);
+
+    // Destroy the YJS binding when the editor unmounts or the ytext changes.
+    useEffect(() => () => {
+        try { bindingRef.current?.destroy?.(); } catch { /* ignore */ }
+        bindingRef.current = null;
+    }, [ytext]);
 
     const changeTimerRef = useRef(null);
+    // Non-collab onChange: debounced to avoid hammering the manual diff
+    // bridge.  In the collab path MonacoBinding bypasses this entirely.
     const handleChange = useCallback((value) => {
-        if (!onChange) return;
+        if (collaborative || !onChange) return;
         clearTimeout(changeTimerRef.current);
         changeTimerRef.current = setTimeout(() => onChange(value), 500);
-    }, [onChange]);
+    }, [onChange, collaborative]);
     useEffect(() => () => clearTimeout(changeTimerRef.current), []);
 
     useImperativeHandle(ref, () => ({
@@ -616,7 +660,7 @@ const CodeEditorInner = forwardRef(({
                 <MonacoEditor
                     height="100%"
                     language={language}
-                    defaultValue={content}
+                    defaultValue={collaborative ? '' : content}
                     onChange={handleChange}
                     onMount={handleEditorDidMount}
                     options={{
@@ -1431,6 +1475,12 @@ export const Editor = forwardRef(({
     // code props
     filePath     = '',
 
+    // Native YJS collaboration (currently wired for code mode via y-monaco).
+    // When provided, the editor binds Monaco's model directly to the shared
+    // Y.Text — no setValue, no debounced onChange diff bridge.
+    ytext        = null,
+    provider     = null,
+
     ...props
 }, ref) => {
     if (mode === 'code') {
@@ -1444,6 +1494,8 @@ export const Editor = forwardRef(({
                 width={width || '100%'}
                 height={height}
                 minHeight={minHeight || '500px'}
+                ytext={ytext}
+                provider={provider}
             />
         );
     }

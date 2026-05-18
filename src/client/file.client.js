@@ -1,8 +1,5 @@
 /**
- * Console File Service - Complete I    getDocumentName(filePath) {
-        // Use direct normalized path as document name - standard Yjs pattern
-        return filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
-    },ace to Server File System
+ * Console File Service - Complete Interface to Server File System
  * 
  * This service provides a simple, comprehensive interface to the server's file system
  * layer with full Yjs collaborative editing support and efficient error handling.
@@ -23,13 +20,17 @@ import { authService } from './auth.client.js';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 
-// Global collaborative document management
-const documentProviders = new Map(); // filePath -> { ydoc, provider, connectionState }
+// Global collaborative document management — one provider per file path.
+const documentProviders = new Map(); // normalizedPath -> connection
 
 const connectionConfig = {
     wsUrl: `${import.meta.env.VITE_WS_BASE_URL}/yjs`,
     reconnectInterval: 3000,
-    maxReconnectAttempts: 10
+    maxReconnectAttempts: 10,
+    // Refresh the WS auth token this many ms before each reconnection cycle.
+    // y-websocket re-reads provider.params when building each new WebSocket URL,
+    // so updating params.token is enough — no need to recreate the provider.
+    tokenRefreshIntervalMs: 4 * 60 * 1000,
 };
 
 // =============================================================================
@@ -186,23 +187,18 @@ export const fileService = {
     // =============================================================================
     
     /**
-     * Get document name from file path (must match server-side document identification)
-     * @param {string} filePath - File path to normalize
-     * @returns {string} Document name that matches server's MongoDB storage key
+     * Get document name from file path.  Must match the server's
+     * docNameFromFilePath helper (file-server/utils/documentRef.js):
+     *   filePath "/user/foo.md"  ->  docName "yjs/user/foo.md"
+     * The room name is passed RAW to WebsocketProvider — y-websocket and the
+     * browser handle URL encoding for the WebSocket URL.  The server
+     * percent-decodes the path before lookup so both sides converge on the
+     * same un-encoded key.
      */
     getDocumentName(filePath) {
-        // Normalize the path
-        let normalizedPath = filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
-        
-        // Ensure it starts with /
-        if (!normalizedPath.startsWith('/')) {
-            normalizedPath = '/' + normalizedPath;
-        }
-        
-        // Server stores documents with 'yjs/' prefix in MongoDB
-        // Server extracts from URL '/yjs/dirname/filename' -> 'yjs/dirname/filename'
-        // So we need to return 'yjs/dirname/filename' format
-        return 'yjs' + normalizedPath;
+        const normalized = this.normalizePath(filePath);
+        if (normalized === '/') return 'yjs';
+        return 'yjs' + normalized;
     },
 
     // =============================================================================
@@ -766,105 +762,93 @@ export const fileService = {
     // =============================================================================
 
     /**
-     * Connect to collaborative document
+     * Connect to collaborative document.
+     *
+     * Lifecycle contract: callers MUST call disconnectFromDocument(filePath)
+     * when they no longer need the connection (e.g. on component unmount).
+     * If a connection already exists for this path it is returned as-is \u2014
+     * callers that want a fresh connection must disconnect first.
+     *
+     * Token refresh: the WebSocket auth token is refreshed proactively on a
+     * timer (connectionConfig.tokenRefreshIntervalMs) so the y-websocket
+     * provider's internal reconnect loop always picks up a fresh token from
+     * provider.params without needing a per-close fetch.
+     *
      * @param {string} filePath - File path
-     * @param {object} options - Connection options
+     * @param {object} options - Connection options (forwarded to WebsocketProvider)
      * @returns {Promise<object>} Document connection { ydoc, provider, ytext }
      */
     async connectToDocument(filePath, options = {}) {
         const normalizedPath = this.normalizePath(filePath);
-        
-        // Reuse existing connection for this path instead of tearing it down.
-        const existingConnection = documentProviders.get(normalizedPath);
-        if (existingConnection) {
+
+        // One provider per file.  Concurrent callers (StrictMode double-invoke)
+        // share the same connection; the matching disconnectFromDocument call
+        // tears it down once it is no longer needed.
+        const existing = documentProviders.get(normalizedPath);
+        if (existing) return existing;
+
+        const ydoc = new Y.Doc();
+        const authToken = await this.getAuthToken();
+
+        // WebsocketProvider(baseUrl, roomName, doc) connects to baseUrl/roomName.
+        // The server URL-decodes the path before lookup so room names with
+        // spaces / unicode are handled correctly.
+        const docName = this.getDocumentName(normalizedPath);
+        const baseWsUrl = connectionConfig.wsUrl.replace('/yjs', '');
+
+        const providerOptions = {
+            connect: true,
+            params: authToken ? { token: authToken } : {},
+            ...options,
+        };
+
+        const provider = new WebsocketProvider(baseWsUrl, docName, ydoc, providerOptions);
+
+        // Proactive token refresh \u2014 y-websocket reads provider.params each time
+        // it builds a new WebSocket URL, so updating params.token is sufficient.
+        // Refresh well before the JWT expires so every reconnect uses a fresh
+        // token without a race against the server-side validity window.
+        const tokenRefreshTimer = setInterval(async () => {
             try {
-                if (existingConnection.provider && existingConnection.provider.shouldConnect !== false) {
-                    existingConnection.provider.connect();
-                }
+                const freshToken = await this.getAuthToken();
+                if (freshToken) provider.params.token = freshToken;
             } catch {
-                // Best-effort reconnect; return existing connection either way.
+                // Best-effort \u2014 if refresh fails the existing token may still be valid.
             }
-            return existingConnection;
-        }
+        }, connectionConfig.tokenRefreshIntervalMs);
 
-        try {
-            // Create new Yjs document
-            const ydoc = new Y.Doc();
-            
-            // Get authentication token for WebSocket connection
-            const authToken = await this.getAuthToken();
-            
-            // WebsocketProvider(baseUrl, roomName, doc) connects to baseUrl/roomName
-            // Server extracts docName from URL: req.url.slice(1).split('?')[0]
-            const docName = this.getDocumentName(normalizedPath);
-            const baseWsUrl = connectionConfig.wsUrl.replace('/yjs', '');
-            
-            const providerOptions = {
-                connect: true,
-                params: authToken ? { token: authToken } : {},
-                ...options
-            };
-            
-            const provider = new WebsocketProvider(baseWsUrl, docName, ydoc, providerOptions);
-
-            // Refresh the auth token before every reconnection attempt.
-            // y-websocket re-reads provider.params when building the URL for
-            // each new WebSocket, so updating params.token is sufficient.
-            // We synchronously pause auto-reconnect, fetch a fresh token,
-            // then resume — avoiding races with the internal setTimeout.
-            provider.on('connection-close', (event) => {
-                const code = event?.code;
-                // Permanent failures — don't retry
-                if (code === 4403 || code === 4404) return;
-
-                // Pause the built-in reconnect (synchronous, runs before
-                // the internal setTimeout checks shouldConnect)
+        // Permanent failure codes \u2014 stop reconnecting forever.
+        provider.on('connection-close', (event) => {
+            const code = event?.code;
+            if (code === 4403 || code === 4404) {
                 provider.shouldConnect = false;
+                clearInterval(tokenRefreshTimer);
+            }
+        });
 
-                this.getAuthToken().then(freshToken => {
-                    if (freshToken) {
-                        provider.params.token = freshToken;
-                        provider.connect();
-                    }
-                    // If no token (user logged out), stay disconnected
-                }).catch(() => {
-                    // Token refresh failed — stay disconnected
-                });
-            });
+        const ytext = ydoc.getText('content');
 
-            // Get text content for collaborative editing
-            const ytext = ydoc.getText('content');
+        const connection = {
+            ydoc,
+            provider,
+            ytext,
+            filePath: normalizedPath,
+            connected: false,
+            lastSync: null,
+            _tokenRefreshTimer: tokenRefreshTimer,
+        };
 
-            const connection = {
-                ydoc,
-                provider,
-                ytext,
-                filePath: normalizedPath,
-                connected: false,
-                lastSync: null
-            };
+        provider.on('status', (event) => {
+            connection.connected = event.status === 'connected';
+            if (connection.connected) connection.lastSync = new Date();
+        });
 
-            // Set up connection event handlers
-            provider.on('status', event => {
-                connection.connected = event.status === 'connected';
-                if (connection.connected) {
-                    connection.lastSync = new Date();
-                }
-            });
+        provider.on('sync', (synced) => {
+            if (synced) connection.lastSync = new Date();
+        });
 
-            provider.on('sync', synced => {
-                if (synced) {
-                    connection.lastSync = new Date();
-                }
-            });
-
-            // Store connection
-            documentProviders.set(normalizedPath, connection);
-            
-            return connection;
-        } catch (error) {
-            throw new Error(`Failed to connect to document: ${error.message}`);
-        }
+        documentProviders.set(normalizedPath, connection);
+        return connection;
     },
 
     /**
@@ -878,6 +862,10 @@ export const fileService = {
         
         if (connection) {
             try {
+                // Clear proactive token-refresh timer
+                if (connection._tokenRefreshTimer) {
+                    clearInterval(connection._tokenRefreshTimer);
+                }
                 // Clean up WebSocket provider
                 if (connection.provider) {
                     connection.provider.disconnect();

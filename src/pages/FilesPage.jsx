@@ -189,49 +189,45 @@ const buildDocxUploadImports = async (files) => {
   return imports.some(Boolean) ? imports : null;
 };
 
-const useFileViewer = (filePath, user) => {
-  const [state, setState] = useState({
-    status: 'idle',           // 'idle' | 'loading' | 'ready' | 'error'
-    viewerType: null,         // null | 'directory' | 'text' | 'image' | 'video' | 'audio' | 'pdf' | '3d' | 'binary'
-    metadata: null,
-    isReadOnly: true,
-    errorMessage: null,
-    content: '',
-    connectionStatus: 'disconnected',
-    imageSrc: null,
-    streamingSrc: null,
-    pdfBlob: null,
-    modelSrc: null,
-    modelFormat: null,
-  });
+const IDLE_VIEWER_STATE = {
+  status: 'idle',           // 'idle' | 'loading' | 'ready' | 'error'
+  viewerType: null,         // null | 'directory' | 'text' | 'image' | 'video' | 'audio' | 'pdf' | '3d' | 'binary'
+  metadata: null,
+  isReadOnly: true,
+  errorMessage: null,
+  content: '',
+  connectionStatus: 'disconnected',
+  ytext: null,
+  provider: null,
+  imageSrc: null,
+  streamingSrc: null,
+  pdfBlob: null,
+  modelSrc: null,
+  modelFormat: null,
+};
 
+const getViewerType = (metadata, fp) => {
+  if (!metadata || !fp) return null;
+  if (metadata.type === 'directory') return 'directory';
+  if (/\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|tiff|tif)$/i.test(fp)) return 'image';
+  if (/\.(mp4|webm|avi|mov|wmv|flv)$/i.test(fp)) return 'video';
+  if (/\.(mp3|wav)$/i.test(fp)) return 'audio';
+  if (/\.(obj|gltf|glb|fbx|stl|dae|3ds|blend|ply|3mf|usdz|usda|usdc|vrm|vox|c4d)$/i.test(fp)) return '3d';
+  if (/\.pdf$/i.test(fp)) return 'pdf';
+  if (metadata.type === 'text') return 'text';
+  return 'binary';
+};
+
+const useFileViewer = (filePath) => {
+  const [state, setState] = useState(IDLE_VIEWER_STATE);
   const connectionRef = useRef(null);
   const blobUrlsRef = useRef([]);
   const pathRef = useRef(filePath);
   pathRef.current = filePath;
-
   const { error: showError } = useNotification();
 
-  const checkReadOnly = useCallback((metadata) => {
-    if (!user || !metadata) return true;
-    const userId = String(user._id || user.id);
-    if (String(metadata.owner) === userId) return false;
-    const writeUsers = metadata.permissions?.write || [];
-    return !writeUsers.some(wu => String(wu) === userId);
-  }, [user]);
-
-  const getViewerType = useCallback((metadata, fp) => {
-    if (!metadata || !fp) return null;
-    if (metadata.type === 'directory') return 'directory';
-    if (fp.match(/\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|tiff|tif)$/i)) return 'image';
-    if (fp.match(/\.(mp4|webm|avi|mov|wmv|flv)$/i)) return 'video';
-    if (fp.match(/\.(mp3|wav)$/i)) return 'audio';
-    if (fp.match(/\.(obj|gltf|glb|fbx|stl|dae|3ds|blend|ply|3mf|usdz|usda|usdc|vrm|vox|c4d)$/i)) return '3d';
-    if (fp.match(/\.pdf$/i)) return 'pdf';
-    if (metadata.type === 'text') return 'text';
-    return 'binary';
-  }, []);
-
+  // Manual char-diff bridge into the shared Y.Text — used by markdown and
+  // document editors.  Code mode bypasses this entirely via native MonacoBinding.
   const updateContent = useCallback((newContent) => {
     const ytext = connectionRef.current?.ytext;
     if (!ytext) {
@@ -253,160 +249,128 @@ const useFileViewer = (filePath, user) => {
 
   useEffect(() => {
     if (!filePath) {
-      setState(prev => prev.status === 'idle' ? prev : {
-        status: 'idle', viewerType: null, metadata: null, isReadOnly: true, errorMessage: null,
-        content: '', connectionStatus: 'disconnected',
-        imageSrc: null, streamingSrc: null, pdfBlob: null, modelSrc: null, modelFormat: null,
-      });
+      setState(s => s.status === 'idle' ? s : IDLE_VIEWER_STATE);
       return;
     }
 
     let cancelled = false;
-    setState({
-      status: 'loading', viewerType: null, metadata: null, isReadOnly: true, errorMessage: null,
-      content: '', connectionStatus: 'disconnected',
-      imageSrc: null, streamingSrc: null, pdfBlob: null, modelSrc: null, modelFormat: null,
-    });
+    setState({ ...IDLE_VIEWER_STATE, status: 'loading' });
 
-    const load = async () => {
+    const setReady = (patch) => {
+      if (!cancelled) setState(s => ({ ...s, status: 'ready', ...patch }));
+    };
+
+    const setupText = async (metadata, isReadOnly) => {
+      const connection = await fileService.connectToDocument(filePath);
+      if (cancelled) return;
+      connectionRef.current = connection;
+
+      const initialStatus = connection.provider
+        ? ((connection.provider.synced || connection.provider.wsconnected) ? 'connected' : 'connecting')
+        : 'connected';
+      setReady({
+        viewerType: 'text', metadata, isReadOnly,
+        content: connection.ytext.toString(),
+        connectionStatus: initialStatus,
+        ytext: connection.ytext,
+        provider: connection.provider,
+      });
+
+      const onYUpdate = (_, transaction) => {
+        if (transaction.origin === 'editor-change' || cancelled) return;
+        setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
+      };
+      const onStatus = (e) => {
+        if (cancelled) return;
+        const next = e.status === 'connected' ? 'connected'
+          : e.status === 'disconnected' ? 'disconnected'
+          : 'connecting';
+        setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: next } : s);
+      };
+      const onSync = (synced) => {
+        if (!synced || cancelled) return;
+        setState(s => s.viewerType === 'text'
+          ? { ...s, connectionStatus: 'connected', content: connection.ytext.toString() }
+          : s);
+      };
+      const onClose = (e) => {
+        if ((e.code !== 4403 && e.code !== 4404) || cancelled) return;
+        connection.provider.shouldConnect = false;
+        connection.provider.disconnect();
+        setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'error' } : s);
+      };
+
+      connection.ytext.observe(onYUpdate);
+      connection.provider?.on('status', onStatus);
+      connection.provider?.on('sync', onSync);
+      connection.provider?.on('connection-close', onClose);
+
+      connectionRef.current._cleanup = () => {
+        try { connection.ytext.unobserve(onYUpdate); } catch { /* ignore */ }
+        try { connection.provider?.off('status', onStatus); } catch { /* ignore */ }
+        try { connection.provider?.off('sync', onSync); } catch { /* ignore */ }
+        try { connection.provider?.off('connection-close', onClose); } catch { /* ignore */ }
+      };
+    };
+
+    (async () => {
       try {
         const metadata = await fileService.getMetadata(filePath);
         if (cancelled) return;
         if (!metadata) throw new Error('File not found or access denied');
 
         const viewerType = getViewerType(metadata, filePath);
-        const isReadOnly = checkReadOnly(metadata);
+        const isReadOnly = !metadata.canWrite;
 
         if (viewerType === 'directory') {
-          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'directory', metadata, isReadOnly: false }));
-          return;
+          return setReady({ viewerType: 'directory', metadata, isReadOnly: false });
         }
-
         if (viewerType === 'text') {
-          const connection = await fileService.connectToDocument(filePath);
-          if (cancelled) {
-            return;
-          }
-          connectionRef.current = connection;
-          if (!cancelled) setState(s => ({
-            ...s, status: 'ready', viewerType: 'text', metadata, isReadOnly,
-            content: connection.ytext.toString(),
-            connectionStatus: connection.provider
-              ? ((connection.provider.synced || connection.provider.wsconnected) ? 'connected' : 'connecting')
-              : 'connected',
-          }));
-
-          const observer = (_, transaction) => {
-            if (transaction.origin !== 'editor-change' && !cancelled) {
-              setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
-            }
-          };
-          connection.ytext.observe(observer);
-          connectionRef.current.observer = observer;
-
-          if (connection.provider) {
-            const statusHandler = (event) => {
-              if (!cancelled) {
-                const nextStatus = event.status === 'connected'
-                  ? 'connected'
-                  : event.status === 'disconnected'
-                    ? 'disconnected'
-                    : 'connecting';
-                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: nextStatus } : s);
-              }
-            };
-            const syncHandler = (synced) => {
-              if (synced && !cancelled) {
-                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected', content: connection.ytext.toString() } : s);
-              }
-            };
-            const closeHandler = (event) => {
-              if ((event.code === 4403 || event.code === 4404) && !cancelled) {
-                connection.provider.shouldConnect = false;
-                connection.provider.disconnect();
-                setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'error' } : s);
-              }
-            };
-
-            connection.provider.on('status', statusHandler);
-            connection.provider.on('sync', syncHandler);
-            connection.provider.on('connection-close', closeHandler);
-            connectionRef.current.providerHandlers = {
-              statusHandler,
-              syncHandler,
-              closeHandler,
-            };
-          } else {
-            if (!cancelled) setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: 'connected', content: connection.ytext.toString() } : s);
-          }
-          return;
+          return setupText(metadata, isReadOnly);
         }
-
-        if (viewerType === 'image') {
-          const blob = await fileService.downloadFile(filePath);
-          if (cancelled) return;
-          const imageSrc = URL.createObjectURL(blob);
-          blobUrlsRef.current.push(imageSrc);
-          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'image', metadata, isReadOnly, imageSrc }));
-          return;
-        }
-
         if (viewerType === 'video' || viewerType === 'audio') {
-          const streamingSrc = fileService.getStreamingUrl(filePath);
-          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType, metadata, isReadOnly: true, streamingSrc }));
-          return;
+          return setReady({
+            viewerType, metadata, isReadOnly: true,
+            streamingSrc: fileService.getStreamingUrl(filePath),
+          });
         }
-
-        if (viewerType === 'pdf') {
+        if (viewerType === 'image' || viewerType === 'pdf' || viewerType === '3d') {
           const blob = await fileService.downloadFile(filePath);
           if (cancelled) return;
-          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'pdf', metadata, isReadOnly, pdfBlob: blob }));
-          return;
+          if (viewerType === 'pdf') {
+            return setReady({ viewerType: 'pdf', metadata, isReadOnly, pdfBlob: blob });
+          }
+          const url = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(url);
+          if (viewerType === 'image') {
+            return setReady({ viewerType: 'image', metadata, isReadOnly, imageSrc: url });
+          }
+          return setReady({
+            viewerType: '3d', metadata, isReadOnly: true,
+            modelSrc: url,
+            modelFormat: filePath.split('.').pop()?.toLowerCase() || 'glb',
+          });
         }
-
-        if (viewerType === '3d') {
-          const blob = await fileService.downloadFile(filePath);
-          if (cancelled) return;
-          const modelSrc = URL.createObjectURL(blob);
-          blobUrlsRef.current.push(modelSrc);
-          const modelFormat = filePath.split('.').pop()?.toLowerCase() || 'glb';
-          if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: '3d', metadata, isReadOnly: true, modelSrc, modelFormat }));
-          return;
-        }
-
-        // Binary
-        if (!cancelled) setState(s => ({ ...s, status: 'ready', viewerType: 'binary', metadata, isReadOnly: true }));
-
+        setReady({ viewerType: 'binary', metadata, isReadOnly: true });
       } catch (err) {
         if (!cancelled) {
-          setState(s => ({ ...s, status: 'error', errorMessage: err.response?.data?.message || err.message || 'Failed to load file' }));
+          setState(s => ({ ...s, status: 'error',
+            errorMessage: err.response?.data?.message || err.message || 'Failed to load file' }));
         }
       }
-    };
-
-    load();
+    })();
 
     return () => {
       cancelled = true;
-      if (connectionRef.current) {
-        const connection = connectionRef.current;
-        if (connectionRef.current.observer) {
-          connectionRef.current.ytext.unobserve(connectionRef.current.observer);
-        }
-        if (connection.provider && connection.providerHandlers) {
-          const { statusHandler, syncHandler, closeHandler } = connection.providerHandlers;
-          if (statusHandler) connection.provider.off('status', statusHandler);
-          if (syncHandler) connection.provider.off('sync', syncHandler);
-          if (closeHandler) connection.provider.off('connection-close', closeHandler);
-        }
-        connectionRef.current = null;
-      }
-      for (const url of blobUrlsRef.current) {
-        URL.revokeObjectURL(url);
-      }
+      connectionRef.current?._cleanup?.();
+      connectionRef.current = null;
+      // Fully disconnect so the next open creates a fresh connection with a
+      // clean sync handshake and the server releases the WebSocket slot.
+      fileService.disconnectFromDocument(filePath);
+      for (const url of blobUrlsRef.current) URL.revokeObjectURL(url);
       blobUrlsRef.current = [];
     };
-  }, [filePath, checkReadOnly, getViewerType]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { ...state, updateContent, pathRef };
 };
@@ -2488,9 +2452,7 @@ export const FilesPage = () => {
   const [isSavingImage, setIsSavingImage] = useState(false);
   const [isStarred, setIsStarred] = useState(false);
 
-  const editorRef = useRef(null);
   const imageRef = useRef(null);
-  const pdfRef = useRef(null);
 
   const { success: showSuccess, error: showError, warning: showWarning, info: showInfo } = useNotification();
 
@@ -2500,7 +2462,7 @@ export const FilesPage = () => {
   const looksLikeFile = (activePath?.split('/').pop() || '').includes('.');
 
   // ─── File viewer hook — owns loading, Yjs, blob lifecycle ─────────────────
-  const viewer = useFileViewer(activePath, user);
+  const viewer = useFileViewer(activePath);
 
   // ─── Starred state ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -2872,6 +2834,16 @@ export const FilesPage = () => {
     }
 
     if (!viewer.metadata || viewer.viewerType === null || viewer.viewerType === 'directory') {
+      if (looksLikeFile) {
+        return (
+          <Container layout="flex" align="center" justify="center" minHeight="100vh" width="100%">
+            <Container layout="flex-column" align="center" gap="md">
+              <CircularProgress size="lg" />
+              <Typography>Loading...</Typography>
+            </Container>
+          </Container>
+        );
+      }
       return (
         <DriveView
           onRefresh={driveRefreshRef}
@@ -2881,8 +2853,14 @@ export const FilesPage = () => {
       );
     }
 
-    const { viewerType, metadata, isReadOnly, content, connectionStatus, updateContent, imageSrc, streamingSrc, pdfBlob, modelSrc, modelFormat } = viewer;
+    const { viewerType, metadata, isReadOnly, content, connectionStatus, updateContent, ytext, provider, imageSrc, streamingSrc, pdfBlob, modelSrc, modelFormat } = viewer;
     const editorMode = activePath?.match(/\.docx?$/i) ? 'document' : activePath?.match(/\.(md|mdx|txt)$/i) ? 'markdown' : 'code';
+    // Native y-monaco binding handles code mode; markdown/document keep the
+    // manual updateContent bridge (TipTap requires XmlFragment storage,
+    // incompatible with the server's Y.Text(string) model; MDXEditor has no
+    // YJS plugin).  Editor's collab path ignores onChange, so we always pass it.
+    const collabYText    = editorMode === 'code' ? ytext    : null;
+    const collabProvider = editorMode === 'code' ? provider : null;
 
     return (
       <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
@@ -2926,48 +2904,27 @@ export const FilesPage = () => {
                 )}
               </Container>
             )}
-            {viewerType === 'image' && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name="TbImageInPicture" size="sm" />
-                <Typography size="xs" color="primary">IMAGE</Typography>
-              </Container>
-            )}
-            {viewerType === 'video' && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name="FiVideo" size="sm" />
-                <Typography size="xs" color="primary">VIDEO</Typography>
-              </Container>
-            )}
-            {viewerType === 'audio' && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name="FiMusic" size="sm" />
-                <Typography size="xs" color="primary">AUDIO</Typography>
-              </Container>
-            )}
-            {viewerType === '3d' && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name="FiBox" size="sm" />
-                <Typography size="xs" color="primary">3D MODEL</Typography>
-              </Container>
-            )}
-            {viewerType === 'text' && activePath?.match(/\.docx?$/i) && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name="FiFileText" size="sm" />
-                <Typography size="xs" color="primary">DOCUMENT</Typography>
-              </Container>
-            )}
-            {viewerType === 'pdf' && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name="FiFileText" size="sm" />
-                <Typography size="xs" color="primary">PDF</Typography>
-              </Container>
-            )}
-            {viewerType === 'binary' && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name={activePath?.match(/\.zip$/i) ? 'FiArchive' : 'FiFile'} size="sm" />
-                <Typography size="xs">{activePath?.match(/\.zip$/i) ? 'ZIP ARCHIVE' : 'BINARY'}</Typography>
-              </Container>
-            )}
+            {(() => {
+              const isDocx = viewerType === 'text' && activePath?.match(/\.docx?$/i);
+              const isZip  = viewerType === 'binary' && activePath?.match(/\.zip$/i);
+              const badge =
+                viewerType === 'image' ? { icon: 'TbImageInPicture', label: 'IMAGE',        color: 'primary' } :
+                viewerType === 'video' ? { icon: 'FiVideo',          label: 'VIDEO',        color: 'primary' } :
+                viewerType === 'audio' ? { icon: 'FiMusic',          label: 'AUDIO',        color: 'primary' } :
+                viewerType === '3d'    ? { icon: 'FiBox',            label: '3D MODEL',     color: 'primary' } :
+                viewerType === 'pdf'   ? { icon: 'FiFileText',       label: 'PDF',          color: 'primary' } :
+                isDocx                 ? { icon: 'FiFileText',       label: 'DOCUMENT',     color: 'primary' } :
+                isZip                  ? { icon: 'FiArchive',        label: 'ZIP ARCHIVE',  color: null      } :
+                viewerType === 'binary'? { icon: 'FiFile',           label: 'BINARY',       color: null      } :
+                null;
+              if (!badge) return null;
+              return (
+                <Container layout="flex" align="center" gap="sm">
+                  <Icon name={badge.icon} size="sm" />
+                  <Typography size="xs" color={badge.color || undefined}>{badge.label}</Typography>
+                </Container>
+              );
+            })()}
             {isReadOnly && (
               <Container layout="flex" align="center" gap="sm">
                 <Icon name="FiLock" size="sm" color="warning" />
@@ -2994,7 +2951,6 @@ export const FilesPage = () => {
           {viewerType === 'text' ? (
             <Editor
               key={`text-editor-${metadata.filePath}`}
-              ref={editorRef}
               mode={editorMode}
               filePath={metadata.filePath}
               content={content}
@@ -3077,7 +3033,6 @@ export const FilesPage = () => {
             <PdfViewer
               key={`pdf-viewer-${metadata.filePath}`}
               ref={pdfRef}
-              blob={pdfBlob}
               fileName={metadata.fileName}
               readOnly={isReadOnly}
               onSave={!isReadOnly ? async (savedBlob) => {

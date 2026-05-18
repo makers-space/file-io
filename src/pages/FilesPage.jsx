@@ -229,31 +229,13 @@ const useFileViewer = (filePath) => {
   // Manual char-diff bridge into the shared Y.Text — used by markdown and
   // document editors.  Code mode bypasses this entirely via native MonacoBinding.
   const updateContent = useCallback((newContent) => {
-    const conn = connectionRef.current;
-    const ytext = conn?.ytext;
+    const ytext = connectionRef.current?.ytext;
     if (!ytext) {
       showError('No collaborative connection available. Please refresh the page.');
       return;
     }
-    // Block edits until the WebsocketProvider has completed its initial
-    // sync with the server.  Otherwise the editor's on-mount onChange (which
-    // fires with empty/placeholder content before remote state has arrived)
-    // diffs against an empty ytext and propagates a wipe to every other
-    // window once sync completes.  This is the classic "2nd window opens →
-    // both windows go blank" race.
-    if (conn.provider && !conn.provider.synced) {
-      // eslint-disable-next-line no-console
-      console.warn('[Yjs] updateContent BLOCKED (provider not synced yet)', { len: newContent?.length });
-      return;
-    }
     const oldText = ytext.toString();
     if (newContent === oldText) return;
-    // Diagnostic: log any large delete that would wipe content.  Helps spot
-    // editor-on-mount onChange firing with '' against a synced ytext.
-    if (oldText.length > 50 && (!newContent || newContent.length < oldText.length / 2)) {
-      // eslint-disable-next-line no-console
-      console.warn('[Yjs] updateContent LARGE DELETE', { oldLen: oldText.length, newLen: newContent?.length || 0, newPreview: (newContent || '').slice(0, 80) });
-    }
     let start = 0;
     while (start < oldText.length && start < newContent.length && oldText[start] === newContent[start]) start++;
     let oldEnd = oldText.length;
@@ -286,13 +268,6 @@ const useFileViewer = (filePath) => {
       const initialStatus = connection.provider
         ? ((connection.provider.synced || connection.provider.wsconnected) ? 'connected' : 'connecting')
         : 'connected';
-      // eslint-disable-next-line no-console
-      console.info('[Yjs] setupText: connection ready', {
-        filePath,
-        initialYtextLen: connection.ytext.toString().length,
-        synced: connection.provider?.synced,
-        wsconnected: connection.provider?.wsconnected,
-      });
       setReady({
         viewerType: 'text', metadata, isReadOnly,
         content: connection.ytext.toString(),
@@ -303,37 +278,16 @@ const useFileViewer = (filePath) => {
 
       const onYUpdate = (_, transaction) => {
         if (transaction.origin === 'editor-change' || cancelled) return;
-        const newLen = connection.ytext.toString().length;
-        // eslint-disable-next-line no-console
-        console.info('[Yjs] remote ytext update', { newLen, origin: String(transaction.origin) });
         setState(s => s.viewerType === 'text' ? { ...s, content: connection.ytext.toString() } : s);
       };
-      // Lower-level: log EVERY ydoc update, regardless of whether the
-      // 'content' Y.Text changed.  This catches the case where sync arrives
-      // but writes to a different key, or arrives but applies a no-op.
-      const onDocUpdate = (update, origin) => {
-        if (cancelled) return;
-        // eslint-disable-next-line no-console
-        console.info('[Yjs] ydoc update', {
-          updateBytes: update?.length,
-          origin: origin?.constructor?.name || String(origin),
-          ytextLen: connection.ytext.toString().length,
-          shareKeys: Array.from(connection.ydoc.share.keys()),
-        });
-      };
-      connection.ydoc.on('update', onDocUpdate);
       const onStatus = (e) => {
         if (cancelled) return;
-        // eslint-disable-next-line no-console
-        console.info('[Yjs] provider status', { status: e.status });
         const next = e.status === 'connected' ? 'connected'
           : e.status === 'disconnected' ? 'disconnected'
           : 'connecting';
         setState(s => s.viewerType === 'text' ? { ...s, connectionStatus: next } : s);
       };
       const onSync = (synced) => {
-        // eslint-disable-next-line no-console
-        console.info('[Yjs] provider sync event', { synced, ytextLen: connection.ytext.toString().length });
         if (!synced || cancelled) return;
         setState(s => s.viewerType === 'text'
           ? { ...s, connectionStatus: 'connected', content: connection.ytext.toString() }
@@ -353,7 +307,6 @@ const useFileViewer = (filePath) => {
 
       connectionRef.current._cleanup = () => {
         try { connection.ytext.unobserve(onYUpdate); } catch { /* ignore */ }
-        try { connection.ydoc.off('update', onDocUpdate); } catch { /* ignore */ }
         try { connection.provider?.off('status', onStatus); } catch { /* ignore */ }
         try { connection.provider?.off('sync', onSync); } catch { /* ignore */ }
         try { connection.provider?.off('connection-close', onClose); } catch { /* ignore */ }

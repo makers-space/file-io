@@ -437,6 +437,23 @@ export const fileService = {
     },
 
     /**
+     * Update editable file metadata (fileName, description, tags,
+     * permissions, mediaMetadata for audio/video). Pass only the fields you
+     * want to change; omitted fields are left untouched.
+     *
+     * mediaMetadata accepts: title, artist, album, year, genre, track,
+     * albumArtist. Empty strings or null clear the field.
+     *
+     * @param {string} filePath - Absolute file path
+     * @param {object} updates - Partial metadata patch
+     * @returns {Promise<object>} Update response (includes updated file)
+     */
+    async updateMetadata(filePath, updates) {
+        const encodedPath = encodeURIComponent(this.normalizePath(filePath));
+        return await api.put(`/files/${encodedPath}/metadata`, updates);
+    },
+
+    /**
      * Get file content (for binary files - text files use Yjs)
      * @param {string} filePath - Absolute file path
      * @returns {Promise<object>} File content response
@@ -664,7 +681,7 @@ export const fileService = {
         const normalizedPath = this.normalizePath(targetPath);
         const formData = new FormData();
         const { textImports = null } = options;
-
+        
         // Append files and capture relative paths explicitly (browsers may strip
         // path separators from filenames, so we send paths as a separate field)
         const relativePaths = [];
@@ -699,8 +716,7 @@ export const fileService = {
             };
         }
 
-        const response = await api.post('/files/upload', formData, config);
-        return response;
+        return await api.post('/files/upload', formData, config);
     },
 
     /**
@@ -786,9 +802,7 @@ export const fileService = {
         // share the same connection; the matching disconnectFromDocument call
         // tears it down once it is no longer needed.
         const existing = documentProviders.get(normalizedPath);
-        if (existing) {
-            return existing;
-        }
+        if (existing) return existing;
 
         const ydoc = new Y.Doc();
         const authToken = await this.getAuthToken();
@@ -862,7 +876,7 @@ export const fileService = {
     async disconnectFromDocument(filePath) {
         const normalizedPath = this.normalizePath(filePath);
         const connection = documentProviders.get(normalizedPath);
-
+        
         if (connection) {
             try {
                 // Clear proactive token-refresh timer

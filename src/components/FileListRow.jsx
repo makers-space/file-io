@@ -1,28 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Container, Icon, Input, Typography } from './Components';
+import { getFileIcon } from './FileCard';
 import './styles/FileCard.css';
-
-const FILE_ICONS = {
-    directory: 'FiFolder',
-    js: 'FiCode', ts: 'FiCode', jsx: 'FiCode', tsx: 'FiCode',
-    py: 'FiCode', go: 'FiCode', rs: 'FiCode', java: 'FiCode',
-    md: 'FiFileText', txt: 'FiFileText', json: 'FiFileText',
-    html: 'FiCode', css: 'FiCode', yaml: 'FiFileText', xml: 'FiFileText',
-    jpg: 'FiImage', jpeg: 'FiImage', png: 'FiImage', gif: 'FiImage',
-    webp: 'FiImage', svg: 'FiImage',
-    mp4: 'FiFilm', webm: 'FiFilm', avi: 'FiFilm', mov: 'FiFilm',
-    mp3: 'FiMusic', wav: 'FiMusic', flac: 'FiMusic', aac: 'FiMusic',
-    pdf: 'FiFileText', xlsx: 'FiFileText', docx: 'FiFileText',
-    zip: 'FiArchive', rar: 'FiArchive', tar: 'FiArchive',
-    glb: 'FiBox', gltf: 'FiBox',
-};
-
-const getFileIcon = (file) => {
-    if (file.type === 'directory') return 'FiFolder';
-    const ext = file.fileName?.split('.').pop()?.toLowerCase();
-    return FILE_ICONS[ext] || 'FiFile';
-};
 
 const formatSize = (bytes) => {
     if (!bytes) return '—';

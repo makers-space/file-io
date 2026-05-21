@@ -99,13 +99,18 @@ export const ThemeProvider = ({ children, theme: overrideTheme }) => {
 
   // Get CSS variables as an object for external use
   const getThemeVariables = () => {
-    const cssVars = getComputedStyle(document.documentElement);
+    // Theme classes are applied to <body> (see effect above), so CSS custom
+    // properties defined under `.theme-*` are scoped there.  Reading from
+    // <html> would return empty strings — always read from <body>.
+    const cssVars = getComputedStyle(document.body);
     const variables = {};
     
     // Extract commonly used variables
     const varNames = [
-      '--background-color', '--text-color', '--text-muted', '--primary-color',
-      '--secondary-color', '--tertiary-color', '--success-color', '--warning-color', '--error-color',
+      '--background-color', '--text-color', '--text-muted', '--text-contrast-color',
+      '--primary-color', '--primary-accent-color',
+      '--secondary-color', '--secondary-accent-color',
+      '--tertiary-color', '--success-color', '--warning-color', '--error-color',
       '--accent-color', '--surface-color', '--border-color',
       '--code-editor-bg', '--code-editor-line-bg', '--code-editor-line-numbers',
       '--code-editor-cursor', '--code-editor-selection', '--code-editor-border',

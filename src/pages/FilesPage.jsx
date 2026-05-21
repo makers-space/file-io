@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import fileService from '../client/file.client';
-import FileCard from '../components/FileCard';
+import FileCard, { getFileIcon } from '../components/FileCard';
 import FileListRow from '../components/FileListRow';
 import {
   Page,
@@ -212,7 +212,13 @@ const getViewerType = (metadata, fp) => {
   if (/\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|tiff|tif)$/i.test(fp)) return 'image';
   if (/\.(mp4|webm|avi|mov|wmv|flv)$/i.test(fp)) return 'video';
   if (/\.(mp3|wav)$/i.test(fp)) return 'audio';
-  if (/\.(obj|gltf|glb|fbx|stl|dae|3ds|blend|ply|3mf|usdz|usda|usdc|vrm|vox|c4d)$/i.test(fp)) return '3d';
+  // Only formats the Model3D viewer (three-stdlib) can actually load.
+  // .blend, .3ds, .usdz/.usda/.usdc, .vrm, .c4d are not supported by web 3D
+  // loaders and must be converted (e.g. to .glb) — fall through to binary
+  // preview so the user can download them instead of seeing a load failure.
+  // .mtl is a plain-text material companion to .obj and is intentionally
+  // routed to the text editor (open the matching .obj for 3D viewing).
+  if (/\.(obj|gltf|glb|fbx|stl|dae|ply|3mf|vox|3ds)$/i.test(fp)) return '3d';
   if (/\.pdf$/i.test(fp)) return 'pdf';
   if (metadata.type === 'text') return 'text';
   return 'binary';
@@ -329,8 +335,12 @@ const useFileViewer = (filePath) => {
           return setupText(metadata, isReadOnly);
         }
         if (viewerType === 'video' || viewerType === 'audio') {
+          // Permission for the file as a whole — gates rename / metadata
+          // editing in the top bar and the in-player metadata editor.
+          // Streaming playback itself is always read-only; that's enforced
+          // by the player having no upload control, not by isReadOnly.
           return setReady({
-            viewerType, metadata, isReadOnly: true,
+            viewerType, metadata, isReadOnly,
             streamingSrc: fileService.getStreamingUrl(filePath),
           });
         }
@@ -372,7 +382,16 @@ const useFileViewer = (filePath) => {
     };
   }, [filePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { ...state, updateContent, pathRef };
+  // Allow callers (e.g. metadata edit forms) to patch the loaded metadata
+  // in-place without re-running the full viewer setup.
+  const setMetadata = useCallback((updater) => {
+    setState(s => ({
+      ...s,
+      metadata: typeof updater === 'function' ? updater(s.metadata) : updater,
+    }));
+  }, []);
+
+  return { ...state, updateContent, pathRef, setMetadata };
 };
 
 const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
@@ -714,7 +733,12 @@ const buildFullTree = (tree, parentPath = '') => {
   const out = {};
   Object.entries(tree || {}).forEach(([key, node]) => {
     const filePath = fileService.normalizePath(node.filePath ?? (parentPath ? `${parentPath}/${key}` : `/${key}`));
-    out[filePath] = { ...node, filePath, fileName: node.fileName || key, children: buildFullTree(node.children || {}, filePath) };
+    const fileName = node.fileName || key;
+    out[filePath] = {
+      ...node, filePath, fileName,
+      icon: getFileIcon({ ...node, fileName, filePath }),
+      children: buildFullTree(node.children || {}, filePath),
+    };
   });
   return out;
 };
@@ -2853,7 +2877,7 @@ export const FilesPage = () => {
       );
     }
 
-    const { viewerType, metadata, isReadOnly, content, connectionStatus, updateContent, ytext, provider, imageSrc, streamingSrc, pdfBlob, modelSrc, modelFormat } = viewer;
+    const { viewerType, metadata, isReadOnly, content, connectionStatus, updateContent, ytext, provider, imageSrc, streamingSrc, pdfBlob, modelSrc, modelFormat, setMetadata } = viewer;
     const editorMode = activePath?.match(/\.docx?$/i) ? 'document' : activePath?.match(/\.(md|mdx|txt)$/i) ? 'markdown' : 'code';
     // Native y-monaco binding handles code mode; markdown/document keep the
     // manual updateContent bridge (TipTap requires XmlFragment storage,
@@ -2904,9 +2928,17 @@ export const FilesPage = () => {
                 )}
               </Container>
             )}
+            {isReadOnly && (
+              <Container layout="flex" align="center" gap="sm">
+                <Icon name="FiLock" size="sm" color="warning" />
+                <Typography size="xs" color="warning">READ-only</Typography>
+              </Container>
+            )}
             {(() => {
-              const isDocx = viewerType === 'text' && activePath?.match(/\.docx?$/i);
-              const isZip  = viewerType === 'binary' && activePath?.match(/\.zip$/i);
+              const isDocx     = viewerType === 'text' && activePath?.match(/\.docx?$/i);
+              const isMarkdown = viewerType === 'text' && activePath?.match(/\.(md|mdx)$/i);
+              const isPlain    = viewerType === 'text' && activePath?.match(/\.txt$/i);
+              const isZip      = viewerType === 'binary' && activePath?.match(/\.zip$/i);
               const badge =
                 viewerType === 'image' ? { icon: 'TbImageInPicture', label: 'IMAGE',        color: 'primary' } :
                 viewerType === 'video' ? { icon: 'FiVideo',          label: 'VIDEO',        color: 'primary' } :
@@ -2914,30 +2946,26 @@ export const FilesPage = () => {
                 viewerType === '3d'    ? { icon: 'FiBox',            label: '3D MODEL',     color: 'primary' } :
                 viewerType === 'pdf'   ? { icon: 'FiFileText',       label: 'PDF',          color: 'primary' } :
                 isDocx                 ? { icon: 'FiFileText',       label: 'DOCUMENT',     color: 'primary' } :
+                isMarkdown             ? { icon: 'FiFileText',       label: 'MARKDOWN',     color: 'primary' } :
+                isPlain                ? { icon: 'FiFileText',       label: 'TEXT',         color: 'primary' } :
+                viewerType === 'text'  ? { icon: 'FiCode',           label: 'CODE',         color: 'primary' } :
                 isZip                  ? { icon: 'FiArchive',        label: 'ZIP ARCHIVE',  color: null      } :
                 viewerType === 'binary'? { icon: 'FiFile',           label: 'BINARY',       color: null      } :
                 null;
               if (!badge) return null;
               return (
-                <Container layout="flex" align="center" gap="sm">
+                <Container layout="flex" align="center" gap="xs" padding="none">
                   <Icon name={badge.icon} size="sm" />
                   <Typography size="xs" color={badge.color || undefined}>{badge.label}</Typography>
                 </Container>
               );
             })()}
-            {isReadOnly && (
-              <Container layout="flex" align="center" gap="sm">
-                <Icon name="FiLock" size="sm" color="warning" />
-                <Typography size="xs" color="warning">READ-only</Typography>
-              </Container>
-            )}
           </Container>
 
-          <Typography weight="semibold">{metadata.fileName}</Typography>
+          <Container layout="flex" align="center" gap="sm" padding="none">
+            <Typography weight="semibold">{metadata.fileName.replace(/\.[^/.]+$/, '')}</Typography>
+          </Container>
           <Container layout="flex" align="center" gap="sm">
-            {isReadOnly && (
-              <Typography size="xs" color="warning">Read-only access</Typography>
-            )}
             <Typography size="xs">
               {metadata.filePath}
             </Typography>
@@ -3009,8 +3037,10 @@ export const FilesPage = () => {
               {(() => {
                 const meta = metadata.mediaMetadata;
                 const title = meta?.title || metadata.fileName.replace(/\.[^/.]+$/, '');
+                // Bust the cover image cache when coverArtId changes so a
+                // freshly-uploaded image replaces the previous one in the UI.
                 const coverUrl = meta?.coverArtId
-                  ? `${baseUrl}/files/${encodeURIComponent(metadata.filePath)}/cover`
+                  ? `${baseUrl}/files/${encodeURIComponent(metadata.filePath)}/cover?v=${meta.coverArtId}`
                   : null;
                 return (
                   <Audio
@@ -3021,6 +3051,14 @@ export const FilesPage = () => {
                     artist={meta?.artist || null}
                     album={meta?.album || null}
                     cover={coverUrl}
+                    metadata={meta}
+                    editable={!isReadOnly}
+                    onMetadataSave={async (patch) => {
+                      const res = await fileService.updateMetadata(metadata.filePath, { mediaMetadata: patch });
+                      const next = res?.file?.mediaMetadata;
+                      if (next) setMetadata(prev => prev ? { ...prev, mediaMetadata: next } : prev);
+                      return next;
+                    }}
                     autoPlay={false}
                     loop={false}
                     muted={false}

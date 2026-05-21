@@ -272,21 +272,31 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-lg, 20px);
+    gap: var(--spacing-sm, 8px);
     width: 100%;
     max-width: 400px;
+    min-width: 0;
 }
 
 .audio-volume-group {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm, 8px);
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     max-width: 200px;
 }
 
+/* Square, fixed-size action buttons so loop/edit never overlap the volume slider */
+.audio-control-button {
+    flex-shrink: 0;
+    aspect-ratio: 1;
+    padding: 0 !important;
+}
+
 .audio-volume-slider {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
     height: 3px;
     -webkit-appearance: none;
     appearance: none;

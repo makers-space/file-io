@@ -4,8 +4,6 @@ import { ThemeProvider } from '@contexts/ThemeContext';
 import { AuthProvider } from '@contexts/AuthContext';
 import { NotificationProvider } from '@contexts/NotificationContext';
 
-import { PreferencesProvider } from '@contexts/PreferencesContext';
-
 // Import all pages
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -106,9 +104,7 @@ function App() {
       <ThemeProvider>
         <NotificationProvider>
           <AuthProvider>
-              <PreferencesProvider>
-                <AppRouter />
-              </PreferencesProvider>
+              <AppRouter />
           </AuthProvider>
         </NotificationProvider>
       </ThemeProvider>

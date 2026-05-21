@@ -41,7 +41,7 @@ const FILE_TYPE_CATEGORIES = [
     },
     {
         // Binary (GridFS) + interactive 3D viewer (three-stdlib):
-        // glb, gltf, obj, stl, fbx, ply, dae, 3mf, vox — all renderable in browser
+        // glb, gltf, obj, stl, fbx, ply, dae, 3mf, vox, 3ds — all renderable in browser
         category: '3D Models',
         icon: 'FiBox',
         color: '#76E4F7',

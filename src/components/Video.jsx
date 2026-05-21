@@ -529,7 +529,7 @@ export const Video = forwardRef(({
                             }}
                             aria-label="Rewind 10 seconds"
                         >
-                            <Icon name="FiRotateCcw" size="sm" />
+                            <Icon name="FiRotateCcw" size="xs" />
                         </Button>
 
                         <Button
@@ -540,7 +540,7 @@ export const Video = forwardRef(({
                             onClick={togglePlay}
                             aria-label={isPlaying ? 'Pause video' : 'Play video'}
                         >
-                            <Icon name={isPlaying ? 'FiPause' : 'FiPlay'} size="md" />
+                            <Icon name={isPlaying ? 'FiPause' : 'FiPlay'} size="sm" />
                         </Button>
 
                         <Button
@@ -555,7 +555,7 @@ export const Video = forwardRef(({
                             }}
                             aria-label="Forward 10 seconds"
                         >
-                            <Icon name="FiRotateCw" size="sm" />
+                            <Icon name="FiRotateCw" size="xs" />
                         </Button>
 
                         <Typography as="span" size="xs" weight="semibold" className="video-timecode">
@@ -593,7 +593,7 @@ export const Video = forwardRef(({
                             onClick={toggleMute}
                             aria-label={isMuted ? 'Unmute video' : 'Mute video'}
                         >
-                            <Icon name={isMuted || volume === 0 ? 'FiVolumeX' : (volume < 0.5 ? 'FiVolume1' : 'FiVolume2')} size="sm" />
+                            <Icon name={isMuted || volume === 0 ? 'FiVolumeX' : (volume < 0.5 ? 'FiVolume1' : 'FiVolume2')} size="xs" />
                         </Button>
 
                         <div className="video-volume-control">
@@ -636,7 +636,7 @@ export const Video = forwardRef(({
                             onClick={handleToggleFullscreen}
                             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                         >
-                            <Icon name={isFullscreen ? 'FiMinimize' : 'FiMaximize'} size="sm" />
+                            <Icon name={isFullscreen ? 'FiMinimize' : 'FiMaximize'} size="xs" />
                         </Button>
                     </div>
                 </div>

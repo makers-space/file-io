@@ -4,6 +4,7 @@ import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
 import fileService from '@/client/file.client';
 import { userService } from '@/client/user.client';
+import { getFileIcon } from '@components/FileCard';
 import {
     Page,
     Container,
@@ -40,15 +41,6 @@ const timeAgo = (dateString) => {
     const days = Math.floor(hrs / 24);
     if (days < 7) return `${days}d ago`;
     return new Date(dateString).toLocaleDateString();
-};
-
-const FILE_ICONS = {
-    text: 'FiFileText',
-    image: 'FiImage',
-    video: 'FiVideo',
-    audio: 'FiMusic',
-    pdf: 'FiFileText',
-    directory: 'FiFolder',
 };
 
 // ─── Files Tab ────────────────────────────────────────────────────────────────
@@ -101,7 +93,7 @@ const FilesTab = ({ navigate, userId }) => {
             style={{ cursor: 'pointer', borderRadius: '6px', textAlign: 'center' }}
             onClick={() => navigate(`/files${f.filePath || ''}`)}
         >
-            <Icon name={FILE_ICONS[f.type] || 'FiFile'} size="md" color="primary" />
+            <Icon name={getFileIcon(f)} size="md" color="primary" />
             <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
                 {f.fileName || f.filePath?.split('/').pop() || 'Untitled'}
             </Typography>
@@ -118,7 +110,7 @@ const FilesTab = ({ navigate, userId }) => {
             style={{ cursor: 'pointer', borderRadius: '6px', width: '180px', flexShrink: 0 }}
             onClick={() => navigate(`/files${f.filePath || ''}`)}
         >
-            <Icon name={FILE_ICONS[f.type] || 'FiFile'} size="sm" color="primary" />
+            <Icon name={getFileIcon(f)} size="sm" color="primary" />
             <Container layout="flex-column" gap="none" style={{ minWidth: 0, flex: 1 }}>
                 <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {f.fileName || f.filePath?.split('/').pop() || 'Untitled'}

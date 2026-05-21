@@ -1,20 +1,22 @@
 import React, { Suspense, useRef, useState, useEffect, useMemo, useCallback, Component } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, Grid, ContactShadows } from '@react-three/drei';
+import { Canvas, useThree } from '@react-three/fiber';
+import { OrbitControls, Environment, Grid, ContactShadows, GizmoHelper } from '@react-three/drei';
+import { useGizmoContext } from '@react-three/drei/core/GizmoHelper';
 import * as THREE from 'three';
-import { GLTFLoader, OBJLoader, STLLoader, FBXLoader, PLYLoader, ColladaLoader, ThreeMFLoader, VOXLoader } from 'three-stdlib';
+import { GLTFLoader, OBJLoader, STLLoader, FBXLoader, PLYLoader, ColladaLoader, ThreeMFLoader, VOXLoader, TDSLoader } from 'three-stdlib';
 import Container from './Container';
 import Typography from './Typography';
 import Button from './Button';
 import Icon from './Icon';
 import CircularProgress from './CircularProgress';
 import FloatingActionButton from './FloatingActionButton';
+import { useTheme } from '../contexts/ThemeContext';
 import './styles/Model3D.css';
 
 /**
  * Model3D - Interactive 3D model viewer component
  *
- * Supports GLB, GLTF, OBJ, STL, FBX, PLY, DAE, 3MF, VOX formats.
+ * Supports GLB, GLTF, OBJ, STL, FBX, PLY, DAE, 3MF, VOX, 3DS formats.
  * Works with both regular URLs and blob URLs.
  *
  * @param {string} src - URL of the 3D model file
@@ -39,7 +41,7 @@ import './styles/Model3D.css';
  * @param {function} onError - Callback when model fails to load
  */
 
-const SUPPORTED_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'fbx', 'ply', 'dae', '3mf', 'vox'];
+const SUPPORTED_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'fbx', 'ply', 'dae', '3mf', 'vox', '3ds'];
 
 const detectFormat = (url, format) => {
     if (!url) return null;
@@ -59,6 +61,7 @@ const createLoader = (ext) => {
         case 'dae':  return new ColladaLoader();
         case '3mf':  return new ThreeMFLoader();
         case 'vox':  return new VOXLoader();
+        case '3ds':  return new TDSLoader();
         default:     return null;
     }
 };
@@ -73,17 +76,25 @@ const extractScene = (ext, data) => {
             break;
         case 'stl':
         case 'ply':
-            obj = new THREE.Mesh(data, new THREE.MeshStandardMaterial({ color: 0x888888 }));
+            {
+                const surface = getComputedStyle(document.body)
+                    .getPropertyValue('--surface-color')
+                    .trim();
+                obj = new THREE.Mesh(
+                    data,
+                    new THREE.MeshStandardMaterial({ color: surface || '#ffffff' })
+                );
+            }
             break;
         default:
             obj = data;
             break;
     }
 
-    // Many formats (STL, OBJ, 3MF, PLY) use Z-up convention while Three.js
+    // Many formats (STL, OBJ, 3MF, PLY, 3DS) use Z-up convention while Three.js
     // uses Y-up.  Rotate these so models stand upright instead of lying flat.
     // GLTF/GLB and FBX handle this internally, so skip them.
-    const zUpFormats = ['stl', 'obj', '3mf', 'ply'];
+    const zUpFormats = ['stl', 'obj', '3mf', 'ply', '3ds'];
     if (obj && zUpFormats.includes(ext)) {
         const wrapper = new THREE.Group();
         wrapper.rotation.x = -Math.PI / 2;
@@ -160,6 +171,7 @@ const CameraFitter = ({ target, controlsRef, onFitted }) => {
 // Scene — loads, centers, and renders the 3D model
 // ---------------------------------------------------------------------------
 const Scene = ({ url, format, controlsRef, wireframe, showGrid, showShadows, onLoad, onError }) => {
+    const gridColors = useThemeColors({ cell: '--secondary-color', section: '--surface-color' });
     const groupRef = useRef();
     const [object, setObject] = useState(null);
     const [bounds, setBounds] = useState(null);
@@ -226,6 +238,13 @@ const Scene = ({ url, format, controlsRef, wireframe, showGrid, showShadows, onL
             })
             .catch((err) => {
                 if (cancelled) return;
+                // Blob URL was revoked while the load was in flight (e.g. user
+                // navigated away). Not a real load failure — stay silent.
+                const msg = err?.message || '';
+                if (msg === 'Failed to fetch' || err?.name === 'NotFoundError' ||
+                    msg.includes('ERR_FILE_NOT_FOUND')) {
+                    return;
+                }
                 console.error('Error loading 3D model:', err);
                 onError?.(new Error(
                     `Failed to load .${extension} model. The file may be corrupted or unsupported.`
@@ -262,10 +281,10 @@ const Scene = ({ url, format, controlsRef, wireframe, showGrid, showShadows, onL
                     args={[gridScale, gridScale]}
                     cellSize={bounds.maxDim * 0.1}
                     cellThickness={0.5}
-                    cellColor="#888888"
+                    cellColor={gridColors.cell}
                     sectionSize={bounds.maxDim * 0.5}
                     sectionThickness={1}
-                    sectionColor="#444444"
+                    sectionColor={gridColors.section}
                     fadeDistance={gridScale}
                     fadeStrength={1}
                     infiniteGrid
@@ -328,6 +347,121 @@ const LoadingFallback = () => (
 );
 
 // ---------------------------------------------------------------------------
+// useThemeColors — reads a set of CSS theme variables and re-reads one frame
+// after a theme change (so the `.theme-*` class on <body> has been applied
+// before getComputedStyle runs). Returns null until the first read succeeds.
+// ---------------------------------------------------------------------------
+const useThemeColors = (mapping) => {
+    const { currentTheme, getThemeVariables } = useTheme();
+    const [values, setValues] = useState(null);
+    useEffect(() => {
+        const id = requestAnimationFrame(() => {
+            const vars = getThemeVariables();
+            const next = {};
+            for (const [key, varName] of Object.entries(mapping)) {
+                next[key] = vars[varName];
+            }
+            setValues(next);
+        });
+        return () => cancelAnimationFrame(id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentTheme]);
+    return values;
+};
+
+// ---------------------------------------------------------------------------
+// ThemedViewcube — drei's GizmoViewcube replacement that pulls all colors
+// from the active theme. Built locally because drei's version multiplies the
+// baked face texture by the hover color, producing a tinted blend instead of
+// the exact theme hover color.
+// ---------------------------------------------------------------------------
+const FACE_LABELS = ['Right', 'Left', 'Top', 'Bottom', 'Front', 'Back'];
+const vec = (x, y, z) => new THREE.Vector3(x, y, z).multiplyScalar(0.38);
+const EDGE_PIVOTS = [
+    [1, 1, 0], [1, 0, 1], [1, 0, -1], [1, -1, 0],
+    [0, 1, 1], [0, 1, -1], [0, -1, 1], [0, -1, -1],
+    [-1, 1, 0], [-1, 0, 1], [-1, 0, -1], [-1, -1, 0],
+].map((p) => ({ position: vec(...p), dimensions: p.map((a) => (a === 0 ? 0.5 : 0.25)) }));
+const CORNER_PIVOTS = [
+    [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
+    [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
+].map((p) => ({ position: vec(...p), dimensions: [0.25, 0.25, 0.25] }));
+const PIVOTS = [...EDGE_PIVOTS, ...CORNER_PIVOTS];
+
+const bakeFace = (label, fill, text, stroke) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = fill;
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, 128, 128);
+    ctx.font = '20px Inter var, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = text;
+    ctx.fillText(label.toUpperCase(), 64, 76);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+};
+
+const ThemedViewcube = () => {
+    const { tweenCamera } = useGizmoContext();
+    const [hoverFace, setHoverFace] = useState(null);
+    const [hoverPivot, setHoverPivot] = useState(null);
+    const colors = useThemeColors({
+        fill: '--primary-color',
+        hover: '--tertiary-color',
+        text: '--text-contrast-color',
+        stroke: '--secondary-color',
+    });
+
+    const textures = useMemo(() => {
+        if (!colors) return null;
+        return {
+            rest: FACE_LABELS.map((l) => bakeFace(l, colors.fill, colors.text, colors.stroke)),
+            hover: FACE_LABELS.map((l) => bakeFace(l, colors.hover, colors.text, colors.stroke)),
+        };
+    }, [colors]);
+
+    if (!textures || !colors) return null;
+
+    return (
+        <group scale={[60, 60, 60]}>
+            <mesh
+                onPointerOut={(e) => { e.stopPropagation(); setHoverFace(null); }}
+                onPointerMove={(e) => { e.stopPropagation(); setHoverFace(Math.floor(e.faceIndex / 2)); }}
+                onClick={(e) => { e.stopPropagation(); tweenCamera(e.face.normal); }}
+            >
+                <boxGeometry />
+                {FACE_LABELS.map((_, i) => (
+                    <meshBasicMaterial
+                        key={i}
+                        attach={`material-${i}`}
+                        map={hoverFace === i ? textures.hover[i] : textures.rest[i]}
+                        toneMapped={false}
+                    />
+                ))}
+            </mesh>
+            {PIVOTS.map((p, i) => (
+                <mesh
+                    key={i}
+                    scale={1.01}
+                    position={p.position}
+                    onPointerOver={(e) => { e.stopPropagation(); setHoverPivot(i); }}
+                    onPointerOut={(e) => { e.stopPropagation(); setHoverPivot(null); }}
+                    onClick={(e) => { e.stopPropagation(); tweenCamera(p.position); }}
+                >
+                    <boxGeometry args={p.dimensions} />
+                    <meshBasicMaterial color={colors.hover} visible={hoverPivot === i} toneMapped={false} />
+                </mesh>
+            ))}
+        </group>
+    );
+};
+
+// ---------------------------------------------------------------------------
 // Main Model3D component
 // ---------------------------------------------------------------------------
 const Model3D = React.forwardRef(({
@@ -385,6 +519,37 @@ const Model3D = React.forwardRef(({
 
     const handleResetCamera = () => controlsRef.current?.reset();
     const handleToggleAutoRotate = () => setCurrentAutoRotate((p) => !p);
+
+    // Snap the camera to one of the six cardinal axes (or an isometric view),
+    // keeping the current OrbitControls target as the look-at point so models
+    // stay centred regardless of where they were framed.
+    const snapToView = useCallback((axis) => {
+        const controls = controlsRef.current;
+        if (!controls) return;
+        const camera = controls.object;
+        const target = controls.target.clone();
+        const distance = camera.position.distanceTo(target) || 5;
+        const offsets = {
+            front:  [0, 0,  1],
+            back:   [0, 0, -1],
+            right:  [1, 0,  0],
+            left:  [-1, 0,  0],
+            top:    [0, 1,  0],
+            bottom: [0,-1,  0],
+            iso:    [1, 1,  1],
+        };
+        const dir = offsets[axis] || offsets.front;
+        const length = Math.hypot(dir[0], dir[1], dir[2]);
+        camera.position.set(
+            target.x + (dir[0] / length) * distance,
+            target.y + (dir[1] / length) * distance,
+            target.z + (dir[2] / length) * distance,
+        );
+        camera.up.set(0, 1, 0);
+        camera.lookAt(target);
+        camera.updateProjectionMatrix();
+        controls.update();
+    }, []);
     const handleToggleWireframe = () => setWireframe((p) => !p);
     const handleToggleGrid = () => setGridVisible((p) => !p);
     const handleToggleShadows = () => setShadowsVisible((p) => !p);
@@ -470,6 +635,7 @@ const Model3D = React.forwardRef(({
                     <Canvas
                         key={retryKey}
                         style={bgStyle}
+                        flat
                         gl={{ antialias: true, alpha: true }}
                         dpr={[1, 2]}
                         camera={{ position: cameraPosition, fov: cameraFov, near: 0.01, far: 10000 }}
@@ -485,6 +651,7 @@ const Model3D = React.forwardRef(({
                         {controls && (
                             <OrbitControls
                                 ref={controlsRef}
+                                makeDefault
                                 autoRotate={currentAutoRotate}
                                 autoRotateSpeed={autoRotateSpeed}
                                 enableDamping
@@ -494,6 +661,13 @@ const Model3D = React.forwardRef(({
                                 maxDistance={10000}
                                 minDistance={0.01}
                             />
+                        )}
+
+                        {/* Axis gizmo — click a face/edge/corner to snap the camera */}
+                        {controls && (
+                            <GizmoHelper alignment="top-right" margin={[60, 60]}>
+                                <ThemedViewcube />
+                            </GizmoHelper>
                         )}
 
                         {/* Model + Grid + Shadows */}
@@ -570,6 +744,15 @@ const Model3D = React.forwardRef(({
                                         <Button size="sm" variant="ghost" onClick={handleFullscreen} title="Fullscreen" className="model3d-control-button">
                                             <Icon name="FiMaximize" size="sm" />
                                         </Button>
+
+                                        {/* Axis-view snap buttons */}
+                                        <Button size="sm" variant="ghost" onClick={() => snapToView('front')}  title="Front view"   className="model3d-control-button">F</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => snapToView('back')}   title="Back view"    className="model3d-control-button">B</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => snapToView('left')}   title="Left view"    className="model3d-control-button">L</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => snapToView('right')}  title="Right view"   className="model3d-control-button">R</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => snapToView('top')}    title="Top view"     className="model3d-control-button">T</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => snapToView('bottom')} title="Bottom view"  className="model3d-control-button">Bt</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => snapToView('iso')}    title="Isometric view" className="model3d-control-button">Iso</Button>
                                     </div>
                                 ),
                                 trigger: 'click',

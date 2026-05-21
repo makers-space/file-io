@@ -3,30 +3,127 @@ import { useNavigate } from 'react-router-dom';
 import { Badge, Button, Card, Container, Icon, Input, Typography } from './Components';
 import './styles/FileCard.css';
 
+// Shared file-extension → icon mapping used by FileCard, FileListRow,
+// the FileBrowser tree, and the dashboard. Icons are react-icons names
+// (mostly Feather) resolved by the shared <Icon /> component.
 const FILE_ICONS = {
     directory: 'FiFolder',
-    // Text
-    js: 'FiCode', ts: 'FiCode', jsx: 'FiCode', tsx: 'FiCode',
-    py: 'FiCode', go: 'FiCode', rs: 'FiCode', java: 'FiCode',
-    md: 'FiFileText', txt: 'FiFileText', json: 'FiFileText',
-    html: 'FiCode', css: 'FiCode', yaml: 'FiFileText', xml: 'FiFileText',
-    // Media
+
+    // ─ Code ────────────────────────────────────────────────────────
+    js: 'FiCode', mjs: 'FiCode', cjs: 'FiCode',
+    ts: 'FiCode', jsx: 'FiCode', tsx: 'FiCode',
+    py: 'FiCode', rb: 'FiCode', php: 'FiCode',
+    go: 'FiCode', rs: 'FiCode',
+    java: 'FiCode', kt: 'FiCode', scala: 'FiCode', groovy: 'FiCode',
+    c: 'FiCode', cpp: 'FiCode', cc: 'FiCode', cxx: 'FiCode',
+    h: 'FiCode', hpp: 'FiCode',
+    cs: 'FiCode', swift: 'FiCode', dart: 'FiCode', lua: 'FiCode',
+    r: 'FiCode', jl: 'FiCode', clj: 'FiCode', ex: 'FiCode', exs: 'FiCode',
+    erl: 'FiCode', hs: 'FiCode', ml: 'FiCode',
+    html: 'FiCode', htm: 'FiCode', vue: 'FiCode', svelte: 'FiCode',
+    css: 'FiCode', scss: 'FiCode', sass: 'FiCode', less: 'FiCode',
+
+    // ─ Shell ───────────────────────────────────────────────────────
+    sh: 'FiTerminal', bash: 'FiTerminal', zsh: 'FiTerminal', fish: 'FiTerminal',
+    ps1: 'FiTerminal', bat: 'FiTerminal', cmd: 'FiTerminal',
+
+    // ─ Config / data ───────────────────────────────────────────────
+    json: 'FiSettings', yaml: 'FiSettings', yml: 'FiSettings', toml: 'FiSettings',
+    ini: 'FiSettings', conf: 'FiSettings', cfg: 'FiSettings', env: 'FiSettings',
+    xml: 'FiFileText',
+
+    // ─ Database ────────────────────────────────────────────────────
+    sql: 'FiDatabase', db: 'FiDatabase', sqlite: 'FiDatabase', sqlite3: 'FiDatabase',
+
+    // ─ Text / docs ─────────────────────────────────────────────────
+    md: 'FiFileText', markdown: 'FiFileText', mdx: 'FiFileText',
+    txt: 'FiFileText', rtf: 'FiFileText', log: 'FiFileText',
+    tex: 'FiFileText',
+
+    pdf: 'FiBook', epub: 'FiBook', mobi: 'FiBook',
+
+    doc: 'FiFileText', docx: 'FiFileText', odt: 'FiFileText',
+    xls: 'FiGrid', xlsx: 'FiGrid', ods: 'FiGrid', csv: 'FiGrid', tsv: 'FiGrid',
+    ppt: 'FiLayers', pptx: 'FiLayers', odp: 'FiLayers', key: 'FiLayers',
+
+    // ─ Images (raster) ─────────────────────────────────────────────
     jpg: 'FiImage', jpeg: 'FiImage', png: 'FiImage', gif: 'FiImage',
-    webp: 'FiImage', svg: 'FiImage', bmp: 'FiImage',
-    mp4: 'FiFilm', webm: 'FiFilm', avi: 'FiFilm', mov: 'FiFilm',
-    mp3: 'FiMusic', wav: 'FiMusic', flac: 'FiMusic', aac: 'FiMusic',
-    // Docs
-    pdf: 'FiFileText', xlsx: 'FiFileText', docx: 'FiFileText', pptx: 'FiFileText',
-    // Archives
+    webp: 'FiImage', bmp: 'FiImage', tiff: 'FiImage', tif: 'FiImage',
+    heic: 'FiImage', heif: 'FiImage', avif: 'FiImage',
+    ico: 'FiImage', icns: 'FiImage',
+
+    // ─ Vector / design ─────────────────────────────────────────────
+    svg: 'FiPenTool', ai: 'FiPenTool', eps: 'FiPenTool',
+    psd: 'FiPenTool', xcf: 'FiPenTool', sketch: 'FiPenTool', fig: 'FiPenTool',
+
+    // ─ RAW photos ──────────────────────────────────────────────────
+    raw: 'FiCamera', cr2: 'FiCamera', cr3: 'FiCamera',
+    nef: 'FiCamera', arw: 'FiCamera', dng: 'FiCamera',
+    orf: 'FiCamera', raf: 'FiCamera', rw2: 'FiCamera',
+
+    // ─ Video ───────────────────────────────────────────────────────
+    mp4: 'FiFilm', m4v: 'FiFilm', mov: 'FiFilm', webm: 'FiFilm', mkv: 'FiFilm',
+    avi: 'FiVideo', wmv: 'FiVideo', flv: 'FiVideo', ogv: 'FiVideo',
+    '3gp': 'FiVideo', mpg: 'FiVideo', mpeg: 'FiVideo',
+
+    // ─ Audio ───────────────────────────────────────────────────────
+    mp3: 'FiMusic', aac: 'FiMusic', m4a: 'FiMusic', wav: 'FiMusic',
+    flac: 'FiMusic', opus: 'FiMusic', ogg: 'FiMusic', oga: 'FiMusic',
+    wma: 'FiMusic', aiff: 'FiMusic',
+    midi: 'FiHeadphones', mid: 'FiHeadphones',
+
+    // ─ 3D mesh / scene ─────────────────────────────────────────────
+    glb: 'FiBox', gltf: 'FiBox', obj: 'FiBox', fbx: 'FiBox', dae: 'FiBox',
+    ply: 'FiBox', '3ds': 'FiBox',
+    blend: 'FiBox', max: 'FiBox', ma: 'FiBox', mb: 'FiBox',
+    usdz: 'FiBox', usd: 'FiBox',
+    x3d: 'FiBox', wrl: 'FiBox', vrml: 'FiBox',
+
+    // ─ 3D printing ─────────────────────────────────────────────────
+    stl: 'FiPackage', '3mf': 'FiPackage', amf: 'FiPackage',
+    gcode: 'FiPackage',
+
+    // ─ Voxel ───────────────────────────────────────────────────────
+    vox: 'FiGrid',
+
+    // ─ CAD ─────────────────────────────────────────────────────────
+    dxf: 'FiCpu', dwg: 'FiCpu',
+    step: 'FiCpu', stp: 'FiCpu', iges: 'FiCpu', igs: 'FiCpu',
+
+    // ─ Archives ────────────────────────────────────────────────────
     zip: 'FiArchive', rar: 'FiArchive', tar: 'FiArchive', gz: 'FiArchive',
-    // 3D
-    glb: 'FiBox', gltf: 'FiBox', obj: 'FiBox',
+    tgz: 'FiArchive', '7z': 'FiArchive', bz2: 'FiArchive', xz: 'FiArchive',
+    zst: 'FiArchive',
+
+    // ─ Fonts ───────────────────────────────────────────────────────
+    ttf: 'FiType', otf: 'FiType', woff: 'FiType', woff2: 'FiType', eot: 'FiType',
+
+    // ─ Executables / disk images ───────────────────────────────────
+    exe: 'FiHardDrive', dmg: 'FiHardDrive', deb: 'FiHardDrive',
+    rpm: 'FiHardDrive', app: 'FiHardDrive', msi: 'FiHardDrive', apk: 'FiHardDrive',
+    iso: 'FiHardDrive', img: 'FiHardDrive',
 };
 
-const getFileIcon = (file) => {
+// Fallback when a file's extension isn't mapped but we know its viewer category.
+const TYPE_FALLBACK = {
+    directory: 'FiFolder',
+    image: 'FiImage',
+    video: 'FiFilm',
+    audio: 'FiMusic',
+    text: 'FiFileText',
+    pdf: 'FiBook',
+    '3d': 'FiBox',
+    binary: 'FiFile',
+};
+
+export const getFileIcon = (file) => {
+    if (!file) return 'FiFile';
     if (file.type === 'directory') return 'FiFolder';
-    const ext = file.fileName?.split('.').pop()?.toLowerCase();
-    return FILE_ICONS[ext] || 'FiFile';
+    const name = file.fileName || file.filePath?.split('/').pop() || '';
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (ext && FILE_ICONS[ext]) return FILE_ICONS[ext];
+    if (file.type && TYPE_FALLBACK[file.type]) return TYPE_FALLBACK[file.type];
+    return 'FiFile';
 };
 
 const formatSize = (bytes) => {

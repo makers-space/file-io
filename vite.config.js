@@ -26,6 +26,12 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // y-monaco@0.1.6 imports monaco-editor's pre-exports-map deep path.
+      // monaco-editor >=0.52 maps "./*" to "./esm/vs/*.js", so the legacy
+      // specifier resolves to a doubled esm/vs/ path. Rollup enforces the
+      // exports map where esbuild did not, so rewrite it to the supported
+      // subpath. Remove once y-monaco ships a fixed import.
+      'monaco-editor/esm/vs/editor/editor.api.js': 'monaco-editor/editor/editor.api.js',
       '@': path.resolve(__dirname, './src'),
       '@components': path.resolve(__dirname, './src/components'),
       '@themes': path.resolve(__dirname, './src/themes'),

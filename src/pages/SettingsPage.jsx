@@ -3,6 +3,7 @@ import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
 import { authService } from '@/client/auth.client';
 import { userService } from '@/client/user.client';
+import IntegrationsTab from '@components/IntegrationsTab';
 import {
     Page,
     Container,
@@ -424,9 +425,10 @@ const RoleTab = ({ user }) => {
 // ─── SettingsPage ─────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'account',  label: 'Account',  icon: 'FiUser' },
-    { id: 'security', label: 'Security', icon: 'FiShield' },
-    { id: 'roles',    label: 'Roles',    icon: 'FiBriefcase' },
+    { id: 'account',      label: 'Account',      icon: 'FiUser' },
+    { id: 'security',     label: 'Security',     icon: 'FiShield' },
+    { id: 'roles',        label: 'Roles',        icon: 'FiBriefcase' },
+    { id: 'integrations', label: 'Integrations', icon: 'FiLink' },
 ];
 
 const SettingsPage = () => {
@@ -435,10 +437,11 @@ const SettingsPage = () => {
 
     const renderTab = () => {
         switch (tab) {
-            case 'account':  return <AccountTab user={user} />;
-            case 'security': return <SecurityTab />;
-            case 'roles':    return <RoleTab user={user} />;
-            default:         return null;
+            case 'account':      return <AccountTab user={user} />;
+            case 'security':     return <SecurityTab />;
+            case 'roles':        return <RoleTab user={user} />;
+            case 'integrations': return <IntegrationsTab />;
+            default:             return null;
         }
     };
 

@@ -413,6 +413,36 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
   const [connectionStatuses, setConnectionStatuses] = useState({});
   const [sendingRequest, setSendingRequest] = useState({});
 
+  // External app integrations ("Send to app")
+  const [appIntegrations, setAppIntegrations] = useState(null); // null = not loaded yet
+  const [selectedIntegration, setSelectedIntegration] = useState(null);
+  const [includeContent, setIncludeContent] = useState(true);
+  const [isSendingToApp, setIsSendingToApp] = useState(false);
+
+  const loadIntegrations = useCallback(async () => {
+    try {
+      const { default: integrationService } = await import('../client/integration.client');
+      const res = await integrationService.getIntegrations();
+      setAppIntegrations((res.integrations || []).filter(i => i.status === 'verified'));
+    } catch {
+      setAppIntegrations([]);
+    }
+  }, []);
+
+  const handleSendToApp = useCallback(async () => {
+    if (!selectedIntegration) return;
+    setIsSendingToApp(true);
+    try {
+      const { default: integrationService } = await import('../client/integration.client');
+      await integrationService.sendFile(selectedIntegration, filePath, { includeContent });
+      showSuccess('File delivered to external app');
+    } catch (err) {
+      showError(err?.response?.data?.message || 'Delivery failed');
+    } finally {
+      setIsSendingToApp(false);
+    }
+  }, [selectedIntegration, filePath, includeContent, showSuccess, showError]);
+
   const fetchSharing = useCallback(async () => {
     try {
       const res = await fileService.getFileSharing(filePath);
@@ -579,6 +609,11 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
         <Button size="sm" variant={tab === 'find' ? 'primary' : 'ghost'} onClick={() => setTab('find')}>
           <Icon name="FiUserPlus" size="xs" /> Find &amp; Connect
         </Button>
+        {!isDirectory && (
+          <Button size="sm" variant={tab === 'apps' ? 'primary' : 'ghost'} onClick={() => { setTab('apps'); if (appIntegrations === null) loadIntegrations(); }}>
+            <Icon name="FiSend" size="xs" /> Send to App
+          </Button>
+        )}
       </Container>
 
       {tab === 'share' && (
@@ -707,6 +742,75 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
               </Card>
             );
           })}
+        </Container>
+      )}
+
+      {tab === 'apps' && (
+        <Container layout="flex-column" gap="sm" width="100%">
+          <Typography size="xs" color="secondary">
+            Send this file to one of your connected external apps. Deliveries are signed and checksummed —
+            manage endpoints in Settings → Integrations.
+          </Typography>
+          {appIntegrations === null && (
+            <Container layout="flex" align="center" gap="sm" padding="sm">
+              <CircularProgress size="sm" />
+              <Typography size="xs" color="secondary">Loading integrations...</Typography>
+            </Container>
+          )}
+          {appIntegrations !== null && appIntegrations.length === 0 && (
+            <Container layout="flex-column" align="center" gap="sm" padding="md">
+              <Icon name="FiLink" size="md" color="secondary" />
+              <Typography size="xs" color="secondary" style={{ textAlign: 'center' }}>
+                No verified integrations available yet. Register and verify an endpoint in Settings → Integrations.
+              </Typography>
+            </Container>
+          )}
+          {appIntegrations !== null && appIntegrations.length > 0 && (
+            <>
+              <Container layout="flex-column" gap="2px" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                {appIntegrations.map(integration => {
+                  const isSelected = selectedIntegration === integration.id;
+                  return (
+                    <Container
+                      key={integration.id} layout="flex" align="center" gap="xs" padding="xs"
+                      onClick={() => setSelectedIntegration(isSelected ? null : integration.id)}
+                      style={{ cursor: 'pointer', borderRadius: '4px', backgroundColor: isSelected ? 'var(--bg-secondary, rgba(255,255,255,0.05))' : 'transparent' }}
+                    >
+                      <Icon name={isSelected ? 'FiCheckSquare' : 'FiSquare'} size="xs" color={isSelected ? 'primary' : 'secondary'} />
+                      <Container layout="flex-column" gap="2px" style={{ flex: 1, overflow: 'hidden' }}>
+                        <Typography size="xs" weight="medium" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {integration.name}
+                        </Typography>
+                        <Typography size="xs" color="secondary" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {integration.baseUrl}
+                        </Typography>
+                      </Container>
+                      <Badge size="sm" color={integration.scope === 'global' ? 'primary' : 'tertiary'}>
+                        {integration.scope === 'global' ? 'Global' : 'Personal'}
+                      </Badge>
+                    </Container>
+                  );
+                })}
+              </Container>
+              <Container layout="flex" gap="xs" align="center">
+                <Select
+                  value={includeContent ? 'content' : 'metadata'}
+                  onChange={(v) => setIncludeContent(v === 'content')}
+                  options={[
+                    { value: 'content', label: 'Content + metadata' },
+                    { value: 'metadata', label: 'Metadata only' }
+                  ]}
+                  size="sm" style={{ flex: 1 }}
+                />
+                <Button size="sm" variant="primary" onClick={handleSendToApp} disabled={!selectedIntegration || isSendingToApp}>
+                  {isSendingToApp ? 'Sending...' : <><Icon name="FiSend" size="xs" /> Send</>}
+                </Button>
+                {onCancel && (
+                  <Button size="sm" variant="ghost" onClick={onCancel} disabled={isSendingToApp}>Cancel</Button>
+                )}
+              </Container>
+            </>
+          )}
         </Container>
       )}
     </Container>

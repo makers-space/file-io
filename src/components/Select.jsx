@@ -21,7 +21,7 @@ export const Select = ({
     className = '',
     variant = 'default', // 'default', 'outline', 'filled', 'underline'
     color = 'primary', // 'primary', 'secondary', 'tertiary'
-    size = 'md', // 'xs', 'sm', 'md', 'lg', 'xl'
+    size = 'md', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl'
     multiSelect = false, // Enable multi-select mode with badges
     options = [],
     value,
@@ -374,6 +374,8 @@ export const Select = ({
 
     const getSizeClass = () => {
         switch (size) {
+            case 'xxs':
+                return 'select-xxs';
             case 'xs':
                 return 'select-xs';
             case 'sm':
@@ -685,6 +687,7 @@ export const Select = ({
                                         key={`${selectId}-option-${index}`}
                                         id={`${selectId}-option-${index}`}
                                         className={`select-option ${getSizeClass().replace('select-', 'select-option-')} ${index === focusedIndex ? 'select-option-focused' : ''} ${option.disabled ? 'select-option-disabled' : ''} ${isSelected ? 'select-option-selected' : ''}`}
+                                        style={option.style}
                                         role="option"
                                         aria-selected={isSelected}
                                         onClick={() => handleOptionSelect(option)}

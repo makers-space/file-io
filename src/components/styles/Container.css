@@ -139,6 +139,49 @@
     }
 }
 
+/* ===== Grid item spanning (`span` prop; collapses with the breakpoints) ===== */
+.container.grid-span-2, .themed-container.grid-span-2,
+.card.grid-span-2, .themed-card.grid-span-2 {
+    grid-column: span 2;
+}
+
+.container.grid-span-3, .themed-container.grid-span-3,
+.card.grid-span-3, .themed-card.grid-span-3 {
+    grid-column: span 3;
+}
+
+.container.grid-span-full, .themed-container.grid-span-full,
+.card.grid-span-full, .themed-card.grid-span-full {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+    .container.grid-span-3, .themed-container.grid-span-3,
+    .card.grid-span-3, .themed-card.grid-span-3 {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 640px) {
+    .container.grid-span-2, .themed-container.grid-span-2,
+    .card.grid-span-2, .themed-card.grid-span-2,
+    .container.grid-span-3, .themed-container.grid-span-3,
+    .card.grid-span-3, .themed-card.grid-span-3 {
+        grid-column: span 1;
+    }
+}
+
+/* ===== Hoverable containers (`hoverable` prop) ===== */
+.container.container-hoverable, .themed-container.container-hoverable {
+    cursor: pointer;
+    border-radius: var(--border-radius-lg);
+    transition: background-color 0.15s ease;
+}
+
+.container.container-hoverable:hover, .themed-container.container-hoverable:hover {
+    background-color: var(--surface-accent-color, var(--surface-color));
+}
+
 /* ===== Multi-column System ===== */
 .container.columns-2, .themed-container.columns-2 {
     column-count: 2;

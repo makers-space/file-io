@@ -18,7 +18,8 @@ export const Input = ({
     type = 'text', // 'text', 'password', 'email', 'checkbox', 'search'.
     variant = 'default', // 'default', 'outline', 'filled', 'underline', 'floating'
     color = 'primary', // 'primary', 'secondary', 'tertiary'
-    size = 'md', // 'xs', 'sm', 'md', 'lg', 'xl'
+    size = 'md', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl'
+    flexFill = false, // Fill available space in flex layouts (matches Container)
     placeholder = '',
     label = '',
     value,
@@ -240,6 +241,8 @@ export const Input = ({
 
     const getSizeClass = () => {
         switch (size) {
+            case 'xxs':
+                return 'input-xxs';
             case 'xs':
                 return 'input-xs';
             case 'sm':
@@ -483,7 +486,7 @@ export const Input = ({
     if (inputVariant === 'floating' && label) {
         return (
             <div
-                className={`input-container input-floating-container variant-${inputVariant} ${getColorClass()} ${getJustifySelfClass()} theme-${inputTheme}`}
+                className={`input-container input-floating-container variant-${inputVariant} ${getColorClass()} ${getJustifySelfClass()} ${flexFill ? 'flex-fill' : ''} theme-${inputTheme}`}
                 style={{width, ...(minWidth ? { minWidth } : {}), ...getMarginStyle()}} data-theme={inputTheme}
                 data-theme-source={theme ? 'local' : 'inherited'}>
                 <div
@@ -565,7 +568,7 @@ export const Input = ({
         );
     }
     return (
-        <div className={`input-container ${getColorClass()} ${getJustifySelfClass()} theme-${inputTheme}`}
+        <div className={`input-container ${getColorClass()} ${getJustifySelfClass()} ${flexFill ? 'flex-fill' : ''} theme-${inputTheme}`}
              style={{width, ...(minWidth ? { minWidth } : {}), ...getMarginStyle()}} data-theme={inputTheme}
              data-theme-source={theme ? 'local' : 'inherited'}>
             {label && (

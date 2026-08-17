@@ -46,7 +46,7 @@ export const Navigation = ({
                                ...props
                            }) => {
     const {user, isLoading, logout, hasRole} = useAuth();
-    const {currentTheme, switchTheme, availableThemes} = useTheme();
+    const {currentTheme, switchTheme, availableThemes, themes} = useTheme();
     const [isNavigating, setIsNavigating] = useState(false);
     const navigate = useNavigate();
 
@@ -221,15 +221,16 @@ export const Navigation = ({
                 <Typography as="p" size="xs" weight="medium">
                     THEME
                 </Typography>
-                <Container layout="flex" gap="xs" wrap>
+                <Container layout="flex" gap="xs" wrap justify="center" maxWidth="480px" width="100%">
                     {availableThemes.map(themeName => (
                         <Button
                             key={themeName}
                             variant='ghost'
                             size="sm"
+                            selected={currentTheme === themeName}
                             onClick={() => handleThemeChange(themeName)}
                         >
-                            {themeName.charAt(0).toUpperCase() + themeName.slice(1)}
+                            {themes[themeName]?.name || themeName.charAt(0).toUpperCase() + themeName.slice(1)}
                         </Button>
                     ))}
                 </Container>

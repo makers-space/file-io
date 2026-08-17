@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
@@ -15,7 +15,6 @@ import {
     Badge,
     Input,
     CircularProgress,
-    ProgressBar,
     Divider,
     Select
 } from '@components/Components';
@@ -43,9 +42,103 @@ const timeAgo = (dateString) => {
     return new Date(dateString).toLocaleDateString();
 };
 
-// ─── Files Tab ────────────────────────────────────────────────────────────────
+const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 5) return 'Working late';
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
+};
 
-const FilesTab = ({ navigate, userId }) => {
+const tint = (color, pct) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+
+const AVATAR_COLORS = ['#4A90D9', '#48BB78', '#9B72EF', '#E05C5C', '#F6AD55', '#76E4F7'];
+const avatarColor = (name = '') => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
+
+const InitialsAvatar = ({ user: u, size = 30 }) => {
+    const name = u?.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u?.username || u?.email || '?');
+    const initials = name.split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
+    return (
+        <Container
+            layout="flex" align="center" justify="center" padding="none" wrap={false}
+            width={`${size}px`} height={`${size}px`}
+            style={{ borderRadius: '50%', flexShrink: 0, background: avatarColor(u?.username || name) }}
+        >
+            <Typography as="span" weight="bold" style={{ color: '#fff', fontSize: size * 0.36, lineHeight: 1 }}>
+                {initials}
+            </Typography>
+        </Container>
+    );
+};
+
+const IconTile = ({ icon, color = 'var(--primary-color)', size = 44, radius = 12, iconSize = 'sm' }) => (
+    <Container
+        layout="flex" align="center" justify="center" padding="none" wrap={false}
+        width={`${size}px`} height={`${size}px`}
+        style={{ borderRadius: radius, flexShrink: 0, background: tint(color, 14) }}
+    >
+        <Icon name={icon} size={iconSize} style={{ color }} />
+    </Container>
+);
+
+// ─── KPI stat card ────────────────────────────────────────────────────────────
+
+const StatCard = ({ icon, label, value, caption, accent = 'var(--primary-color)', onClick }) => (
+    <Card
+        layout="flex" gap="md" padding="md" hover={!!onClick} align="center" wrap={false}
+        onClick={onClick}
+        style={{ minWidth: 0, cursor: onClick ? 'pointer' : 'default' }}
+    >
+        <IconTile icon={icon} color={accent} />
+        <Container layout="flex-column" gap="none" padding="none" wrap={false} style={{ minWidth: 0 }}>
+            <Typography size="xl" weight="bold" style={{ lineHeight: 1.15 }}>{value}</Typography>
+            <Typography size="xs" color="muted" style={{ whiteSpace: 'nowrap' }}>
+                {label}{caption ? ` · ${caption}` : ''}
+            </Typography>
+        </Container>
+    </Card>
+);
+
+// ─── File rows ────────────────────────────────────────────────────────────────
+
+const FileRow = ({ file, navigate, showOwner = false }) => (
+    <Container
+        layout="flex" align="center" gap="sm" padding="none" wrap={false} hoverable
+        onClick={() => navigate(`/files${file.filePath || ''}`)}
+        style={{ padding: '9px 10px', minWidth: 0 }}
+    >
+        <IconTile icon={getFileIcon(file)} size={34} radius={9} />
+        <Container layout="flex-column" gap="none" padding="none" flexFill wrap={false} style={{ minWidth: 0 }}>
+            <Typography size="sm" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {file.fileName || file.filePath?.split('/').pop() || 'Untitled'}
+            </Typography>
+            <Typography size="xs" color="muted">
+                {timeAgo(file.updatedAt)}
+                {showOwner && file.owner?.username ? ` · shared by ${file.owner.username}` : ''}
+            </Typography>
+        </Container>
+        <Icon name="FiChevronRight" size="xs" style={{ opacity: 0.35, flexShrink: 0 }} />
+    </Container>
+);
+
+const SectionHeader = ({ icon, title, count, action }) => (
+    <Container layout="flex" align="center" justify="between" padding="none" width="100%">
+        <Container layout="flex" align="center" gap="xs" padding="none" wrap={false}>
+            <Icon name={icon} size="xs" color="primary" />
+            <Typography size="sm" weight="semibold">{title}</Typography>
+            {count != null && <Badge size="xs" color="secondary">{count}</Badge>}
+        </Container>
+        {action}
+    </Container>
+);
+
+// ─── Files panel ──────────────────────────────────────────────────────────────
+
+const FilesPanel = ({ navigate, userId }) => {
     const [recentFiles, setRecentFiles] = useState([]);
     const [sharedFiles, setSharedFiles] = useState([]);
     const [starredFiles, setStarredFiles] = useState([]);
@@ -70,8 +163,8 @@ const FilesTab = ({ navigate, userId }) => {
                         recent.push(f);
                     }
                 }
-                setRecentFiles(recent.slice(0, 10));
-                setSharedFiles(shared.slice(0, 10));
+                setRecentFiles(recent.slice(0, 8));
+                setSharedFiles(shared.slice(0, 6));
                 setStarredFiles(starredRes?.data || []);
             } catch { /* non-critical */ }
             finally { setIsLoading(false); }
@@ -80,107 +173,92 @@ const FilesTab = ({ navigate, userId }) => {
 
     if (isLoading) {
         return (
-            <Container layout="flex" align="center" justify="center" padding="lg">
+            <Card layout="flex" align="center" justify="center" padding="xl" width="100%" minHeight="220px">
                 <CircularProgress size="sm" />
-            </Container>
+            </Card>
         );
     }
 
-    const renderFileCard = (f) => (
-        <Container
-            key={f._id || f.filePath}
-            layout="flex-column" align="center" gap="xs" padding="sm"
-            style={{ cursor: 'pointer', borderRadius: '6px', textAlign: 'center' }}
-            onClick={() => navigate(`/files${f.filePath || ''}`)}
-        >
-            <Icon name={getFileIcon(f)} size="md" color="primary" />
-            <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
-                {f.fileName || f.filePath?.split('/').pop() || 'Untitled'}
-            </Typography>
-            <Typography size="xs" color="secondary">
-                {timeAgo(f.updatedAt)}
-            </Typography>
-        </Container>
-    );
-
-    const renderSharedCard = (f) => (
-        <Container
-            key={f._id || f.filePath}
-            layout="flex" align="center" gap="sm" padding="sm"
-            style={{ cursor: 'pointer', borderRadius: '6px', width: '180px', flexShrink: 0 }}
-            onClick={() => navigate(`/files${f.filePath || ''}`)}
-        >
-            <Icon name={getFileIcon(f)} size="sm" color="primary" />
-            <Container layout="flex-column" gap="none" style={{ minWidth: 0, flex: 1 }}>
-                <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {f.fileName || f.filePath?.split('/').pop() || 'Untitled'}
-                </Typography>
-                <Typography size="xxs" color="secondary">
-                    {timeAgo(f.updatedAt)}
-                    {f.owner?.username ? ` · ${f.owner.username}` : ''}
-                </Typography>
-            </Container>
-        </Container>
-    );
-                
     return (
-        <Container layout="flex-column" gap="sm" width="100%" wrap={false}>
-            {/* Recent Files */}
-            <Typography size="sm" weight="semibold">
-                <Icon name="FiClock" size="xs" /> Recent Files
-            </Typography>
-            {recentFiles.length === 0 ? (
-                <Container layout="flex-column" align="center" gap="sm" padding="md" width="100%">
-                    <Icon name="FiFile" size="md" color="secondary" />
-                    <Typography size="xs" color="secondary">No files yet</Typography>
-                    <Button size="sm" color="primary" onClick={() => navigate('/files')}>
-                        Create your first file
-                    </Button>
-                </Container>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', width: '100%' }}>
-                    {recentFiles.map(renderFileCard)}
-                </div>
-            )}
+        <Container layout="flex-column" gap="md" padding="none" width="100%" wrap={false} style={{ minWidth: 0 }}>
+            {/* Recent */}
+            <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" style={{ minWidth: 0 }}>
+                <SectionHeader
+                    icon="FiClock"
+                    title="Recent files"
+                    action={
+                        <Button size="xs" color="secondary" onClick={() => navigate('/files')}>
+                            View all <Icon name="FiArrowRight" size="xs" />
+                        </Button>
+                    }
+                />
+                {recentFiles.length === 0 ? (
+                    <Container layout="flex-column" align="center" gap="sm" padding="lg" width="100%">
+                        <IconTile icon="FiUploadCloud" size={52} radius={14} iconSize="md" />
+                        <Typography size="sm" weight="medium">Your drive is empty</Typography>
+                        <Typography size="xs" color="muted" align="center" maxWidth="300px">
+                            Upload a file or create a document to see it here.
+                        </Typography>
+                        <Button size="sm" color="primary" onClick={() => navigate('/files')}>
+                            <Icon name="FiPlus" size="xs" /> Create your first file
+                        </Button>
+                    </Container>
+                ) : (
+                    <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
+                        {recentFiles.map(f => <FileRow key={f._id || f.filePath} file={f} navigate={navigate} />)}
+                    </Container>
+                )}
+            </Card>
 
-            <Divider margin="xs" />
+            {/* Starred */}
+            <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" style={{ minWidth: 0 }}>
+                <SectionHeader icon="FiStar" title="Starred" count={starredFiles.length} />
+                {starredFiles.length === 0 ? (
+                    <Typography size="xs" color="muted">
+                        Star files in your drive to pin them here for quick access.
+                    </Typography>
+                ) : (
+                    <Container layout="flex" gap="sm" padding="none" wrap width="100%">
+                        {starredFiles.slice(0, 8).map(f => (
+                            <Container
+                                key={f._id || f.filePath}
+                                layout="flex" align="center" gap="xs" padding="none" wrap={false} hoverable
+                                onClick={() => navigate(`/files${f.filePath || ''}`)}
+                                style={{
+                                    padding: '7px 12px', borderRadius: 999,
+                                    border: '1px solid var(--border-color)', maxWidth: '100%',
+                                }}
+                            >
+                                <Icon name={getFileIcon(f)} size="xs" color="primary" />
+                                <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+                                    {f.fileName || f.filePath?.split('/').pop() || 'Untitled'}
+                                </Typography>
+                            </Container>
+                        ))}
+                    </Container>
+                )}
+            </Card>
 
-            {/* Starred Files */}
-            <Typography size="sm" weight="semibold">
-                <Icon name="FiStar" size="xs" /> Starred
-            </Typography>
-            {starredFiles.length === 0 ? (
-                <Typography size="xs" color="secondary" padding="sm">
-                    No starred files yet — star files to find them quickly
-                </Typography>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', width: '100%' }}>
-                    {starredFiles.slice(0, 10).map(renderFileCard)}
-                </div>
-            )}
-
-            <Divider margin="xs" />
-
-            {/* Shared With Me */}
-            <Typography size="sm" weight="semibold">
-                <Icon name="FiShare2" size="xs" /> Shared With Me
-            </Typography>
-            {sharedFiles.length === 0 ? (
-                <Typography size="xs" color="secondary" padding="sm">
-                    No files shared with you yet
-                </Typography>
-            ) : (
-                <Container layout="flex" gap="sm" wrap width="100%">
-                    {sharedFiles.map(renderSharedCard)}
-                </Container>
-            )}
+            {/* Shared with me */}
+            <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" style={{ minWidth: 0 }}>
+                <SectionHeader icon="FiShare2" title="Shared with me" count={sharedFiles.length} />
+                {sharedFiles.length === 0 ? (
+                    <Typography size="xs" color="muted">
+                        Files that teammates share with you will show up here.
+                    </Typography>
+                ) : (
+                    <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
+                        {sharedFiles.map(f => <FileRow key={f._id || f.filePath} file={f} navigate={navigate} showOwner />)}
+                    </Container>
+                )}
+            </Card>
         </Container>
     );
 };
 
-// ─── Social Tab ───────────────────────────────────────────────────────────────
+// ─── Social rail ──────────────────────────────────────────────────────────────
 
-const SocialTab = ({ userId, navigate }) => {
+const SocialPanel = ({ userId, navigate, onCountsChange }) => {
     const [connections, setConnections] = useState([]);
     const [groups, setGroups] = useState([]);
     const [pendingRequests, setPendingRequests] = useState([]);
@@ -222,17 +300,19 @@ const SocialTab = ({ userId, navigate }) => {
                 setGroups(groupRes.data);
                 setPendingRequests(pendingRes?.data || []);
                 setSentRequests(sentRes?.data || []);
+                onCountsChange?.({ groups: (groupRes.data || []).length });
             } catch { /* non-critical */ }
             finally { setIsLoading(false); }
         })();
-    }, [userId]);
+    }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const reloadGroups = useCallback(async () => {
         try {
             const groupRes = await userService.getMyGroups();
             setGroups(groupRes.data || []);
+            onCountsChange?.({ groups: (groupRes.data || []).length });
         } catch { /* non-critical */ }
-    }, []);
+    }, [onCountsChange]);
 
     const handleCreateGroup = async () => {
         if (!createGroupForm.name.trim()) return;
@@ -348,15 +428,15 @@ const SocialTab = ({ userId, navigate }) => {
 
     if (isLoading) {
         return (
-            <Container layout="flex" align="center" justify="center" padding="lg">
+            <Card layout="flex" align="center" justify="center" padding="xl" width="100%" minHeight="220px">
                 <CircularProgress size="sm" />
-            </Container>
+            </Card>
         );
     }
 
     // Find People genie content — rendered inside a Button genie dropdown
     const findPeopleGenie = (
-        <Container layout="flex-column" gap="sm" padding="md" style={{ width: '280px' }}>
+        <Container layout="flex-column" gap="sm" padding="md" width="280px">
             <Typography size="sm" weight="semibold">Find People</Typography>
             <Input
                 placeholder="Name, username or email…"
@@ -375,15 +455,15 @@ const SocialTab = ({ userId, navigate }) => {
                 <Typography size="xs" color="secondary">No users found</Typography>
             )}
             {!isSearching && searchResults.length > 0 && (
-                <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                <Container layout="flex-column" gap="xs" padding="none" maxHeight="200px" overflow="auto">
                     {searchResults.map(u => {
                         const uid = u._id || u.id;
                         const statusInfo = getStatusLabel(connectionStatuses[uid]);
                         const isSending = !!sendingRequest[uid];
                         return (
-                            <Container key={uid} layout="flex" align="center" gap="sm" padding="xs">
-                                <Icon name="FiUser" size="sm" />
-                                <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
+                            <Container key={uid} layout="flex" align="center" gap="sm" padding="xs" wrap={false}>
+                                <InitialsAvatar user={u} size={26} />
+                                <Container layout="flex-column" gap="none" padding="none" flexFill wrap={false} style={{ minWidth: 0 }}>
                                     <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
                                     {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
                                 </Container>
@@ -403,9 +483,9 @@ const SocialTab = ({ userId, navigate }) => {
                 <>
                     <Divider margin="xs" />
                     <Typography size="xs" weight="semibold" color="secondary">Sent Requests</Typography>
-                    <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                    <Container layout="flex-column" gap="xs" padding="none" maxHeight="120px" overflow="auto">
                         {sentRequests.map(u => (
-                            <Container key={u._id || u.id} layout="flex" align="center" gap="sm" padding="xs">
+                            <Container key={u._id || u.id} layout="flex" align="center" gap="sm" padding="xs" wrap={false}>
                                 <Icon name="FiUser" size="xs" color="secondary" />
                                 <Typography size="xs" color="secondary" flexFill style={{ minWidth: 0 }}>{u.username || u.email}</Typography>
                                 <Badge size="xs" color="warning">Pending</Badge>
@@ -418,41 +498,44 @@ const SocialTab = ({ userId, navigate }) => {
     );
 
     return (
-        <Container layout="flex-column" gap="sm" width="100%" wrap={false}>
+        <Container layout="flex-column" gap="md" padding="none" width="100%" wrap={false} style={{ minWidth: 0 }}>
 
-            {/* ── Connections header with Find People genie ── */}
-            <Container layout="flex" align="center" justify="between" padding="none" gap="sm" width="100%">
-                <Container layout="flex" align="center" gap="xs" padding="none">
-                    <Icon name="FiUserCheck" size="sm" />
-                    <Typography size="sm" weight="semibold">Connections ({connections.length})</Typography>
-                    {pendingRequests.length > 0 && (
-                        <Badge size="xs" color="warning">{pendingRequests.length} pending</Badge>
-                    )}
-                </Container>
-                <Button
-                    size="xs"
-                    color="secondary"
-                    genie={findPeopleGenie}
-                    genieTrigger="click"
-                >
-                    <Icon name="FiSearch" size="xs" /> Find People
-                </Button>
-            </Container>
+            {/* ── People ── */}
+            <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" style={{ minWidth: 0 }}>
+                <SectionHeader
+                    icon="FiUserCheck"
+                    title="People"
+                    count={connections.length}
+                    action={
+                        <Button size="xs" color="secondary" genie={findPeopleGenie} genieTrigger="click">
+                            <Icon name="FiSearch" size="xs" /> Find people
+                        </Button>
+                    }
+                />
 
-            {/* ── Pending requests (compact inline) ── */}
-            {pendingRequests.length > 0 && (
-                <Card padding="sm">
-                    <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '140px', overflowY: 'auto' }}>
+                {/* Pending requests */}
+                {pendingRequests.length > 0 && (
+                    <Container
+                        layout="flex-column" gap="xs" padding="sm" maxHeight="170px" overflow="auto"
+                        style={{
+                            background: tint('var(--warning-color)', 8),
+                            border: `1px solid ${tint('var(--warning-color)', 30)}`,
+                            borderRadius: 10,
+                        }}
+                    >
+                        <Typography size="xs" weight="semibold" color="warning">
+                            {pendingRequests.length} pending request{pendingRequests.length > 1 ? 's' : ''}
+                        </Typography>
                         {pendingRequests.map(u => {
                             const uid = u._id || u.id;
                             return (
-                                <Container key={uid} layout="flex" align="center" gap="sm" padding="none">
-                                    <Icon name="FiUserPlus" size="xs" color="warning" />
-                                    <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
+                                <Container key={uid} layout="flex" align="center" gap="sm" padding="none" wrap={false}>
+                                    <InitialsAvatar user={u} size={28} />
+                                    <Container layout="flex-column" gap="none" padding="none" flexFill wrap={false} style={{ minWidth: 0 }}>
                                         <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
                                         {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
                                     </Container>
-                                    <Container layout="flex" gap="xs" padding="none">
+                                    <Container layout="flex" gap="xs" padding="none" wrap={false}>
                                         <Button size="xs" color="primary" onClick={() => handleRespond(uid, 'accept')} disabled={!!responding[uid]}>
                                             {responding[uid] === 'accept' ? <CircularProgress size="xs" /> : 'Accept'}
                                         </Button>
@@ -464,52 +547,51 @@ const SocialTab = ({ userId, navigate }) => {
                             );
                         })}
                     </Container>
-                </Card>
-            )}
+                )}
 
-            {/* ── Connections list ── */}
-            {connections.length === 0 ? (
-                <Typography size="xs" color="secondary" style={{ padding: '4px 2px' }}>
-                    No connections yet. Use Find People to connect with others.
-                </Typography>
-            ) : (
-                <Container layout="flex-column" gap="2px" padding="none" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                    {connections.map(u => (
-                        <Container key={u._id} layout="flex" align="center" gap="sm" padding="xs">
-                            <Icon name="FiUser" size="sm" />
-                            <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
-                                <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
-                                {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
+                {/* Connections list */}
+                {connections.length === 0 ? (
+                    <Typography size="xs" color="muted">
+                        No connections yet — use Find people to build your network.
+                    </Typography>
+                ) : (
+                    <Container layout="flex-column" gap="none" padding="none" maxHeight="220px" overflow="auto">
+                        {connections.map(u => (
+                            <Container key={u._id} layout="flex" align="center" gap="sm" padding="none" wrap={false} hoverable style={{ padding: '7px 8px' }}>
+                                <InitialsAvatar user={u} size={30} />
+                                <Container layout="flex-column" gap="none" padding="none" flexFill wrap={false} style={{ minWidth: 0 }}>
+                                    <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
+                                    {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
+                                </Container>
                             </Container>
-                        </Container>
-                    ))}
-                </Container>
-            )}
-
-            <Divider margin="xs" />
+                        ))}
+                    </Container>
+                )}
+            </Card>
 
             {/* ── Groups ── */}
-            <Container layout="flex" justify="between" align="center" padding="none">
-                <Container layout="flex" align="center" gap="xs" padding="none">
-                    <Icon name="FiUsers" size="sm" />
-                    <Typography size="sm" weight="semibold">Groups ({groups.length})</Typography>
-                </Container>
-                <Container layout="flex" gap="xs" padding="none">
-                    <Button size="xs" color="secondary" onClick={handleDiscover}>
-                        <Icon name="FiCompass" size="xs" />
-                        {showDiscover ? 'Hide' : 'Discover'}
-                    </Button>
-                    <Button size="xs" color="primary" onClick={() => { setShowCreateGroup(p => !p); setShowDiscover(false); }}>
-                        <Icon name={showCreateGroup ? 'FiChevronUp' : 'FiPlus'} size="xs" />
-                        {showCreateGroup ? 'Cancel' : 'New'}
-                    </Button>
-                </Container>
-            </Container>
+            <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" style={{ minWidth: 0 }}>
+                <SectionHeader
+                    icon="FiUsers"
+                    title="Groups"
+                    count={groups.length}
+                    action={
+                        <Container layout="flex" gap="xs" padding="none" wrap={false}>
+                            <Button size="xs" color="secondary" onClick={handleDiscover}>
+                                <Icon name="FiCompass" size="xs" />
+                                {showDiscover ? 'Hide' : 'Discover'}
+                            </Button>
+                            <Button size="xs" color="primary" onClick={() => { setShowCreateGroup(p => !p); setShowDiscover(false); }}>
+                                <Icon name={showCreateGroup ? 'FiChevronUp' : 'FiPlus'} size="xs" />
+                                {showCreateGroup ? 'Cancel' : 'New'}
+                            </Button>
+                        </Container>
+                    }
+                />
 
-            {/* Create group inline form */}
-            {showCreateGroup && (
-                <Card padding="md">
-                    <Container layout="flex-column" gap="sm" padding="none">
+                {/* Create group inline form */}
+                {showCreateGroup && (
+                    <Container layout="flex-column" gap="sm" padding="sm" style={{ background: tint('var(--primary-color)', 6), borderRadius: 10 }}>
                         <Input
                             placeholder="Group name *"
                             value={createGroupForm.name}
@@ -534,65 +616,68 @@ const SocialTab = ({ userId, navigate }) => {
                             {isCreatingGroup ? <CircularProgress size="xs" /> : <><Icon name="FiUsers" size="xs" />Create Group</>}
                         </Button>
                     </Container>
-                </Card>
-            )}
+                )}
 
-            {/* Discover public groups */}
-            {showDiscover && (
-                <Container layout="flex-column" gap="xs" padding="none">
-                    {isDiscovering && (
-                        <Container layout="flex" align="center" gap="xs" padding="xs">
-                            <CircularProgress size="xs" />
-                            <Typography size="xs" color="secondary">Looking for groups…</Typography>
-                        </Container>
-                    )}
-                    {!isDiscovering && discoverResults.length === 0 && (
-                        <Typography size="xs" color="secondary" padding="xs">No public groups to join</Typography>
-                    )}
-                    {discoverResults.map(g => (
-                        <Container key={g._id} layout="flex" align="center" justify="between" gap="sm" padding="xs">
-                            <Container layout="flex" align="center" gap="sm" padding="none">
-                                <Container style={{ width: '22px', height: '22px', borderRadius: '6px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <Icon name="FiUsers" size="xs" color="surface" />
+                {/* Discover public groups */}
+                {showDiscover && (
+                    <Container layout="flex-column" gap="xs" padding="none">
+                        {isDiscovering && (
+                            <Container layout="flex" align="center" gap="xs" padding="xs">
+                                <CircularProgress size="xs" />
+                                <Typography size="xs" color="secondary">Looking for groups…</Typography>
+                            </Container>
+                        )}
+                        {!isDiscovering && discoverResults.length === 0 && (
+                            <Typography size="xs" color="muted" padding="xs">No public groups to join right now</Typography>
+                        )}
+                        {discoverResults.map(g => (
+                            <Container key={g._id} layout="flex" align="center" justify="between" gap="sm" padding="xs" wrap={false}>
+                                <Container layout="flex" align="center" gap="sm" padding="none" wrap={false} style={{ minWidth: 0 }}>
+                                    <IconTile icon="FiUsers" size={28} radius={8} iconSize="xs" />
+                                    <Container layout="flex-column" gap="none" padding="none" wrap={false} style={{ minWidth: 0 }}>
+                                        <Typography size="xs" weight="medium">{g.name}</Typography>
+                                        <Typography size="xxs" color="secondary">{g.memberCount || g.members?.length || 0} members</Typography>
+                                    </Container>
                                 </Container>
-                                <Container layout="flex-column" gap="none" padding="none">
+                                <Button size="xs" color="primary" onClick={() => handleJoinGroup(g)} disabled={joiningGroup === g._id}>
+                                    {joiningGroup === g._id ? <CircularProgress size="xs" /> : 'Join'}
+                                </Button>
+                            </Container>
+                        ))}
+                    </Container>
+                )}
+
+                {/* My groups list */}
+                {groups.length === 0 && !showCreateGroup && !showDiscover ? (
+                    <Typography size="xs" color="muted">
+                        No groups yet — create one or discover public groups.
+                    </Typography>
+                ) : (
+                    <Container layout="flex-column" gap="none" padding="none" maxHeight="220px" overflow="auto">
+                        {groups.map(g => (
+                            <Container
+                                key={g._id}
+                                layout="flex" align="center" gap="sm" padding="none" wrap={false} hoverable
+                                onClick={() => navigate(`/groups/${g._id}`)}
+                                style={{ padding: '7px 8px' }}
+                            >
+                                <Container
+                                    layout="flex" align="center" justify="center" padding="none" wrap={false}
+                                    width="30px" height="30px"
+                                    style={{ borderRadius: 9, flexShrink: 0, background: avatarColor(g.name) }}
+                                >
+                                    <Icon name="FiUsers" size="xs" style={{ color: '#fff' }} />
+                                </Container>
+                                <Container layout="flex-column" gap="none" padding="none" flexFill wrap={false} style={{ minWidth: 0 }}>
                                     <Typography size="xs" weight="medium">{g.name}</Typography>
                                     <Typography size="xxs" color="secondary">{g.memberCount || g.members?.length || 0} members</Typography>
                                 </Container>
+                                {g.privacy === 'private' && <Badge size="xs" color="secondary">Private</Badge>}
                             </Container>
-                            <Button size="xs" color="primary" onClick={() => handleJoinGroup(g)} disabled={joiningGroup === g._id}>
-                                {joiningGroup === g._id ? <CircularProgress size="xs" /> : 'Join'}
-                            </Button>
-                        </Container>
-                    ))}
-                </Container>
-            )}
-
-            {/* My groups list */}
-            {groups.length === 0 && !showCreateGroup && !showDiscover ? (
-                <Typography size="xs" color="secondary" padding="xs">
-                    No groups yet — create one or discover public groups
-                </Typography>
-            ) : (
-                <Container layout="flex-column" gap="xs" padding="none" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                    {groups.map(g => (
-                        <Container
-                            key={g._id} layout="flex" align="center" gap="sm" padding="xs"
-                            style={{ cursor: 'pointer', borderRadius: '4px' }}
-                            onClick={() => navigate(`/groups/${g._id}`)}
-                        >
-                            <Container style={{ width: '26px', height: '26px', borderRadius: '6px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Icon name="FiUsers" size="xs" color="surface" />
-                            </Container>
-                            <Container layout="flex-column" gap="none" flexFill style={{ minWidth: 0 }}>
-                                <Typography size="xs" weight="medium">{g.name}</Typography>
-                                <Typography size="xxs" color="secondary">{g.memberCount || g.members?.length || 0} members</Typography>
-                            </Container>
-                            {g.privacy === 'private' && <Badge size="xs" color="secondary">Private</Badge>}
-                        </Container>
-                    ))}
-                </Container>
-            )}
+                        ))}
+                    </Container>
+                )}
+            </Card>
         </Container>
     );
 };
@@ -604,8 +689,8 @@ const DashboardPage = () => {
     const navigate = useNavigate();
     const { error: showError } = useNotification();
     const [stats, setStats] = useState(null);
+    const [groupCount, setGroupCount] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('files');
 
     useEffect(() => {
         if (!user?.id) {
@@ -633,6 +718,10 @@ const DashboardPage = () => {
         })();
     }, [user?.id, showError]);
 
+    const handleCountsChange = useCallback(({ groups }) => {
+        if (groups != null) setGroupCount(groups);
+    }, []);
+
     if (isLoading) {
         return (
             <Page layout="flex" align="center" justify="center">
@@ -644,98 +733,73 @@ const DashboardPage = () => {
         );
     }
 
-    const tabs = [
-        { id: 'files', icon: 'FiFolder', label: 'Files' },
-        { id: 'social', icon: 'FiUsers', label: 'Social' },
-    ];
+    const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
     return (
-        <Page layout="flex-column" padding="none" gap="none" style={{ overflow: 'hidden', height: '100vh' }}>
+        <Page layout="flex-column" padding="none" gap="none">
             <Container
-                layout="flex-column"
-                gap="none"
-                width="100%"
-                height="100%"
-                style={{ padding: '8vmin', display: 'flex', flexDirection: 'column' }}
+                layout="flex-column" gap="lg" padding="none" width="100%" maxWidth="1360px" margin="auto" wrap={false}
+                style={{ padding: 'clamp(20px, 3vw, 36px)' }}
             >
-                {/* ── Main scrollable content area ── */}
-                <Container layout="flex-column" gap="sm" flexFill overflow="auto" padding="none" wrap={false} width="100%">
-                    {/* Welcome */}
-                    <Container layout="flex" justify="between" align="center" padding="none" width="100%">
-                        <Container layout="flex-column" gap="xs" padding="none">
-                            <Typography as="h1" size="xl" weight="bold">
-                                Welcome back, {user?.firstName || user?.username || 'User'}
-                            </Typography>
-                            <Typography size="sm" color="secondary">
-                                Here's an overview of your workspace
-                            </Typography>
-                        </Container>
+                {/* ── Header ── */}
+                <Container layout="flex" justify="between" align="center" padding="none" width="100%" gap="md" wrap>
+                    <Container layout="flex-column" gap="none" padding="none">
+                        <Typography size="xs" color="muted" weight="medium" style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            {today}
+                        </Typography>
+                        <Typography as="h1" size="2xl" weight="bold" style={{ letterSpacing: '-0.015em' }}>
+                            {greeting()}, {user?.firstName || user?.username || 'there'}
+                        </Typography>
+                    </Container>
+                    <Container layout="flex" gap="sm" padding="none" wrap={false}>
+                        <Button color="secondary" onClick={() => navigate('/settings')}>
+                            <Icon name="FiSettings" size="xs" /> Settings
+                        </Button>
                         <Button color="primary" onClick={() => navigate('/files')}>
-                            <Icon name="FiFolder" size="xs" />
-                            Open Files
+                            <Icon name="FiFolder" size="xs" /> Open Files
                         </Button>
-                    </Container>
-
-                    {/* Tab Content */}
-                    <Container layout="flex-column" flexFill overflow="auto" padding="none" width="100%" style={{ minHeight: 0 }}>
-                        {activeTab === 'files' && <FilesTab navigate={navigate} userId={user?.id} />}
-                        {activeTab === 'social' && <SocialTab userId={user?.id} navigate={navigate} />}
                     </Container>
                 </Container>
 
-                {/* ── Tab Icons (above footer) ── */}
-                <Container layout="flex" justify="center" gap="lg" padding="sm" width="100%">
-                    {tabs.map(tab => (
-                        <Button
-                            key={tab.id}
-                            size="md"
-                            variant="border-shadow"
-                            selected={activeTab === tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            style={{ borderRadius: '50%', width: '48px', height: '48px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            title={tab.label}
-                        >
-                            <Icon name={tab.icon} size="sm" />
-                        </Button>
-                    ))}
+                {/* ── KPI cards ── */}
+                <Container layout="grid" columns="auto-sm" gap="md" padding="none" width="100%">
+                    <StatCard
+                        icon="FiFile"
+                        label="Files"
+                        value={stats?.totalFiles ?? 0}
+                        onClick={() => navigate('/files')}
+                    />
+                    <StatCard
+                        icon="FiHardDrive"
+                        label="Storage used"
+                        value={formatBytes(stats?.totalStorage || 0)}
+                        accent="var(--tertiary-accent-color, var(--primary-color))"
+                        onClick={() => navigate('/files')}
+                    />
+                    <StatCard
+                        icon="FiUserCheck"
+                        label="Connections"
+                        value={stats?.connections ?? 0}
+                        caption={(stats?.pending ?? 0) > 0 ? `${stats.pending} pending` : null}
+                        accent="var(--success-color)"
+                    />
+                    <StatCard
+                        icon="FiUsers"
+                        label="Groups"
+                        value={groupCount ?? '—'}
+                        accent="var(--warning-color)"
+                    />
                 </Container>
 
-                {/* ── Footer Stats Bar ── */}
-                <Card padding="md" width="100%" style={{ minHeight: '40px', flexShrink: 0 }}>
-                    <Container layout="flex" align="center" justify="between" width="100%" height="100%" padding="none" style={{ padding: '0 16px' }}>
-                        <Container layout="flex" align="center" gap="sm" padding="none">
-                            <Icon name="FiHardDrive" size="xs" color="secondary" />
-                            <Typography size="xs" color="secondary">
-                                {formatBytes(stats?.totalStorage || 0)} used
-                            </Typography>
-                        </Container>
-
-                        <Container layout="flex" align="center" gap="md" padding="none">
-                            <Container layout="flex" align="center" gap="xs" padding="none">
-                                <Icon name="FiFile" size="xs" color="secondary" />
-                                <Typography size="xs" color="secondary">
-                                    {stats?.totalFiles ?? 0} files
-                                </Typography>
-                            </Container>
-
-                            <Container layout="flex" align="center" gap="xs" padding="none">
-                                <Icon name="FiUserCheck" size="xs" color="secondary" />
-                                <Typography size="xs" color="secondary">
-                                    {stats?.connections ?? 0} connections
-                                </Typography>
-                            </Container>
-
-                            {(stats?.pending ?? 0) > 0 && (
-                                <Container layout="flex" align="center" gap="xs" padding="none">
-                                    <Icon name="FiUserPlus" size="xs" color="warning" />
-                                    <Typography size="xs" color="warning">
-                                        {stats.pending} pending
-                                    </Typography>
-                                </Container>
-                            )}
-                        </Container>
+                {/* ── Main content: files (left) + social rail (right) ── */}
+                <Container layout="flex" gap="lg" padding="none" width="100%" align="start" wrap>
+                    <Container layout="flex-column" gap="none" padding="none" wrap={false} style={{ flex: '2 1 480px', minWidth: 0 }}>
+                        <FilesPanel navigate={navigate} userId={user?.id} />
                     </Container>
-                </Card>
+                    <Container layout="flex-column" gap="none" padding="none" wrap={false} style={{ flex: '1 1 310px', minWidth: 0 }}>
+                        <SocialPanel userId={user?.id} navigate={navigate} onCountsChange={handleCountsChange} />
+                    </Container>
+                </Container>
             </Container>
         </Page>
     );

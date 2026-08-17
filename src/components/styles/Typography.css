@@ -6,8 +6,20 @@
     color: var(--text-color); /* Inherit theme text color by default */
 }
 
+/* Block tags from the `as` prop take margins only from margin props /
+   explicit styles; specificity beats the base rules, loses to .margin-*. */
+h1.typography, h2.typography, h3.typography, h4.typography,
+h5.typography, h6.typography, p.typography, div.typography,
+label.typography {
+    margin: 0;
+}
+
 /* Size classes are defined in the responsive section below */
 /* Letter-spacing for each size */
+.typography-size-xxs {
+    letter-spacing: 0.025em; /* More open spacing for small text readability */
+}
+
 .typography-size-xs {
     letter-spacing: 0.025em; /* More open spacing for small text readability */
 }
@@ -348,6 +360,10 @@
 /* Breakpoints: 480px (small→large phones), 768px (tablet portrait), 1025px (desktop), 1440px (large desktop) */
 
 /* Mobile base styles (< 480px) - Extra compact for small phones */
+.typography-size-xxs {
+    font-size: 0.5rem;     /* 8px */
+}
+
 .typography-size-xs {
     font-size: 0.5625rem;  /* 9px */
 }
@@ -382,6 +398,10 @@
 
 /* Large phone adjustments (480px - 767px) - Standard phone size */
 @media (min-width: 480px) {
+    .typography-size-xxs {
+        font-size: 0.5625rem;  /* 9px */
+    }
+
     .typography-size-xs {
         font-size: 0.6875rem;  /* 11px - +22% from small phone */
     }
@@ -417,6 +437,10 @@
 
 /* Tablet adjustments (768px - 1024px) - Moderately sized for comfortable viewing */
 @media (min-width: 768px) {
+    .typography-size-xxs {
+        font-size: 0.6875rem;  /* 11px */
+    }
+
     .typography-size-xs {
         font-size: 0.875rem;   /* 14px - +27% from large phone */
     }
@@ -452,6 +476,10 @@
 
 /* Desktop adjustments (1025px - 1439px) - Spacious for optimal desktop experience */
 @media (min-width: 1025px) {
+    .typography-size-xxs {
+        font-size: 0.75rem;    /* 12px */
+    }
+
     .typography-size-xs {
         font-size: 1rem;       /* 16px - +14% from tablet */
     }
@@ -625,7 +653,7 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    white-space: pre;
+    white-space: pre-wrap;
     animation: typography-shiny var(--typography-animation-duration, 5000ms) linear infinite;
     animation-delay: var(--typography-animation-delay, 0ms);
 }

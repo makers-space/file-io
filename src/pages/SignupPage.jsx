@@ -88,7 +88,7 @@ export const SignupPage = () => {
                         {/* Header */}
                         <Container layout="flex-column" gap="sm" align="center">
                             <Icon name="FaUserPlus" size="lg" color="primary"/>
-                            <Typography as="h1" size="2xl" weight="bold" color="primary">
+                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary">
                                 Create Account
                             </Typography>
                             <Typography color="muted">

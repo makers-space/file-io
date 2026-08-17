@@ -58,7 +58,7 @@ export const ForgotPasswordPage = () => {
                     <Card style={{ maxWidth: '400px', width: '100%' }}>
                         <Container layout="flex-column" gap="lg" justify="center">
                             <Icon name="FaCheckCircle" size="lg" color="success"/>
-                            <Typography as="h1" size="2xl" weight="bold" color="primary">
+                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary">
                                 Check Your Email
                             </Typography>
                             <Typography align="center">
@@ -90,7 +90,7 @@ export const ForgotPasswordPage = () => {
                         {/* Header */}
                         <Container layout="flex-column" gap="sm" align="center" justify="center" padding="none">
                             <Icon name="FaKey" size="lg" color="primary"/>
-                            <Typography as="h1" size="2xl" weight="bold" color="primary">
+                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary">
                                 Forgot Password?
                             </Typography>
                             <Typography>

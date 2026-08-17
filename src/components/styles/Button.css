@@ -161,6 +161,13 @@
 /* Size variations - xs/sm/md/lg/xl scale */
 /* NOTE: Heights are set by the responsive system below (line ~400+).
    These rules set margin/padding/font-size defaults and act as a fallback. */
+.button.themed-button.xxs {
+    height: 1.125rem; /* 18px - one notch below xs */
+    margin: calc(var(--spacing-xs) * 0.5) 0;
+    padding: 0 var(--spacing-xs);
+    font-size: 0.6875rem;
+}
+
 .button.themed-button.xs {
     height: 1.25rem; /* 20px - matches Input/Select xs mobile base */
     margin: calc(var(--spacing-xs) * 0.5) 0;
@@ -405,6 +412,13 @@
 /* Breakpoints: 480px (small→large phones), 768px (tablet portrait), 1025px (desktop), 1440px (large desktop) */
 
 /* Mobile base styles (< 480px) - Extra compact for small phones */
+.button.themed-button.xxs {
+    height: 1.125rem;       /* 18px */
+    padding: 0 0.3125rem;   /* 5px */
+    font-size: 0.5625rem;   /* 9px */
+    min-width: 1.125rem;
+}
+
 .button.themed-button.xs {
     height: 1.25rem;        /* 20px */
     padding: 0 0.375rem;    /* 6px */
@@ -442,6 +456,12 @@
 
 /* Large phone adjustments (480px - 767px) - Slightly larger for standard phones */
 @media (min-width: 480px) {
+    .button.themed-button.xxs {
+        height: 1.25rem;        /* 20px */
+        padding: 0 0.375rem;    /* 6px */
+        font-size: 0.625rem;    /* 10px */
+    }
+
     .button.themed-button.xs {
         height: 1.5rem;         /* 24px */
         padding: 0 0.5rem;      /* 8px */
@@ -475,6 +495,12 @@
 
 /* Tablet adjustments (768px - 1024px) - Moderately sized for comfortable interaction */
 @media (min-width: 768px) {
+    .button.themed-button.xxs {
+        height: 1.5rem;         /* 24px */
+        padding: 0 0.5rem;      /* 8px */
+        font-size: 0.6875rem;   /* 11px */
+    }
+
     .button.themed-button.xs {
         height: 1.75rem;        /* 28px */
         padding: 0 0.75rem;     /* 12px */
@@ -508,6 +534,12 @@
 
 /* Desktop adjustments (1025px - 1439px) - Spacious for optimal desktop experience */
 @media (min-width: 1025px) {
+    .button.themed-button.xxs {
+        height: 1.625rem;       /* 26px */
+        padding: 0 0.625rem;    /* 10px */
+        font-size: 0.75rem;     /* 12px */
+    }
+
     .button.themed-button.xs {
         height: 2rem;           /* 32px */
         padding: 0 0.875rem;    /* 14px */
@@ -541,6 +573,12 @@
 
 /* Large desktop adjustments (>= 1440px) - Extra spacious for large monitors */
 @media (min-width: 1440px) {
+    .button.themed-button.xxs {
+        height: 1.75rem;        /* 28px */
+        padding: 0 0.75rem;     /* 12px */
+        font-size: 0.8125rem;   /* 13px */
+    }
+
     .button.themed-button.xs {
         height: 2.125rem;       /* 34px */
         padding: 0 1rem;        /* 16px */

@@ -224,6 +224,27 @@ const getViewerType = (metadata, fp) => {
   return 'binary';
 };
 
+const getTypeBadge = (viewerType, filePath) => {
+  const isDocx     = viewerType === 'text' && filePath?.match(/\.docx?$/i);
+  const isMarkdown = viewerType === 'text' && filePath?.match(/\.(md|mdx)$/i);
+  const isPlain    = viewerType === 'text' && filePath?.match(/\.txt$/i);
+  const isZip      = viewerType === 'binary' && filePath?.match(/\.zip$/i);
+  return (
+    viewerType === 'image' ? { icon: 'TbImageInPicture', label: 'IMAGE',        color: 'primary' } :
+    viewerType === 'video' ? { icon: 'FiVideo',          label: 'VIDEO',        color: 'primary' } :
+    viewerType === 'audio' ? { icon: 'FiMusic',          label: 'AUDIO',        color: 'primary' } :
+    viewerType === '3d'    ? { icon: 'FiBox',            label: '3D MODEL',     color: 'primary' } :
+    viewerType === 'pdf'   ? { icon: 'FiFileText',       label: 'PDF',          color: 'primary' } :
+    isDocx                 ? { icon: 'FiFileText',       label: 'DOCUMENT',     color: 'primary' } :
+    isMarkdown             ? { icon: 'FiFileText',       label: 'MARKDOWN',     color: 'primary' } :
+    isPlain                ? { icon: 'FiFileText',       label: 'TEXT',         color: 'primary' } :
+    viewerType === 'text'  ? { icon: 'FiCode',           label: 'CODE',         color: 'primary' } :
+    isZip                  ? { icon: 'FiArchive',        label: 'ZIP ARCHIVE',  color: null      } :
+    viewerType === 'binary'? { icon: 'FiFile',           label: 'BINARY',       color: null      } :
+    null
+  );
+};
+
 const useFileViewer = (filePath) => {
   const [state, setState] = useState(IDLE_VIEWER_STATE);
   const connectionRef = useRef(null);
@@ -1964,7 +1985,7 @@ const CommentPanel = ({ file }) => {
 
 // ─── File Metadata Bar ───────────────────────────────────────────────────────
 
-const FileMetadata = ({ file, isReadOnly, onDownload, onVersionLoaded, onSave, isSavingImage }) => {
+const FileMetadata = ({ file, typeBadge, isReadOnly, onDownload, onVersionLoaded, onSave, isSavingImage }) => {
   const [metadata, setMetadata] = useState(null);
   const [lastModified, setLastModified] = useState(null);
   const { error: showError } = useNotification();
@@ -2033,6 +2054,13 @@ const FileMetadata = ({ file, isReadOnly, onDownload, onVersionLoaded, onSave, i
     <Card className="file-metadata-bar" padding="xs" width="100%" backgroundColor="surface" margin="none">
       <Container layout="flex" align="center" justify="between" width="100%" padding="none">
         <Container layout="flex" align="center" gap="sm" padding="none">
+          {typeBadge && (
+            <Container layout="flex" align="center" gap="xs">
+              <Icon name={typeBadge.icon} size="xs" />
+              <Typography size="xs" color={typeBadge.color || undefined}>{typeBadge.label}</Typography>
+            </Container>
+          )}
+
           {file.type === 'text' && latestVersion && (
             <Container layout="flex" align="center" gap="xs">
               <Icon name="FiGitBranch" size="xs" />
@@ -2565,6 +2593,66 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   );
 };
 
+const EDITOR_PEER_COLORS = [
+  'var(--primary-color)',
+  'var(--secondary-color)',
+  'var(--tertiary-color)',
+  'var(--success-color)',
+  'var(--error-color)',
+  'var(--warning-color)',
+];
+
+const ActiveEditors = ({ provider, user }) => {
+  const [peers, setPeers] = useState([]);
+
+  useEffect(() => {
+    const awareness = provider?.awareness;
+    if (!awareness) { setPeers([]); return undefined; }
+
+    if (user) {
+      awareness.setLocalStateField('user', {
+        name: user.username || user.firstName || 'User',
+        color: EDITOR_PEER_COLORS[awareness.clientID % EDITOR_PEER_COLORS.length],
+      });
+    }
+
+    const update = () => {
+      const next = [];
+      awareness.getStates().forEach((state, clientId) => {
+        if (clientId !== awareness.clientID) next.push({ clientId, ...(state.user || {}) });
+      });
+      setPeers(next);
+    };
+    awareness.on('change', update);
+    update();
+    return () => awareness.off('change', update);
+  }, [provider, user]);
+
+  if (peers.length === 0) return null;
+
+  return (
+    <Container layout="flex" align="center" gap="xs" padding="none" wrap={false} title={peers.map(p => p.name || 'Anonymous').join(', ')}>
+      <Container layout="flex" align="center" gap="none" padding="none" wrap={false}>
+        {peers.slice(0, 4).map((p, i) => (
+          <Container
+            key={p.clientId}
+            layout="flex" align="center" justify="center" padding="none" wrap={false}
+            width="18px" height="18px"
+            style={{ borderRadius: '50%', background: p.color || 'var(--primary-color)', border: '2px solid var(--surface-color)', marginLeft: i === 0 ? 0 : -6 }}
+          >
+            <Typography as="span" size="xs" weight="bold" style={{ color: 'var(--text-contrast-color, #fff)', fontSize: '0.5rem', lineHeight: 1 }}>
+              {(p.name || '?').charAt(0).toUpperCase()}
+            </Typography>
+          </Container>
+        ))}
+      </Container>
+      <Typography size="xs" color="primary">
+        {peers.length === 1 ? '1 other editing' : `${peers.length} others editing`}
+      </Typography>
+    </Container>
+  );
+};
+
 export const FilesPage = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -3038,32 +3126,7 @@ export const FilesPage = () => {
                 <Typography size="xs" color="warning">READ-only</Typography>
               </Container>
             )}
-            {(() => {
-              const isDocx     = viewerType === 'text' && activePath?.match(/\.docx?$/i);
-              const isMarkdown = viewerType === 'text' && activePath?.match(/\.(md|mdx)$/i);
-              const isPlain    = viewerType === 'text' && activePath?.match(/\.txt$/i);
-              const isZip      = viewerType === 'binary' && activePath?.match(/\.zip$/i);
-              const badge =
-                viewerType === 'image' ? { icon: 'TbImageInPicture', label: 'IMAGE',        color: 'primary' } :
-                viewerType === 'video' ? { icon: 'FiVideo',          label: 'VIDEO',        color: 'primary' } :
-                viewerType === 'audio' ? { icon: 'FiMusic',          label: 'AUDIO',        color: 'primary' } :
-                viewerType === '3d'    ? { icon: 'FiBox',            label: '3D MODEL',     color: 'primary' } :
-                viewerType === 'pdf'   ? { icon: 'FiFileText',       label: 'PDF',          color: 'primary' } :
-                isDocx                 ? { icon: 'FiFileText',       label: 'DOCUMENT',     color: 'primary' } :
-                isMarkdown             ? { icon: 'FiFileText',       label: 'MARKDOWN',     color: 'primary' } :
-                isPlain                ? { icon: 'FiFileText',       label: 'TEXT',         color: 'primary' } :
-                viewerType === 'text'  ? { icon: 'FiCode',           label: 'CODE',         color: 'primary' } :
-                isZip                  ? { icon: 'FiArchive',        label: 'ZIP ARCHIVE',  color: null      } :
-                viewerType === 'binary'? { icon: 'FiFile',           label: 'BINARY',       color: null      } :
-                null;
-              if (!badge) return null;
-              return (
-                <Container layout="flex" align="center" gap="xs" padding="none">
-                  <Icon name={badge.icon} size="sm" />
-                  <Typography size="xs" color={badge.color || undefined}>{badge.label}</Typography>
-                </Container>
-              );
-            })()}
+            <ActiveEditors provider={provider} user={user} />
           </Container>
 
           <Container layout="flex" align="center" gap="sm" padding="none">
@@ -3281,6 +3344,7 @@ export const FilesPage = () => {
 
         <FileMetadata
           file={{ ...metadata, name: metadata.fileName, isImage: viewerType === 'image' }}
+          typeBadge={getTypeBadge(viewerType, activePath)}
           isReadOnly={isReadOnly}
           onDownload={handleFileDownload}
           onVersionLoaded={handleVersionLoaded}

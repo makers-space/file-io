@@ -33,6 +33,7 @@ export const Card = forwardRef(({
     marginBottom = null, // Margin bottom: 'none', 'xs', 'sm', 'md', 'lg', 'xl' or custom value
     justifySelf = null, // CSS justify-self property: 'auto', 'start', 'end', 'center', 'stretch'
     flexFill = false, // Whether the card should fill available space in flex layouts
+    span = null, // Grid item spanning inside a parent grid: 2, 3, or 'full'
     // Genie integration props
     genie = null, // Genie content to show
     genieTrigger = 'click', // 'click', 'hover', 'contextmenu'
@@ -254,12 +255,15 @@ export const Card = forwardRef(({
     // Add flex-fill class if the flexFill prop is true
     const flexFillClass = flexFill ? 'flex-fill' : '';
 
+    // Grid item spanning inside a parent grid
+    const spanClass = span ? `grid-span-${span}` : '';
+
     const cardElement = (
         <div
             ref={cardRef}
             {...domProps}
             {...triggerProps}
-            className={`card themed-card ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getWrapClass()} ${getMarginClass()} ${hoverClass} ${flexFillClass} ${getJustifySelfClass()} ${genie ? 'genie-trigger' : ''} theme-${cardTheme} ${className}`}
+            className={`card themed-card ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getWrapClass()} ${getMarginClass()} ${hoverClass} ${flexFillClass} ${spanClass} ${getJustifySelfClass()} ${genie ? 'genie-trigger' : ''} theme-${cardTheme} ${className}`}
             data-theme={cardTheme}
             data-theme-source={theme ? 'local' : 'inherited'}
 

@@ -35,7 +35,7 @@ export const Data = forwardRef(({
     fieldConfig = {},
     variant = 'table', // 'table', 'cards', 'list'
     className = '',
-    size = 'sm', // 'xs', 'sm', 'md', 'lg', 'xl' - Controls size of all nested components
+    size = 'sm', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl' - Controls size of all nested components
     sortable = true, // Default to true for new sorting functionality
     maxColumns = 6, // Maximum columns to show before condensing (table variant)
     exclude = [], // Array of field names to exclude from display and filters
@@ -89,8 +89,8 @@ export const Data = forwardRef(({
 
         // Size mapping helpers - derive smaller/larger sizes from main size prop
         const getSmallerSize = (baseSize) => {
-            const sizeMap = { xl: 'lg', lg: 'md', md: 'sm', sm: 'xs', xs: 'xs' };
-            return sizeMap[baseSize] || 'xs';
+            const sizeMap = { xl: 'lg', lg: 'md', md: 'sm', sm: 'xs', xs: 'xxs', xxs: 'xxs' };
+            return sizeMap[baseSize] || 'xxs';
         };
 
         const getTypographySize = () => size; // Typography uses main size
@@ -411,6 +411,10 @@ export const Data = forwardRef(({
             }
 
             const Component = config.component;
+            // Label-only fieldConfig entries fall back to default rendering
+            if (!Component) {
+                return <Typography as="span" size={getTypographySize()}>{String(value)}</Typography>;
+            }
             let componentProps = {...config.props};
 
             // Remove any size prop from fieldConfig - parent Data component's size prop takes precedence
@@ -1197,8 +1201,8 @@ export const Data = forwardRef(({
                     </Container>
 
                     {/* Right Side: Pagination Controls */}
-                    <Container layout="flex" padding="none" justify="end" flexFill>
-                        <ButtonGroup size={getButtonSize()} spaced>
+                    <Container layout="flex" padding="none" justify="end" flexFill wrap={false}>
+                        <ButtonGroup size={getButtonSize()} spaced wrap={false} justify="end">
                             <Button size={getButtonSize()} selected={false} onClick={() => setPage(1)} disabled={page === 1}><Icon
                                 name="FiChevronsLeft" size='xs'/></Button>
                             <Button size={getButtonSize()} selected={false} onClick={() => setPage(page - 1)}

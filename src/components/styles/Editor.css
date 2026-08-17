@@ -1465,3 +1465,28 @@
         page-break-after: always;
     }
 }
+
+/* Yjs remote cursors (y-monaco) */
+.yRemoteSelection {
+    background-color: color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+
+.yRemoteSelectionHead {
+    position: absolute;
+    box-sizing: border-box;
+    height: 100%;
+    border-left: 2px solid var(--primary-color);
+}
+
+.yRemoteSelectionHead::after {
+    position: absolute;
+    top: -1.5em;
+    left: -2px;
+    padding: 1px 4px;
+    font-size: 10px;
+    line-height: 1.3;
+    border-radius: 3px;
+    color: var(--text-contrast-color, #fff);
+    white-space: nowrap;
+    pointer-events: none;
+}

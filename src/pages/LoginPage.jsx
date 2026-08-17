@@ -20,6 +20,8 @@ export const LoginPage = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [shakeSignup, setShakeSignup] = useState(false);
+  const [twoFactorStep, setTwoFactorStep] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState('');
   const { login } = useAuth();
   const { error: showError, success: showSuccess } = useNotification();
 
@@ -46,8 +48,13 @@ export const LoginPage = () => {
     setIsLoading(true);
 
     try {
-      const result = await login(formData);
-      
+      const result = await login(twoFactorStep ? { ...formData, twoFactorToken: twoFactorToken.trim() } : formData);
+
+      if (result.requiresTwoFactor) {
+        setTwoFactorStep(true);
+        return;
+      }
+
       if (result.success) {
         showSuccess('Login successful! Welcome back.');
         navigate('/dashboard');
@@ -68,72 +75,125 @@ export const LoginPage = () => {
     }
   };
 
-  const isFormValid = formData.identifier && formData.password;
+  const isFormValid = twoFactorStep
+    ? twoFactorToken.trim().length >= 6
+    : formData.identifier && formData.password;
 
   return (
     <Page layout="flex" align="center" justify="center">
-        <Card layout="flex-column" padding="xl" align="center" gap="lg" >
+        <Card layout="flex-column" padding="xl" align="center" gap="lg" width="100%" maxWidth="560px">
             {/* Header */}
             <Container layout="flex-column" gap="sm" align="center" padding="none">
-              <Icon name="FaLock" size="lg" color="primary" />
-              <Typography as="h1" size="2xl" weight="bold" color="primary">
-                Sign In
+              <Icon name={twoFactorStep ? 'FaShieldAlt' : 'FaLock'} size="lg" color="primary" />
+              <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary" style={{ textAlign: 'center' }}>
+                {twoFactorStep ? 'Two-Factor Authentication' : 'Sign In'}
               </Typography>
-              <Typography align="center">
-                Welcome back! Please sign in to your account.
+              <Typography size="sm" align="center" style={{ display: 'block', width: '100%', textAlign: 'center' }}>
+                {twoFactorStep
+                  ? 'Enter the 6-digit code from your authenticator app, or a backup code.'
+                  : 'Welcome back! Please sign in to your account.'}
               </Typography>
             </Container>
 
             {/* Login Form */}
               <Container
                 as="form"
-                style={{ width: '80%' }}
+                style={{ width: '92%' }}
                 gap="md"
                 padding="none"
                 onSubmit={handleSubmit}
               >
-                <Input
-                  type="text"
-                  name="identifier"
-                  label="Email or Username"
-                  variant="floating"
-                  value={formData.identifier}
-                  onChange={handleInputChange}
-                  required
-                  width="100%"
-                  autoComplete="username"
-                />
+                {twoFactorStep ? (
+                  <>
+                    <Input
+                      type="text"
+                      name="twoFactorToken"
+                      label="Authentication code"
+                      variant="floating"
+                      value={twoFactorToken}
+                      onChange={e => setTwoFactorToken(e.target.value)}
+                      required
+                      width="100%"
+                      maxLength={20}
+                      autoComplete="one-time-code"
+                      autoFocus
+                    />
 
-                <Input
-                  type="password"
-                  name="password"
-                  label="Password"
-                  variant="floating"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  required
-                  width="100%"
-                  autoComplete="current-password"
-                />
+                    <Button
+                      type="submit"
+                      color="primary"
+                      disabled={!isFormValid || isLoading}
+                      width="100%"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Icon name="FaSpinner" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="FaShieldAlt" />
+                          Verify Code
+                        </>
+                      )}
+                    </Button>
 
-                <Button
-                  type="submit"
-                  color="primary"
-                  disabled={!isFormValid || isLoading}
-                  width="100%"
-                >
-                  {isLoading ? (
-                    <>
-                      <Icon name="FaSpinner" />
-                      Signing In...
-                    </>
-                  ) : (
-                    <>
-                      <Icon name="FaSignInAlt" />
-                      Sign In
-                    </>
-                  )}
-                </Button>
+                    <Button
+                      type="button"
+                      color="secondary"
+                      width="100%"
+                      onClick={() => { setTwoFactorStep(false); setTwoFactorToken(''); }}
+                      disabled={isLoading}
+                    >
+                      Back to sign in
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Input
+                      type="text"
+                      name="identifier"
+                      label="Email or Username"
+                      variant="floating"
+                      value={formData.identifier}
+                      onChange={handleInputChange}
+                      required
+                      width="100%"
+                      autoComplete="username"
+                    />
+
+                    <Input
+                      type="password"
+                      name="password"
+                      label="Password"
+                      variant="floating"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required
+                      width="100%"
+                      autoComplete="current-password"
+                    />
+
+                    <Button
+                      type="submit"
+                      color="primary"
+                      disabled={!isFormValid || isLoading}
+                      width="100%"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Icon name="FaSpinner" />
+                          Signing In...
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="FaSignInAlt" />
+                          Sign In
+                        </>
+                      )}
+                    </Button>
+                  </>
+                )}
               </Container>
 
             {/* Actions */}

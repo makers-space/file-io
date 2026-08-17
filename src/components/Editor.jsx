@@ -568,43 +568,67 @@ const CodeEditorInner = forwardRef(({
         if (viewState) editorRef.current.restoreViewState(viewState);
     }, [content, collaborative]);
 
+    const [editorMounted, setEditorMounted] = useState(false);
+
     const handleEditorDidMount = useCallback((editor, monaco) => {
         monacoRef.current = monaco;
         editorRef.current = editor;
         applyMonacoTheme(monaco, currentTheme);
-        // Apply theme monospace font on mount
         const monoFont = getComputedStyle(document.body).getPropertyValue('--font-family-monospace').trim();
         if (monoFont) editor.updateOptions({ fontFamily: monoFont });
+        setEditorMounted(true);
+    }, [currentTheme]);
 
-        // Native YJS collaboration via y-monaco.  Binds Monaco's text model
-        // directly to the shared Y.Text — multi-user cursors, no manual diffs,
-        // no setValue/onChange round-trip, no debounced char-by-char syncing.
-        if (collaborative) {
-            try {
-                const model = editor.getModel();
-                if (model) {
-                    bindingRef.current = new MonacoBinding(
-                        ytext,
-                        model,
-                        new Set([editor]),
-                        provider?.awareness ?? null,
-                    );
-                }
-            } catch (err) {
-                // Falling back is not possible from inside the binding —
-                // surface so the dev sees the issue and the manual diff
-                // bridge can still run via the onChange path next time.
-                // eslint-disable-next-line no-console
-                console.error('MonacoBinding failed to attach', err);
-            }
+    // Native YJS collaboration via y-monaco. Effect-based so the binding is
+    // recreated when the provider arrives after the editor mounts — binding
+    // with a null awareness would silently drop remote cursors.
+    useEffect(() => {
+        if (!collaborative || !editorMounted || !ytext) return undefined;
+        const editor = editorRef.current;
+        const model = editor?.getModel();
+        if (!model) return undefined;
+        try {
+            bindingRef.current = new MonacoBinding(
+                ytext,
+                model,
+                new Set([editor]),
+                provider?.awareness ?? null,
+            );
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('MonacoBinding failed to attach', err);
         }
-    }, [currentTheme, collaborative, ytext, provider]);
+        return () => {
+            try { bindingRef.current?.destroy?.(); } catch { /* ignore */ }
+            bindingRef.current = null;
+        };
+    }, [collaborative, editorMounted, ytext, provider]);
 
-    // Destroy the YJS binding when the editor unmounts or the ytext changes.
-    useEffect(() => () => {
-        try { bindingRef.current?.destroy?.(); } catch { /* ignore */ }
-        bindingRef.current = null;
-    }, [ytext]);
+    // Per-client cursor colors + name tags for y-monaco's remote decorations
+    useEffect(() => {
+        if (!collaborative || !provider?.awareness) return undefined;
+        const awareness = provider.awareness;
+        const styleEl = document.createElement('style');
+        document.head.appendChild(styleEl);
+        const render = () => {
+            let css = '';
+            awareness.getStates().forEach((state, clientId) => {
+                if (clientId === awareness.clientID || !state.user) return;
+                const color = state.user.color || 'var(--primary-color)';
+                const name = String(state.user.name || 'Anonymous').replace(/["\\]/g, '');
+                css += `.yRemoteSelection-${clientId}{background-color:color-mix(in srgb, ${color} 25%, transparent);}`;
+                css += `.yRemoteSelectionHead-${clientId}{border-left-color:${color};}`;
+                css += `.yRemoteSelectionHead-${clientId}::after{content:"${name}";background-color:${color};}`;
+            });
+            styleEl.textContent = css;
+        };
+        awareness.on('change', render);
+        render();
+        return () => {
+            awareness.off('change', render);
+            styleEl.remove();
+        };
+    }, [collaborative, provider]);
 
     const changeTimerRef = useRef(null);
     // Non-collab onChange: debounced to avoid hammering the manual diff
@@ -677,6 +701,7 @@ const CodeEditorInner = forwardRef(({
                         tabSize: 2,
                         renderLineHighlight: 'all',
                         bracketPairColorization: { enabled: true },
+                        fixedOverflowWidgets: true,
                     }}
                     loading={
                         <Container layout="flex" align="center" justify="center" minHeight={minHeight}>

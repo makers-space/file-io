@@ -34,7 +34,7 @@ export const Button = forwardRef(({
     className = '',
     color = 'primary', // 'primary', 'secondary', 'tertiary', 'success', 'warning', 'error'
     variant = null, // Special variant: 'border-shadow' for unique styling
-    size = 'md', // 'xs', 'sm', 'md', 'lg', 'xl'
+    size = 'md', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl'
     disabled = false,
     selected: externalSelected = null, // Allow external control of selected state
     type = 'button',
@@ -180,7 +180,7 @@ export const Button = forwardRef(({
         return BUTTON_COLOR_TOKENS[color] || color || BUTTON_COLOR_TOKENS.primary;
     };
 
-    const getSizeClass = () => ['xs', 'sm', 'lg', 'xl'].includes(size) ? size : 'md';
+    const getSizeClass = () => ['xxs', 'xs', 'sm', 'lg', 'xl'].includes(size) ? size : 'md';
 
     const getSelectedClass = () => {
         return isSelected ? 'selected' : '';

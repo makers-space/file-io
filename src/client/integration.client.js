@@ -57,6 +57,16 @@ export const integrationService = {
     /** Recent delivery log + stats (owner/admin only) */
     async getDeliveries(integrationId) {
         return await api.get(`/integrations/${integrationId}/deliveries`);
+    },
+
+    /** Issue or rotate the inbound pull API key — returns { inboundKey } once */
+    async issueInboundKey(integrationId) {
+        return await api.post(`/integrations/${integrationId}/inbound-key`);
+    },
+
+    /** Replace the read-only path grants for inbound pulls: [{ path: '/folder' }] */
+    async setGrants(integrationId, grants) {
+        return await api.put(`/integrations/${integrationId}/grants`, { grants });
     }
 };
 

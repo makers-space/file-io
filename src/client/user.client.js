@@ -12,7 +12,8 @@ export const userService = {
     async updateProfile(profileData) {
         // Get current user ID first, then update via users/:id
         const profile = await this.getProfile();
-        return await api.put(`/users/${profile.data.user._id}`, profileData);
+        const user = profile?.data?.user || profile?.user || {};
+        return await api.put(`/users/${user._id || user.id}`, profileData);
     },
 
     async getUsers(params = {}) {

@@ -34,6 +34,8 @@ export const Container = forwardRef(({
     marginBottom = null, // Margin bottom: 'none', 'xs', 'sm', 'md', 'lg', 'xl' or custom value
     wrap = true, // true, false (for flex layouts)
     flexFill = false, // Whether the container should fill available space in flex layouts
+    span = null, // Grid item spanning inside a parent grid: 2, 3, or 'full'
+    hoverable = false, // true adds a themed hover background + pointer cursor (for list rows, chips)
     backgroundColor = 'transparent', // 'transparent', 'background', 'surface', 'surface-alt', 'primary', 'secondary', 'success', 'warning', 'error', 'tertiary'
     theme = null, // Optional theme override for this container and its children
     justifySelf = null, // CSS justify-self property: 'auto', 'start', 'end', 'center', 'stretch'
@@ -211,7 +213,7 @@ export const Container = forwardRef(({
 
     const getBackgroundStyle = () => {
         if (!backgroundColor || backgroundColor === 'transparent') {
-            return {backgroundColor: 'transparent'};
+            return {};
         }
 
         return {backgroundColor: `var(--${backgroundColor}-color)`};
@@ -226,6 +228,10 @@ export const Container = forwardRef(({
 
     // Add flex-fill class if the flexFill prop is true
     const flexFillClass = flexFill ? 'flex-fill' : '';
+
+    // Grid item spanning and hover affordance
+    const spanClass = span ? `grid-span-${span}` : '';
+    const hoverableClass = hoverable ? 'container-hoverable' : '';
 
     // Pass all props to DOM
     const domProps = props;
@@ -243,7 +249,7 @@ export const Container = forwardRef(({
             {...domProps}
             {...triggerProps}
             style={mergedStyle}
-            className={`container themed-container ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getMarginClass()} ${getWrapClass()} ${getJustifySelfClass()} ${flexFillClass} ${genieConfig ? 'genie-trigger' : ''} theme-${containerTheme} ${className}`}
+            className={`container themed-container ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getMarginClass()} ${getWrapClass()} ${getJustifySelfClass()} ${flexFillClass} ${spanClass} ${hoverableClass} ${genieConfig ? 'genie-trigger' : ''} theme-${containerTheme} ${className}`}
             data-theme={containerTheme}
             data-theme-source={theme ? 'local' : 'inherited'}
             data-genie-position={genieConfig?.position || 'auto'}

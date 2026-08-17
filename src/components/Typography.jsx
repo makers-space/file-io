@@ -57,8 +57,8 @@ const useTextSplitting = (text, animation, splitBy) => {
         }
 
         if (splitBy === 'words') {
-            // Split by whitespace but keep delimiters to preserve spacing
-            const parts = text.split(/(\s+)/);
+            // Split on breakable whitespace; non-breaking spaces stay glued to their word
+            const parts = text.split(/([^\S\u00A0]+)/);
             let springIndexCounter = 0;
             
             return parts.map((part, index) => {
@@ -120,10 +120,23 @@ const useAnimationTrigger = (ref, animation, animateOn, onStart) => {
     return { shouldAnimate, isHovering, setIsHovering };
 };
 
-// External Animation Components to prevent remounting on state changes
-const BlurAnimation = React.memo(({
-    animConfig,
-    animateOn,
+// Convert an animation config object (which may use react-spring style x/y
+// shorthands) into a plain CSS style object.
+const toCssAnimationStyle = (config) => {
+    if (!config) return {};
+    const { x, y, ...rest } = config;
+    const style = { ...rest };
+    if (x !== undefined || y !== undefined) {
+        style.transform = `translate3d(${x || 0}px, ${y || 0}px, 0)`;
+    }
+    return style;
+};
+
+// Staggered entrance engine for blur/fade/slide. CSS transitions, not
+// react-spring: spring frameloop bindings break under StrictMode double-mount.
+const StaggeredTransitionAnimation = React.memo(({
+    fromStyle,
+    toStyle,
     shouldAnimate,
     animationDelay,
     animationStagger,
@@ -132,141 +145,98 @@ const BlurAnimation = React.memo(({
     notifyAnimationComplete,
     renderSegmentsWithSprings
 }) => {
-    const fromConfig = useMemo(() => {
-        if (animConfig.from) return { ...animConfig.from };
-
-        // If hover trigger, keep visible but blurred
-        const defaultOpacity = animateOn === 'hover' ? 1 : 0;
-
-        return { opacity: defaultOpacity, filter: 'blur(10px)' };
-    }, [animConfig.from, animateOn]);
-
-    const toConfig = useMemo(() => {
-        if (animConfig.to) return { ...animConfig.to };
-        return { opacity: 1, filter: 'blur(0px)' };
-    }, [animConfig.to]);
-
-    const [springs, api] = useSprings(animatedSegmentCount, (index) => ({
-        from: fromConfig,
-        ...fromConfig
-    }), [animatedSegmentCount]);
+    const [active, setActive] = useState(false);
 
     useEffect(() => {
-        api.start((index) => ({
-            to: shouldAnimate ? toConfig : fromConfig,
-            delay: shouldAnimate 
-                ? (animationDelay + (animationStagger * index)) 
-                : (animationStagger * (animatedSegmentCount - 1 - index)),
-            config: { duration: animationDuration },
-            onRest: (result) => {
-                if (shouldAnimate && index === animatedSegmentCount - 1 && result.finished) {
-                    notifyAnimationComplete();
-                }
-            },
-        }));
-    }, [shouldAnimate, toConfig, fromConfig, animationDelay, animationStagger, animationDuration, notifyAnimationComplete, api, animatedSegmentCount]);
+        if (!shouldAnimate) {
+            setActive(false);
+            return undefined;
+        }
+        // Render one frame at "from" so the transition has a start point
+        let raf2;
+        const raf1 = requestAnimationFrame(() => {
+            raf2 = requestAnimationFrame(() => setActive(true));
+        });
+        return () => {
+            cancelAnimationFrame(raf1);
+            if (raf2) cancelAnimationFrame(raf2);
+        };
+    }, [shouldAnimate]);
 
-    return renderSegmentsWithSprings(springs);
+    useEffect(() => {
+        if (!active) return undefined;
+        const total = animationDelay + animationStagger * Math.max(0, animatedSegmentCount - 1) + animationDuration;
+        const timer = setTimeout(notifyAnimationComplete, total);
+        return () => clearTimeout(timer);
+    }, [active, animationDelay, animationStagger, animationDuration, animatedSegmentCount, notifyAnimationComplete]);
+
+    const segmentStyles = useMemo(() => (
+        Array.from({ length: animatedSegmentCount }, (_, index) => ({
+            ...(active ? toStyle : fromStyle),
+            transition: `all ${animationDuration}ms ease`,
+            transitionDelay: `${active
+                ? animationDelay + animationStagger * index
+                : animationStagger * (animatedSegmentCount - 1 - index)}ms`,
+        }))
+    ), [active, toStyle, fromStyle, animationDelay, animationStagger, animationDuration, animatedSegmentCount]);
+
+    return renderSegmentsWithSprings(segmentStyles);
 });
 
-const FadeAnimation = React.memo(({
-    animConfig,
-    animateOn,
-    shouldAnimate,
-    animationDelay,
-    animationStagger,
-    animationDuration,
-    animatedSegmentCount,
-    notifyAnimationComplete,
-    renderSegmentsWithSprings
-}) => {
-    const fromConfig = useMemo(() => {
-        if (animConfig.from) return { ...animConfig.from };
+// External Animation Components to prevent remounting on state changes
+const BlurAnimation = React.memo(({ animConfig, animateOn, ...rest }) => {
+    const fromStyle = useMemo(() => {
+        if (animConfig.from) return toCssAnimationStyle(animConfig.from);
+        // If hover trigger, keep visible but blurred
+        return { opacity: animateOn === 'hover' ? 1 : 0, filter: 'blur(10px)' };
+    }, [animConfig.from, animateOn]);
+
+    const toStyle = useMemo(() => (
+        animConfig.to ? toCssAnimationStyle(animConfig.to) : { opacity: 1, filter: 'blur(0px)' }
+    ), [animConfig.to]);
+
+    return <StaggeredTransitionAnimation fromStyle={fromStyle} toStyle={toStyle} {...rest} />;
+});
+
+const FadeAnimation = React.memo(({ animConfig, animateOn, ...rest }) => {
+    const fromStyle = useMemo(() => {
+        if (animConfig.from) return toCssAnimationStyle(animConfig.from);
         // If hover trigger, keep partially visible
         return { opacity: animateOn === 'hover' ? 0.4 : 0 };
     }, [animConfig.from, animateOn]);
-    
-    const toConfig = useMemo(() => (animConfig.to ? { ...animConfig.to } : { opacity: 1 }), [animConfig.to]);
 
-    const [springs, api] = useSprings(animatedSegmentCount, (index) => ({
-        from: fromConfig,
-        ...fromConfig
-    }), [animatedSegmentCount]);
+    const toStyle = useMemo(() => (
+        animConfig.to ? toCssAnimationStyle(animConfig.to) : { opacity: 1 }
+    ), [animConfig.to]);
 
-    useEffect(() => {
-        api.start((index) => ({
-            to: shouldAnimate ? toConfig : fromConfig,
-            delay: shouldAnimate 
-                ? (animationDelay + (animationStagger * index)) 
-                : (animationStagger * (animatedSegmentCount - 1 - index)),
-            config: { duration: animationDuration },
-            onRest: (result) => {
-                if (shouldAnimate && index === animatedSegmentCount - 1 && result.finished) {
-                    notifyAnimationComplete();
-                }
-            },
-        }));
-    }, [shouldAnimate, toConfig, fromConfig, animationDelay, animationStagger, animationDuration, notifyAnimationComplete, api, animatedSegmentCount]);
-
-    return renderSegmentsWithSprings(springs);
+    return <StaggeredTransitionAnimation fromStyle={fromStyle} toStyle={toStyle} {...rest} />;
 });
 
-const SlideAnimation = React.memo(({
-    animConfig,
-    animateOn,
-    shouldAnimate,
-    animationDelay,
-    animationStagger,
-    animationDuration,
-    animatedSegmentCount,
-    notifyAnimationComplete,
-    renderSegmentsWithSprings
-}) => {
-    const fromConfig = useMemo(() => {
-        if (animConfig.from) return { ...animConfig.from };
+const SlideAnimation = React.memo(({ animConfig, animateOn, ...rest }) => {
+    const fromStyle = useMemo(() => {
+        if (animConfig.from) return toCssAnimationStyle(animConfig.from);
 
         // If hover trigger, keep partially visible
         const defaultOpacity = animateOn === 'hover' ? 0.4 : 0;
 
         switch (animConfig.direction) {
             case 'left':
-                return { opacity: defaultOpacity, x: -50 };
+                return toCssAnimationStyle({ opacity: defaultOpacity, x: -50 });
             case 'right':
-                return { opacity: defaultOpacity, x: 50 };
+                return toCssAnimationStyle({ opacity: defaultOpacity, x: 50 });
             case 'bottom':
-                return { opacity: defaultOpacity, y: 50 };
+                return toCssAnimationStyle({ opacity: defaultOpacity, y: 50 });
             case 'top':
             default:
-                return { opacity: defaultOpacity, y: -50 };
+                return toCssAnimationStyle({ opacity: defaultOpacity, y: -50 });
         }
     }, [animConfig.from, animConfig.direction, animateOn]);
 
-    const toConfig = useMemo(() => {
-        if (animConfig.to) return { ...animConfig.to };
-        return { opacity: 1, x: 0, y: 0 };
-    }, [animConfig.to]);
+    const toStyle = useMemo(() => (
+        animConfig.to ? toCssAnimationStyle(animConfig.to) : toCssAnimationStyle({ opacity: 1, x: 0, y: 0 })
+    ), [animConfig.to]);
 
-    const [springs, api] = useSprings(animatedSegmentCount, (index) => ({
-        from: fromConfig,
-        ...fromConfig
-    }), [animatedSegmentCount]);
-
-    useEffect(() => {
-        api.start((index) => ({
-            to: shouldAnimate ? toConfig : fromConfig,
-            delay: shouldAnimate 
-                ? (animationDelay + (animationStagger * index)) 
-                : (animationStagger * (animatedSegmentCount - 1 - index)),
-            config: { duration: animationDuration },
-            onRest: (result) => {
-                if (shouldAnimate && index === animatedSegmentCount - 1 && result.finished) {
-                    notifyAnimationComplete();
-                }
-            },
-        }));
-    }, [shouldAnimate, toConfig, fromConfig, animationDelay, animationStagger, animationDuration, notifyAnimationComplete, api, animatedSegmentCount]);
-
-    return renderSegmentsWithSprings(springs);
+    return <StaggeredTransitionAnimation fromStyle={fromStyle} toStyle={toStyle} {...rest} />;
 });
 
 // Helper for color styles
@@ -1260,7 +1230,7 @@ const FocusAnimation = React.memo(({
 export const Typography = ({
     children,
     className = '',
-    size = 'md', // 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl'
+    size = 'md', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl'
     weight = 'normal', // 'thin', 'extralight', 'light', 'normal', 'regular', 'medium', 'semibold', 'bold', 'extrabold', 'black'
     color = 'default', // 'default', 'primary', 'secondary', 'success', 'warning', 'error', 'muted', 'header', 'tertiary', 'contrast'
     font = 'primary', // 'primary', 'secondary', 'monospace' - different font families per theme
@@ -1276,6 +1246,7 @@ export const Typography = ({
     marginBottom = null, // Margin bottom spacing: 'xs', 'sm', 'md', 'lg', 'xl'
     margin = null, // All margin spacing: 'none', 'xs', 'sm', 'md', 'lg', 'xl'
     padding = null, // All padding spacing: 'none', 'xs', 'sm', 'md', 'lg', 'xl'
+    as = null, // Semantic element to render: 'h1'-'h6', 'p', 'label', 'span', etc. (default 'span'; href always renders an 'a')
     href, // URL for links - automatically renders as link with proper styling
     target, // Link target (_blank, _self, etc.)
     rel, // Link relationship (e.g., 'noopener noreferrer' for external links)
@@ -1425,8 +1396,9 @@ export const Typography = ({
         }
     };
 
-    // If href is provided, automatically render as a link
-    const Component = href ? 'a' : 'span';
+    // If href is provided, automatically render as a link; otherwise honor
+    // the `as` prop so headings and paragraphs are semantic elements.
+    const Component = href ? 'a' : (as || 'span');
 
     // Detect if this is an external link
     const isExternalLink = href && (
@@ -1467,6 +1439,10 @@ export const Typography = ({
         className
     ].filter(Boolean).join(' ');
 
+    // Merge the caller's style prop on top — spreading {...props} after
+    // style={style} would otherwise REPLACE the computed style (dropping
+    // color, sizing, etc.) whenever a caller passes any style at all.
+    const { style: callerStyle, ...domProps } = props;
     const style = {
         ...getColorStyle(color),
         ...(width !== null && { width }),
@@ -1476,6 +1452,7 @@ export const Typography = ({
         ...(maxWidth !== null && { maxWidth }),
         ...(maxHeight !== null && { maxHeight }),
         ...(justifySelf !== null && { justifySelf }),
+        ...callerStyle,
     };
 
     return (
@@ -1492,7 +1469,7 @@ export const Typography = ({
             style={style}
             {...linkProps}
             {...hoverHandlers}
-            {...props}
+            {...domProps}
         >
             {renderAnimatedContent()}
         </Component>

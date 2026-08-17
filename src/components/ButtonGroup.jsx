@@ -11,8 +11,9 @@ import { ButtonGroupContext } from './Button';
 export const ButtonGroup = forwardRef(({
     children,
     className = '',
-    size = 'md', // 'xs', 'sm', 'md', 'lg', 'xl'
+    size = 'md', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl'
     spaced = false, // Add spacing between buttons instead of shared borders
+    wrap = true, // false keeps all buttons on one line (no flex wrapping)
     theme = null, // Optional theme override
     width = null, // Custom width
     height = null, // Custom height
@@ -139,6 +140,8 @@ export const ButtonGroup = forwardRef(({
 
     const getSizeClass = () => {
         switch (size) {
+            case 'xxs':
+                return 'xxs';
             case 'xs':
                 return 'xs';
             case 'sm':
@@ -223,7 +226,7 @@ export const ButtonGroup = forwardRef(({
         <div className="button-group-container" style={getButtonGroupStyle()}>
             <div
                 ref={ref}
-                className={`button-group ${getSizeClass()} ${getSpacedClass()} theme-${buttonGroupTheme} ${className}`}
+                className={`button-group ${getSizeClass()} ${getSpacedClass()} ${wrap ? '' : 'nowrap'} theme-${buttonGroupTheme} ${className}`}
                 data-theme={buttonGroupTheme}
                 style={{
                     justifyContent: groupStyleProp.justifyContent ?? normalizeJustify(justify),

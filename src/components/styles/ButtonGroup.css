@@ -1,6 +1,10 @@
 .button-group {
     display: inline-flex;
     flex-wrap: wrap;
+}
+
+.button-group.nowrap {
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
     margin: var(--spacing-xs);

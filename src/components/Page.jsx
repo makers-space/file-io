@@ -31,7 +31,7 @@ export const STATUS_COLORS = ['success', 'warning', 'error'];
 export const BACKGROUND_INTENSITIES = ['subtle', 'medium', 'strong'];
 export const BACKGROUND_SIZES = ['sm', 'md', 'lg'];
 export const BACKGROUND_MOTIONS = ['none', 'drift', 'pulse'];
-export const BACKGROUND_FADES = ['none', 'radial', 'top', 'bottom'];
+export const BACKGROUND_FADES = ['none', 'radial', 'radial-inverse', 'top', 'bottom', 'left', 'right', 'center'];
 
 const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
 
@@ -44,7 +44,9 @@ const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fa
  * backgroundIntensity how strongly the pattern shows
  * backgroundSize      scale of the repeating pattern
  * backgroundMotion    'drift' scrolls a pattern, 'pulse' breathes it, 'none' stops any animation
- * backgroundFade      fades the background out: 'radial' toward the edges, 'top' / 'bottom' toward that side
+ * backgroundFade      fades the background out: 'radial' toward the edges, 'radial-inverse' toward a clear centre,
+ *                     'top' / 'bottom' / 'left' / 'right' toward that side, 'center' from the left and right
+ *                     edges toward a clear middle
  */
 export function getBackgroundClass({
     background = null,
@@ -107,7 +109,7 @@ export const Page = forwardRef(({
     backgroundIntensity = 'subtle', // 'subtle', 'medium', 'strong'
     backgroundSize = 'md', // 'sm', 'md', 'lg' - scale of the repeating pattern
     backgroundMotion = null, // 'drift', 'pulse', or 'none' to stop an animated background
-    backgroundFade = 'none', // 'none', 'radial', 'top', 'bottom'
+    backgroundFade = 'none', // 'none', 'radial', 'radial-inverse', 'top', 'bottom', 'left', 'right', 'center'
     backgroundColor = null, // Fill color: 'background' (the default), 'surface', 'primary', 'secondary', 'tertiary' (status colors are not fills)
     // Genie integration props
     genie = null, // Genie content to show OR object with {trigger, content, position}

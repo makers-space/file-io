@@ -42,7 +42,7 @@ export const Card = forwardRef(({
     backgroundIntensity = 'subtle', // 'subtle', 'medium', 'strong'
     backgroundSize = 'md', // 'sm', 'md', 'lg' - scale of the repeating pattern
     backgroundMotion = null, // 'drift', 'pulse', or 'none' to stop an animated background
-    backgroundFade = 'none', // 'none', 'radial', 'top', 'bottom'
+    backgroundFade = 'none', // 'none', 'radial', 'radial-inverse', 'top', 'bottom', 'left', 'right', 'center'
     // Genie integration props
     genie = null, // Genie content to show
     genieTrigger = 'click', // 'click', 'hover', 'contextmenu'

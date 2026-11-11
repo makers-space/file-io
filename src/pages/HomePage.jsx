@@ -226,20 +226,13 @@ const HeroMockup = () => {
                             <Container key={r.name} layout="flex" align="center" gap="sm" padding="none" wrap={false} width="100%" style={{ padding: '8px 10px', borderRadius: 8 }}>
                                 <IconTile icon={r.icon} color={r.tint} size={28} radius={8} iconSize="xs" />
                                 <Container layout="flex-column" gap="none" padding="none" flexFill wrap={false} style={{ minWidth: 0 }}>
-                                    <Typography size="xs" weight="medium" font="monospace" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <Typography size="xs" weight="medium" font="monospace" truncate>
                                         {r.name}
                                     </Typography>
                                     <Typography size="xs" color="muted" style={{ fontSize: '0.65rem' }}>{r.meta}</Typography>
                                 </Container>
                                 {r.live && (
-                                    <Container
-                                        as="span" padding="none" width="7px" height="7px"
-                                        style={{
-                                            borderRadius: '50%', flexShrink: 0,
-                                            background: 'var(--success-color)',
-                                            boxShadow: `0 0 0 3px ${tint('var(--success-color)', 25)}`,
-                                        }}
-                                    />
+                                    <Typography as="span" color="success" style={{ fontSize: 9, lineHeight: 1, flexShrink: 0 }}>●</Typography>
                                 )}
                             </Container>
                         ))}
@@ -249,7 +242,7 @@ const HeroMockup = () => {
 
             {/* Floating: live editing toast */}
             <Card layout="flex" align="center" gap="sm" padding="sm" hover={false} wrap={false} style={{ position: 'absolute', top: -18, right: -14, boxShadow: 'var(--shadow-lg)' }}>
-                <Container as="span" padding="none" width="8px" height="8px" style={{ borderRadius: '50%', background: 'var(--success-color)' }} />
+                <Typography as="span" color="success" style={{ fontSize: 10, lineHeight: 1 }}>●</Typography>
                 <Typography size="xs" weight="semibold" animation="typewriter" animationDelay={1400} animationDuration={900}>3 people editing now</Typography>
             </Card>
 
@@ -323,8 +316,11 @@ const HomePage = () => {
 
             {/* ── Hero ─────────────────────────────────────────────── */}
             <Band bandStyle={{ position: 'relative' }}>
-                {/* Ambient background: gradient blob + dot grid */}
-                <Container padding="none" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+                {/* Ambient background: gradient blob over a faded dot grid */}
+                <Container
+                    padding="none" background="dots" backgroundTone="text" backgroundSize="lg" backgroundFade="radial"
+                    style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}
+                >
                     {/* Kept inside the band — clipped edges show as hard lines */}
                     <Container
                         padding="none"
@@ -332,17 +328,6 @@ const HomePage = () => {
                             position: 'absolute', top: '8%', right: '4%', width: '48%', height: '70%',
                             background: 'radial-gradient(ellipse, var(--primary-color) 0%, transparent 65%)',
                             opacity: 0.1, borderRadius: '50%',
-                        }}
-                    />
-                    <Container
-                        padding="none"
-                        style={{
-                            position: 'absolute', inset: 0,
-                            backgroundImage: `radial-gradient(${tint('var(--text-color)', 14)} 1px, transparent 1px)`,
-                            backgroundSize: '28px 28px',
-                            maskImage: 'radial-gradient(ellipse at 30% 40%, black 0%, transparent 70%)',
-                            WebkitMaskImage: 'radial-gradient(ellipse at 30% 40%, black 0%, transparent 70%)',
-                            opacity: 0.35,
                         }}
                     />
                 </Container>

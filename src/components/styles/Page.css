@@ -298,3 +298,368 @@
     /* Disable transforms when floating card is active */
     transform: none;
 }
+
+/* ==========================================================================
+   Decorative backgrounds for Page, Container and Card (`background` props)
+   --------------------------------------------------------------------------
+   The background is painted on a ::before layer behind the content. Colors
+   come from the theme variables in scope, so patterns follow the theme.
+   ========================================================================== */
+
+.has-background {
+    position: relative;
+    /* Keeps the layer above this element's own background and below its content. */
+    isolation: isolate;
+
+    --bg-tone-auto: var(--primary-color);
+    --bg-tone: var(--bg-tone-auto);
+    --bg-alpha: 12%;
+    --bg-alpha-scale: 1;
+    --bg-alpha-effective: min(100%, calc(var(--bg-alpha) * var(--bg-alpha-scale)));
+    --bg-size: 24px;
+    --bg-tile-x: var(--bg-size);
+    --bg-tile-y: var(--bg-size);
+    --bg-fade: linear-gradient(#000, #000);
+    --bg-color: color-mix(in srgb, var(--bg-tone) var(--bg-alpha-effective), transparent);
+    --bg-color-soft: color-mix(in srgb, var(--bg-tone) calc(var(--bg-alpha-effective) * 0.5), transparent);
+    --bg-color-strong: color-mix(in srgb, var(--bg-tone) min(100%, calc(var(--bg-alpha-effective) * 2)), transparent);
+    --bg-wash-base-1: var(--primary-color);
+    --bg-wash-base-2: var(--secondary-color);
+    --bg-wash-base-3: var(--tertiary-color);
+}
+
+/* Card resets `isolation` in a later stylesheet; this has to win regardless of import order. */
+.page.has-background,
+.container.has-background,
+.card.has-background {
+    isolation: isolate;
+}
+
+.has-background::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    background-repeat: repeat;
+    -webkit-mask-image: var(--bg-fade);
+    mask-image: var(--bg-fade);
+}
+
+/* ===== Surface: the component's own fill (backgroundColor prop) =====
+   What the 'auto' tone draws the pattern in, per fill:
+     surface / background (and no fill) -> primary
+     primary   -> secondary
+     secondary -> tertiary
+     tertiary  -> secondary
+   The pattern is drawn stronger on a saturated fill, and the washes skip
+   the fill color. */
+.bg-on-primary,
+.bg-on-tertiary {
+    --bg-tone-auto: var(--secondary-color);
+    --bg-alpha-scale: 3.5;
+}
+
+.bg-on-secondary {
+    --bg-tone-auto: var(--tertiary-color);
+    --bg-alpha-scale: 3.5;
+}
+
+.bg-on-primary { --bg-wash-base-1: var(--text-contrast-color); }
+.bg-on-secondary { --bg-wash-base-2: var(--text-color); }
+.bg-on-tertiary { --bg-wash-base-3: var(--text-contrast-color); }
+
+/* ===== Tone: which theme color draws the pattern ===== */
+.bg-tone-auto { --bg-tone: var(--bg-tone-auto); }
+.bg-tone-contrast { --bg-tone: var(--text-contrast-color); }
+.bg-tone-primary { --bg-tone: var(--primary-color); }
+.bg-tone-secondary { --bg-tone: var(--secondary-color); }
+.bg-tone-tertiary { --bg-tone: var(--tertiary-color); }
+.bg-tone-neutral { --bg-tone: var(--neutral-color); }
+.bg-tone-text { --bg-tone: var(--text-color); }
+
+/* ===== Intensity ===== */
+.bg-intensity-subtle { --bg-alpha: 12%; }
+.bg-intensity-medium { --bg-alpha: 22%; }
+.bg-intensity-strong { --bg-alpha: 40%; }
+
+/* ===== Pattern scale ===== */
+.bg-size-sm { --bg-size: 16px; }
+.bg-size-md { --bg-size: 24px; }
+.bg-size-lg { --bg-size: 40px; }
+
+/* ===== Fade ===== */
+.bg-fade-radial { --bg-fade: radial-gradient(ellipse at center, #000 25%, transparent 78%); }
+.bg-fade-top { --bg-fade: linear-gradient(to top, #000 15%, transparent 90%); }
+.bg-fade-bottom { --bg-fade: linear-gradient(to bottom, #000 15%, transparent 90%); }
+
+/* ==========================================================================
+   Static patterns drawn with gradients
+   ========================================================================== */
+
+.bg-grid::before {
+    background-image:
+        linear-gradient(var(--bg-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-color) 1px, transparent 1px);
+    background-size: var(--bg-size) var(--bg-size);
+}
+
+/* Graph paper: a fine grid with a heavier line every fifth cell */
+.bg-graph {
+    --bg-tile-x: calc(var(--bg-size) * 5);
+    --bg-tile-y: calc(var(--bg-size) * 5);
+}
+
+.bg-graph::before {
+    background-image:
+        linear-gradient(var(--bg-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-color) 1px, transparent 1px),
+        linear-gradient(var(--bg-color-soft) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-color-soft) 1px, transparent 1px);
+    background-size:
+        var(--bg-tile-x) var(--bg-tile-y),
+        var(--bg-tile-x) var(--bg-tile-y),
+        var(--bg-size) var(--bg-size),
+        var(--bg-size) var(--bg-size);
+}
+
+.bg-dots::before {
+    background-image: radial-gradient(circle, var(--bg-color-strong) 1.25px, transparent 1.75px);
+    background-size: var(--bg-size) var(--bg-size);
+}
+
+/* Ruled lines */
+.bg-lines {
+    --bg-tile-x: 0px;
+}
+
+.bg-lines::before {
+    background-image: linear-gradient(var(--bg-color) 1px, transparent 1px);
+    background-size: 100% var(--bg-size);
+}
+
+.bg-diagonal::before {
+    background-image: linear-gradient(
+        45deg,
+        transparent calc(50% - 0.5px),
+        var(--bg-color) calc(50% - 0.5px) calc(50% + 0.5px),
+        transparent calc(50% + 0.5px)
+    );
+    background-size: var(--bg-size) var(--bg-size);
+}
+
+.bg-crosshatch::before {
+    background-image:
+        linear-gradient(
+            45deg,
+            transparent calc(50% - 0.5px),
+            var(--bg-color) calc(50% - 0.5px) calc(50% + 0.5px),
+            transparent calc(50% + 0.5px)
+        ),
+        linear-gradient(
+            -45deg,
+            transparent calc(50% - 0.5px),
+            var(--bg-color) calc(50% - 0.5px) calc(50% + 0.5px),
+            transparent calc(50% + 0.5px)
+        );
+    background-size: var(--bg-size) var(--bg-size);
+}
+
+.bg-checker {
+    --bg-tile-x: calc(var(--bg-size) * 2);
+    --bg-tile-y: calc(var(--bg-size) * 2);
+}
+
+.bg-checker::before {
+    background-image: conic-gradient(
+        var(--bg-color-soft) 25%,
+        transparent 0 50%,
+        var(--bg-color-soft) 0 75%,
+        transparent 0
+    );
+    background-size: var(--bg-tile-x) var(--bg-tile-y);
+}
+
+/* Concentric rings from the centre; not a repeating tile */
+.bg-rings {
+    --bg-tile-x: 0px;
+    --bg-tile-y: 0px;
+}
+
+/* --bg-ripple is how far the rings have travelled outward; registering it lets
+   the drift motion animate it, which reads as a ripple. */
+@property --bg-ripple {
+    syntax: '<length>';
+    inherits: false;
+    initial-value: 0px;
+}
+
+/* One ring per period of --bg-size. The ring starts at --bg-ripple and is
+   --bg-ring wide; whatever part of it passes the end of the period is drawn
+   at the start instead, so the period never changes length and the ripple
+   loops without a jump. */
+.bg-rings {
+    --bg-ring: 1.5px;
+}
+
+.bg-rings::before {
+    --bg-ring-end: min(calc(var(--bg-ripple) + var(--bg-ring)), var(--bg-size));
+    --bg-ring-wrap: max(0px, calc(var(--bg-ripple) + var(--bg-ring) - var(--bg-size)));
+    background-image: repeating-radial-gradient(
+        circle at 50% 50%,
+        var(--bg-color) 0 var(--bg-ring-wrap),
+        transparent var(--bg-ring-wrap) var(--bg-ripple),
+        var(--bg-color) var(--bg-ripple) var(--bg-ring-end),
+        transparent var(--bg-ring-end) var(--bg-size)
+    );
+    background-repeat: no-repeat;
+}
+
+/* ==========================================================================
+   Static patterns drawn from a shape mask, tinted with the tone color
+   ========================================================================== */
+
+.bg-hex::before,
+.bg-plus::before,
+.bg-waves::before,
+.bg-zigzag::before {
+    background-color: var(--bg-color-strong);
+    -webkit-mask-image: var(--bg-fade), var(--bg-shape);
+    mask-image: var(--bg-fade), var(--bg-shape);
+    -webkit-mask-size: 100% 100%, var(--bg-tile-x) var(--bg-tile-y);
+    mask-size: 100% 100%, var(--bg-tile-x) var(--bg-tile-y);
+    -webkit-mask-repeat: no-repeat, repeat;
+    mask-repeat: no-repeat, repeat;
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+}
+
+/* Pointy-top hexagonal grid: one tile is sqrt(3)·r wide and 3·r tall */
+.bg-hex {
+    --bg-tile-x: calc(var(--bg-size) * 1.1547);
+    --bg-tile-y: calc(var(--bg-size) * 2);
+    --bg-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 27.713 48' preserveAspectRatio='none'%3E%3Cpath d='M13.856 0L27.713 8V24L13.856 32L0 24V8ZM13.856 32V48' fill='none' stroke='%23000' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+}
+
+.bg-plus {
+    --bg-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 12h6M12 9v6' fill='none' stroke='%23000' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+}
+
+.bg-waves {
+    --bg-tile-y: calc(var(--bg-size) * 0.5);
+    --bg-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 12' preserveAspectRatio='none'%3E%3Cpath d='M0 6Q6 1 12 6T24 6' fill='none' stroke='%23000' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+}
+
+.bg-zigzag {
+    --bg-tile-y: calc(var(--bg-size) * 0.5);
+    --bg-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 12' preserveAspectRatio='none'%3E%3Cpath d='M0 9L6 3L12 9L18 3L24 9' fill='none' stroke='%23000' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+}
+
+/* ==========================================================================
+   Motion for patterns
+   ========================================================================== */
+
+@keyframes bg-drift {
+    to { background-position: var(--bg-tile-x) var(--bg-tile-y); }
+}
+
+@keyframes bg-drift-mask {
+    to {
+        -webkit-mask-position: 0 0, var(--bg-tile-x) var(--bg-tile-y);
+        mask-position: 0 0, var(--bg-tile-x) var(--bg-tile-y);
+    }
+}
+
+@keyframes bg-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+.bg-motion-drift::before {
+    animation: bg-drift 8s linear infinite;
+}
+
+.bg-motion-drift.bg-hex::before,
+.bg-motion-drift.bg-plus::before,
+.bg-motion-drift.bg-waves::before,
+.bg-motion-drift.bg-zigzag::before {
+    animation-name: bg-drift-mask;
+}
+
+/* Rings do not scroll: drift sends them outward from the centre as a ripple. */
+@keyframes bg-ripple {
+    to { --bg-ripple: var(--bg-size); }
+}
+
+.bg-motion-drift.bg-rings::before {
+    animation: bg-ripple 2.4s linear infinite;
+}
+
+.bg-motion-pulse::before {
+    animation: bg-pulse 5s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Dynamic backgrounds: animated washes of the theme colors
+   ========================================================================== */
+
+/* Aurora: drifting blobs of the three brand colors plus success, warning and
+   error for extra vibrancy. This is the one place status colors are painted
+   behind content; they are never a fill. */
+.bg-aurora {
+    --bg-wash-1: color-mix(in srgb, var(--bg-wash-base-1) min(100%, calc(var(--bg-alpha-effective) * 2.2)), transparent);
+    --bg-wash-2: color-mix(in srgb, var(--bg-wash-base-2) min(100%, calc(var(--bg-alpha-effective) * 2.2)), transparent);
+    --bg-wash-3: color-mix(in srgb, var(--bg-wash-base-3) min(100%, calc(var(--bg-alpha-effective) * 2.2)), transparent);
+    --bg-wash-4: color-mix(in srgb, var(--success-color) min(100%, calc(var(--bg-alpha-effective) * 2.2)), transparent);
+    --bg-wash-5: color-mix(in srgb, var(--warning-color) min(100%, calc(var(--bg-alpha-effective) * 2.2)), transparent);
+    --bg-wash-6: color-mix(in srgb, var(--error-color) min(100%, calc(var(--bg-alpha-effective) * 2.2)), transparent);
+}
+
+@keyframes bg-aurora {
+    from { background-position: 0% 0%, 100% 0%, 50% 100%, 0% 100%, 100% 100%, 50% 0%; }
+    to { background-position: 60% 45%, 25% 70%, 75% 15%, 45% 20%, 20% 35%, 80% 85%; }
+}
+
+.has-background.bg-aurora::before {
+    background-image:
+        radial-gradient(closest-side, var(--bg-wash-1), transparent),
+        radial-gradient(closest-side, var(--bg-wash-2), transparent),
+        radial-gradient(closest-side, var(--bg-wash-3), transparent),
+        radial-gradient(closest-side, var(--bg-wash-4), transparent),
+        radial-gradient(closest-side, var(--bg-wash-5), transparent),
+        radial-gradient(closest-side, var(--bg-wash-6), transparent);
+    background-size: 75% 85%, 70% 80%, 85% 75%, 60% 70%, 65% 75%, 55% 65%;
+    background-repeat: no-repeat;
+    background-position: 0% 0%, 100% 0%, 50% 100%, 0% 100%, 100% 100%, 50% 0%;
+    animation: bg-aurora 16s ease-in-out infinite alternate;
+}
+
+@keyframes bg-gradient-flow {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+/* Gradient: from the component's own fill toward the tone color, so it follows
+   the same pairing as the patterns (surface / background -> primary,
+   primary -> secondary, secondary -> tertiary, tertiary -> secondary). */
+.bg-gradient {
+    --bg-gradient-to: color-mix(in srgb, var(--bg-tone) min(100%, calc(var(--bg-alpha-effective) * 4)), transparent);
+}
+
+.has-background.bg-gradient::before {
+    background-image: linear-gradient(120deg, transparent 0%, var(--bg-gradient-to) 50%, transparent 100%);
+    background-size: 300% 300%;
+    background-repeat: no-repeat;
+    animation: bg-gradient-flow 14s ease-in-out infinite;
+}
+
+.has-background.bg-motion-none::before {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .has-background::before {
+        animation: none !important;
+    }
+}

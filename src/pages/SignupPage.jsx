@@ -11,7 +11,9 @@ import {
     Icon
 } from '@components/Components';
 
-export const SignupPage = () => {
+export const BY_WORDS = { splitBy: 'words' };
+
+const SignupPage = () => {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         firstName: '',
@@ -83,12 +85,12 @@ export const SignupPage = () => {
         formData.confirmPassword;
 
     return (
-        <Page layout="flex" align="center" justify="center">
+        <Page layout="flex" align="center" justify="center" background="dots" backgroundFade="radial">
                 <Card layout="flex-column" gap="none" align="center">
                         {/* Header */}
                         <Container layout="flex-column" gap="sm" align="center">
                             <Icon name="FaUserPlus" size="lg" color="primary"/>
-                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary">
+                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary" animation="blur" animationDuration={700} animationConfig={BY_WORDS}>
                                 Create Account
                             </Typography>
                             <Typography color="muted">

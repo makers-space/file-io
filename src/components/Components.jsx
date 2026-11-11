@@ -12,6 +12,10 @@ export {default as FloatingActionButton} from './FloatingActionButton';
 export {default as Navigation, RouteAccessControl, PageLoading} from './Navigation';
 export {default as NotificationDisplay} from './NotificationDisplay';
 export {default as Card} from './Card';
+export {
+    BACKGROUNDS, BACKGROUND_PATTERNS, BACKGROUND_DYNAMIC, BACKGROUND_TONES,
+    BACKGROUND_INTENSITIES, BACKGROUND_SIZES, BACKGROUND_MOTIONS, BACKGROUND_FADES
+} from './Page';
 export {default as Input} from './Input';
 export {default as Typography} from './Typography';
 export {default as Select} from './Select';

@@ -1,6 +1,7 @@
 import React, { forwardRef, useMemo, useRef } from 'react';
 import { ThemeProvider, useTheme } from '@contexts/ThemeContext';
 import { useGeniePortal } from './Genie';
+import { getBackgroundClass, STATUS_COLORS } from './Page';
 
 /**
  * Container - Enhanced layout container with Genie integration
@@ -35,8 +36,15 @@ export const Container = forwardRef(({
     wrap = true, // true, false (for flex layouts)
     flexFill = false, // Whether the container should fill available space in flex layouts
     span = null, // Grid item spanning inside a parent grid: 2, 3, or 'full'
+    // Decorative background drawn from the theme colors (defined in Page.jsx)
+    background = null, // 'grid', 'graph', 'dots', 'lines', 'diagonal', 'crosshatch', 'checker', 'hex', 'plus', 'waves', 'zigzag', 'rings', 'aurora', 'gradient'
+    backgroundTone = 'auto', // 'auto' contrasts with backgroundColor; or 'primary', 'secondary', 'tertiary', 'neutral', 'text', 'contrast'
+    backgroundIntensity = 'subtle', // 'subtle', 'medium', 'strong'
+    backgroundSize = 'md', // 'sm', 'md', 'lg' - scale of the repeating pattern
+    backgroundMotion = null, // 'drift', 'pulse', or 'none' to stop an animated background
+    backgroundFade = 'none', // 'none', 'radial', 'top', 'bottom'
     hoverable = false, // true adds a themed hover background + pointer cursor (for list rows, chips)
-    backgroundColor = 'transparent', // 'transparent', 'background', 'surface', 'surface-alt', 'primary', 'secondary', 'success', 'warning', 'error', 'tertiary'
+    backgroundColor = 'transparent', // 'transparent', 'background', 'surface', 'surface-alt', 'primary', 'secondary', 'tertiary' (status colors are not fills)
     theme = null, // Optional theme override for this container and its children
     justifySelf = null, // CSS justify-self property: 'auto', 'start', 'end', 'center', 'stretch'
     as: Component = 'div', // Component to render as (default: div)
@@ -212,7 +220,7 @@ export const Container = forwardRef(({
     };
 
     const getBackgroundStyle = () => {
-        if (!backgroundColor || backgroundColor === 'transparent') {
+        if (!backgroundColor || backgroundColor === 'transparent' || STATUS_COLORS.includes(backgroundColor)) {
             return {};
         }
 
@@ -233,6 +241,10 @@ export const Container = forwardRef(({
     const spanClass = span ? `grid-span-${span}` : '';
     const hoverableClass = hoverable ? 'container-hoverable' : '';
 
+    const backgroundClass = getBackgroundClass({
+        background, backgroundTone, backgroundIntensity, backgroundSize, backgroundMotion, backgroundFade, backgroundColor
+    });
+
     // Pass all props to DOM
     const domProps = props;
 
@@ -249,7 +261,7 @@ export const Container = forwardRef(({
             {...domProps}
             {...triggerProps}
             style={mergedStyle}
-            className={`container themed-container ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getMarginClass()} ${getWrapClass()} ${getJustifySelfClass()} ${flexFillClass} ${spanClass} ${hoverableClass} ${genieConfig ? 'genie-trigger' : ''} theme-${containerTheme} ${className}`}
+            className={`container themed-container ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getMarginClass()} ${getWrapClass()} ${getJustifySelfClass()} ${flexFillClass} ${spanClass} ${hoverableClass} ${genieConfig ? 'genie-trigger' : ''} ${backgroundClass} theme-${containerTheme} ${className}`}
             data-theme={containerTheme}
             data-theme-source={theme ? 'local' : 'inherited'}
             data-genie-position={genieConfig?.position || 'auto'}

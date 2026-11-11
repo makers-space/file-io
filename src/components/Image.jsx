@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, useMemo, useCallback } from 'react';
 import { useTheme } from '@contexts/ThemeContext';
 import Button from './Button';
+import ButtonGroup from './ButtonGroup';
 import Container from './Container';
 import FloatingActionButton from './FloatingActionButton';
 import Input from './Input';
@@ -631,23 +632,25 @@ const Image = React.forwardRef(({
 					Transform
 				</Typography>
 				
-				<Container layout="flex" gap="sm" marginBottom="md">
-					<Button
-						icon={edits.flipX ? 'FiCheckSquare' : 'FiSquare'}
-						onClick={() => updateEdits({ ...edits, flipX: !edits.flipX })}
-						size="sm"
-						variant="outlined"
-					>
-						Flip X
-					</Button>
-					<Button
-						icon={edits.flipY ? 'FiCheckSquare' : 'FiSquare'}
-						onClick={() => updateEdits({ ...edits, flipY: !edits.flipY })}
-						size="sm"
-						variant="outlined"
-					>
-						Flip Y
-					</Button>
+				<Container layout="flex" marginBottom="md">
+					<ButtonGroup spaced selectable={false} justify="start">
+						<Button
+							icon={edits.flipX ? 'FiCheckSquare' : 'FiSquare'}
+							onClick={() => updateEdits({ ...edits, flipX: !edits.flipX })}
+							size="sm"
+							variant="outlined"
+						>
+							Flip X
+						</Button>
+						<Button
+							icon={edits.flipY ? 'FiCheckSquare' : 'FiSquare'}
+							onClick={() => updateEdits({ ...edits, flipY: !edits.flipY })}
+							size="sm"
+							variant="outlined"
+						>
+							Flip Y
+						</Button>
+					</ButtonGroup>
 				</Container>
 
 				{/* Filter Controls */}
@@ -778,33 +781,35 @@ const Image = React.forwardRef(({
 				</Container>
 
 				{/* Action Buttons */}
-				<Container layout="flex" gap="sm" marginTop="lg" style={{ flexWrap: 'wrap' }}>
-					<Button
-						icon="FiRotateCcw"
-						onClick={undo}
-						disabled={historyIndex === 0}
-						size="sm"
-						variant="outlined"
-					>
-						Undo
-					</Button>
-					<Button
-						icon="FiRotateCw"
-						onClick={redo}
-						disabled={historyIndex === editHistory.length - 1}
-						size="sm"
-						variant="outlined"
-					>
-						Redo
-					</Button>
-					<Button
-						icon="FiRefreshCw"
-						onClick={resetEdits}
-						size="sm"
-						variant="outlined"
-					>
-						Reset
-					</Button>
+				<Container layout="flex" marginTop="lg" style={{ flexWrap: 'wrap' }}>
+					<ButtonGroup spaced selectable={false} justify="start">
+						<Button
+							icon="FiRotateCcw"
+							onClick={undo}
+							disabled={historyIndex === 0}
+							size="sm"
+							variant="outlined"
+						>
+							Undo
+						</Button>
+						<Button
+							icon="FiRotateCw"
+							onClick={redo}
+							disabled={historyIndex === editHistory.length - 1}
+							size="sm"
+							variant="outlined"
+						>
+							Redo
+						</Button>
+						<Button
+							icon="FiRefreshCw"
+							onClick={resetEdits}
+							size="sm"
+							variant="outlined"
+						>
+							Reset
+						</Button>
+					</ButtonGroup>
 				</Container>
 
 				<Container layout="flex" gap="sm" marginTop="md">
@@ -1053,8 +1058,8 @@ const Image = React.forwardRef(({
 					justify="center"
 					padding="md"
 					style={{
-						backgroundColor: 'var(--error-color)',
-						color: 'var(--error-contrast-text)',
+						border: '1px solid var(--error-color)',
+						color: 'var(--error-color)',
 						borderRadius: 'var(--border-radius-md)'
 					}}
 				>

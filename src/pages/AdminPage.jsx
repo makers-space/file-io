@@ -9,7 +9,8 @@ import { fileService } from '@/client/file.client';
 import { authService } from '@/client/auth.client';
 import {
     Page, Container, Card, Button, Typography, Icon, Input, Badge,
-    CircularProgress, Select, Switch, Divider, TreeView, PageLoading, ProgressBar, Data
+    CircularProgress, Select, Switch, Divider, TreeView, PageLoading, ProgressBar, Data,
+    ButtonGroup
 } from '@components/Components';
 
 // ─── Bulk Delete Form ─────────────────────────────────────────────────────────
@@ -84,11 +85,13 @@ const BulkDeleteForm = ({ onSubmit, onCancel, onClose }) => {
                     </Card>
                 </Container>
             )}
-            <Container layout="flex" gap="sm" justify="end">
-                <Button color="secondary" onClick={handleCancel} disabled={isLoading}>Cancel</Button>
-                <Button color="error" onClick={handleSubmit} disabled={isLoading || selectedFiles.length === 0}>
-                    {isLoading ? <><CircularProgress size="xs" /> Deleting...</> : <><Icon name="FiTrash2" size="xs" /> Delete {selectedFiles.length} file(s)</>}
-                </Button>
+            <Container layout="flex" justify="end">
+                <ButtonGroup spaced selectable={false} justify="end">
+                    <Button color="secondary" onClick={handleCancel} disabled={isLoading}>Cancel</Button>
+                    <Button color="error" onClick={handleSubmit} disabled={isLoading || selectedFiles.length === 0}>
+                        {isLoading ? <><CircularProgress size="xs" /> Deleting...</> : <><Icon name="FiTrash2" size="xs" /> Delete {selectedFiles.length} file(s)</>}
+                    </Button>
+                </ButtonGroup>
             </Container>
         </Container>
     );
@@ -193,11 +196,13 @@ const BulkTagForm = ({ onSubmit, onCancel, onClose }) => {
                     </Card>
                 )}
             </Container>
-            <Container layout="flex" gap="sm" justify="end">
-                <Button color="secondary" onClick={handleCancel} disabled={isLoading}>Cancel</Button>
-                <Button color="tertiary" onClick={handleSubmit} disabled={isLoading || selectedFiles.length === 0 || tags.length === 0}>
-                    {isLoading ? <><CircularProgress size="xs" /> Tagging...</> : <><Icon name="FiTag" size="xs" /> Tag {selectedFiles.length} file(s)</>}
-                </Button>
+            <Container layout="flex" justify="end">
+                <ButtonGroup spaced selectable={false} justify="end">
+                    <Button color="secondary" onClick={handleCancel} disabled={isLoading}>Cancel</Button>
+                    <Button color="tertiary" onClick={handleSubmit} disabled={isLoading || selectedFiles.length === 0 || tags.length === 0}>
+                        {isLoading ? <><CircularProgress size="xs" /> Tagging...</> : <><Icon name="FiTag" size="xs" /> Tag {selectedFiles.length} file(s)</>}
+                    </Button>
+                </ButtonGroup>
             </Container>
         </Container>
     );
@@ -279,15 +284,17 @@ const BulkPermissionsForm = ({ onSubmit, onCancel, onClose }) => {
                     </Card>
                 )}
             </Container>
-            <Container layout="flex" gap="sm" justify="end">
-                <Button color="secondary" onClick={handleCancel} disabled={isLoading}>Cancel</Button>
-                <Button
-                    color="warning"
-                    onClick={handleSubmit}
-                    disabled={isLoading || selectedFiles.length === 0 || (readUsers.length === 0 && writeUsers.length === 0)}
-                >
-                    {isLoading ? <><CircularProgress size="xs" /> Updating...</> : <><Icon name="FiUsers" size="xs" /> Update {selectedFiles.length} file(s)</>}
-                </Button>
+            <Container layout="flex" justify="end">
+                <ButtonGroup spaced selectable={false} justify="end">
+                    <Button color="secondary" onClick={handleCancel} disabled={isLoading}>Cancel</Button>
+                    <Button
+                        color="warning"
+                        onClick={handleSubmit}
+                        disabled={isLoading || selectedFiles.length === 0 || (readUsers.length === 0 && writeUsers.length === 0)}
+                    >
+                        {isLoading ? <><CircularProgress size="xs" /> Updating...</> : <><Icon name="FiUsers" size="xs" /> Update {selectedFiles.length} file(s)</>}
+                    </Button>
+                </ButtonGroup>
             </Container>
         </Container>
     );
@@ -363,17 +370,19 @@ const EditUserForm = ({ user, onSave, onCancel }) => {
                     </Container>
                 )}
             </Container>
-            <Container layout="flex" gap="sm" justify="end" padding="none">
+            <ButtonGroup spaced selectable={false} justify="end">
                 <Button color="secondary" onClick={onCancel} disabled={isSaving}>Cancel</Button>
                 <Button color="primary" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <><CircularProgress size="sm" /> Saving…</> : 'Save Changes'}
                 </Button>
-            </Container>
+            </ButtonGroup>
         </Container>
     );
 };
 
 // ─── Shared presentation helpers ──────────────────────────────────────────────
+
+const BY_WORDS = { splitBy: 'words' };
 
 const tint = (color, pct) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
 
@@ -388,12 +397,15 @@ const formatUptime = (seconds = 0) =>
     `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 
 /** KPI tile — icon plate, value, label */
+// Status colors tint the icon only; the tile behind it stays neutral.
+const tileFill = (color) => (/(success|warning|error)-color/.test(color) ? tint('var(--text-color)', 8) : tint(color, 14));
+
 const StatTile = ({ icon, label, value, caption, accent = 'var(--primary-color)' }) => (
     <Card layout="flex" gap="md" padding="md" hover={false} style={{ alignItems: 'center', minWidth: 0 }}>
         <Container
             layout="flex" align="center" justify="center" padding="none" wrap={false}
             width="40px" height="40px"
-            style={{ borderRadius: 10, flexShrink: 0, background: tint(accent, 14) }}
+            style={{ borderRadius: 10, flexShrink: 0, background: tileFill(accent) }}
         >
             <Icon name={icon} size="sm" style={{ color: accent }} />
         </Container>
@@ -714,7 +726,7 @@ const AdminPage = () => {
 
     if (!hasAdminAccess) {
         return (
-            <Page layout="flex" align="center" justify="center">
+            <Page layout="flex" align="center" justify="center" background="rings" backgroundMotion="drift" backgroundFade="radial">
                 <Container layout="flex-column" align="center" gap="md">
                     <Icon name="FiLock" size="xl" color="error" />
                     <Typography size="xl" weight="bold">Access Denied</Typography>
@@ -729,7 +741,7 @@ const AdminPage = () => {
     }
 
     return (
-        <Page layout="flex-column" padding="none" gap="none">
+        <Page layout="flex-column" padding="none" gap="none" background="graph" backgroundFade="bottom">
             <Container
                 layout="flex-column" gap="lg" padding="none" width="100%" maxWidth="1400px"
                 style={{ margin: '0 auto', padding: 'clamp(20px, 3vw, 36px)' }}
@@ -740,7 +752,7 @@ const AdminPage = () => {
                         <Typography size="xs" color="muted" weight="medium" style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             Administration
                         </Typography>
-                        <Typography as="h1" size="xl" weight="bold" style={{ letterSpacing: '-0.015em' }}>
+                        <Typography as="h1" size="xl" weight="bold" animation="blur" animationDuration={700} animationConfig={BY_WORDS} style={{ letterSpacing: '-0.015em' }}>
                             Admin Console
                         </Typography>
                     </Container>
@@ -791,7 +803,7 @@ const AdminPage = () => {
                                         <Typography size="sm" weight={activeSection === section.id ? 'semibold' : 'medium'} color={activeSection === section.id ? 'primary' : 'default'}>
                                             {section.label}
                                         </Typography>
-                                        <Typography size="xxs" color="muted" style={{ display: 'block', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        <Typography size="xxs" color="muted" truncate>
                                             {section.desc}
                                         </Typography>
                                     </Container>
@@ -874,7 +886,7 @@ const AdminPage = () => {
                                     title="Cache management"
                                     description="Redis performance, cleanup service, and emergency controls"
                                     actions={
-                                        <Container layout="flex" gap="xs" padding="none" wrap>
+                                        <ButtonGroup spaced selectable={false} justify="start">
                                             <Button size="sm" color="secondary" onClick={handleGetCleanupInfo} disabled={loadingCleanup}>
                                                 <Icon name="FiInfo" size="xs" />{loadingCleanup ? 'Loading…' : 'Cleanup status'}
                                             </Button>
@@ -884,7 +896,7 @@ const AdminPage = () => {
                                             <Button size="sm" color="error" onClick={handleClearCache} disabled={clearingCache}>
                                                 <Icon name="FiTrash2" size="xs" />{clearingCache ? 'Clearing…' : 'Clear all'}
                                             </Button>
-                                        </Container>
+                                        </ButtonGroup>
                                     }
                                 />
                                 {adminData.cache && (
@@ -976,7 +988,7 @@ const AdminPage = () => {
                                     </Panel>
                                 </Container>
                                 <Panel title="Bulk operations">
-                                    <Container layout="flex" gap="xs" padding="none" wrap>
+                                    <ButtonGroup spaced selectable={false} justify="start">
                                         <Button size="sm" color="error" selected={activeBulk === 'delete'} onClick={() => setActiveBulk(activeBulk === 'delete' ? null : 'delete')}>
                                             <Icon name="FiTrash2" size="xs" />Delete
                                         </Button>
@@ -986,7 +998,7 @@ const AdminPage = () => {
                                         <Button size="sm" color="secondary" selected={activeBulk === 'permissions'} onClick={() => setActiveBulk(activeBulk === 'permissions' ? null : 'permissions')}>
                                             <Icon name="FiUsers" size="xs" />Permissions
                                         </Button>
-                                    </Container>
+                                    </ButtonGroup>
                                     {activeBulk === 'delete' && <BulkDeleteForm onSubmit={handleBulkDelete} onCancel={() => setActiveBulk(null)} onClose={() => setActiveBulk(null)} />}
                                     {activeBulk === 'tag' && <BulkTagForm onSubmit={handleBulkTag} onCancel={() => setActiveBulk(null)} onClose={() => setActiveBulk(null)} />}
                                     {activeBulk === 'permissions' && <BulkPermissionsForm onSubmit={handleBulkPermissions} onCancel={() => setActiveBulk(null)} onClose={() => setActiveBulk(null)} />}

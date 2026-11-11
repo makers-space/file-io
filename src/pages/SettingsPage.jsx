@@ -21,7 +21,8 @@ import {
     Select,
     Switch,
     Data,
-    CircularProgress
+    CircularProgress,
+    ButtonGroup
 } from '@components/Components';
 
 // ─── Account Tab (Profile + Password) ────────────────────────────────────────
@@ -524,11 +525,13 @@ const SecretReveal = ({
             <Container backgroundColor="surface" padding="xs">
                 <Typography size="xs" font="monospace" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{secret}</Typography>
             </Container>
-            <Container layout="flex" gap="sm">
-                <Button size="sm" color="secondary" onClick={() => navigator.clipboard?.writeText(secret)}>
-                    <Icon name="FiCopy" size="xs" />Copy
-                </Button>
-                <Button size="sm" onClick={onDismiss}>Done</Button>
+            <Container layout="flex">
+                <ButtonGroup spaced selectable={false} justify="start">
+                    <Button size="sm" color="secondary" onClick={() => navigator.clipboard?.writeText(secret)}>
+                        <Icon name="FiCopy" size="xs" />Copy
+                    </Button>
+                    <Button size="sm" onClick={onDismiss}>Done</Button>
+                </ButtonGroup>
             </Container>
         </Container>
     </Card>
@@ -570,7 +573,7 @@ const DeliveryLog = ({ integrationId }) => {
                 : (data.deliveries || []).slice(0, 10).map((d, i) => (
                     <Container key={i} layout="flex" align="center" gap="sm" padding="xs" backgroundColor="surface" style={{ borderRadius: '4px' }}>
                         <Icon name={d.success ? 'FiCheck' : 'FiX'} size="xs" color={d.success ? 'success' : 'error'} />
-                        <Typography size="xs" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filePath}</Typography>
+                        <Typography size="xs" truncate style={{ flex: 1 }}>{d.filePath}</Typography>
                         <Typography size="xs" color="secondary">{d.event}</Typography>
                         {d.includedContent && <Badge size="sm" color="tertiary">content</Badge>}
                         <Typography size="xs" color="secondary">{d.sentAt ? new Date(d.sentAt).toLocaleString() : ''}</Typography>
@@ -887,12 +890,14 @@ const IntegrationsTab = () => {
                                 <Button size="sm" color="primary" selected={form.scope === 'global'} onClick={() => setForm(f => ({ ...f, scope: 'global' }))}>Global (all users)</Button>
                             </Container>
                         )}
-                        <Container layout="flex" gap="sm">
-                            <Button color="primary" onClick={handleCreate} disabled={isSubmitting}>
-                                <Icon name={isSubmitting ? 'FiLoader' : 'FiPlus'} size="xs" />
-                                {isSubmitting ? 'Registering…' : 'Register'}
-                            </Button>
-                            <Button color="secondary" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} disabled={isSubmitting}>Cancel</Button>
+                        <Container layout="flex">
+                            <ButtonGroup spaced selectable={false} justify="start">
+                                <Button color="primary" onClick={handleCreate} disabled={isSubmitting}>
+                                    <Icon name={isSubmitting ? 'FiLoader' : 'FiPlus'} size="xs" />
+                                    {isSubmitting ? 'Registering…' : 'Register'}
+                                </Button>
+                                <Button color="secondary" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} disabled={isSubmitting}>Cancel</Button>
+                            </ButtonGroup>
                         </Container>
                     </Container>
                 </Card>
@@ -1126,13 +1131,13 @@ const ThemeEditor = ({ initial, editingId, onSaved, onCancel }) => {
                 ))}
             </Container>
 
-            <Container layout="flex" gap="sm" padding="none">
+            <ButtonGroup spaced selectable={false} justify="start">
                 <Button color="primary" onClick={handleSave} disabled={isSaving}>
                     <Icon name={isSaving ? 'FiLoader' : 'FiSave'} size="xs" />
                     {isSaving ? 'Saving…' : editingId ? 'Save changes' : 'Create theme'}
                 </Button>
                 <Button color="secondary" onClick={onCancel} disabled={isSaving}>Cancel</Button>
-            </Container>
+            </ButtonGroup>
         </Card>
     );
 };
@@ -1142,7 +1147,7 @@ const ThemeEditor = ({ initial, editingId, onSaved, onCancel }) => {
 const ThemeCard = ({ doc, isApplied, onApply, onFork, onEdit, onDelete }) => (
     <Card layout="flex-column" gap="sm" padding="md" hover={false} style={{ minWidth: 0 }}>
         <Container layout="flex" align="center" gap="xs" padding="none" width="100%" wrap={false}>
-            <Typography size="sm" weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</Typography>
+            <Typography size="sm" weight="semibold" truncate>{doc.name}</Typography>
             {isApplied && <Badge size="xs" color="success">Applied</Badge>}
             {doc.isPreset && <Badge size="xs" color="secondary">Built-in</Badge>}
             {!doc.isPreset && doc.visibility && doc.visibility !== 'private' && (
@@ -1150,7 +1155,7 @@ const ThemeCard = ({ doc, isApplied, onApply, onFork, onEdit, onDelete }) => (
             )}
         </Container>
         {doc.description && (
-            <Typography size="xs" color="muted" style={{ display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography size="xs" color="muted" truncate>
                 {doc.description}
             </Typography>
         )}
@@ -1416,7 +1421,7 @@ const SettingsPage = () => {
     };
 
     return (
-        <Page layout="flex-column" padding="none" gap="none">
+        <Page layout="flex-column" padding="none" gap="none" background="diagonal" backgroundFade="bottom">
             <Container
                 layout="flex-column" gap="lg" padding="none" width="100%" maxWidth="1200px"
                 style={{ margin: '0 auto', padding: 'clamp(20px, 3vw, 36px)' }}
@@ -1426,7 +1431,7 @@ const SettingsPage = () => {
                     <Typography size="xs" color="muted" weight="medium" style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         {user?.username}
                     </Typography>
-                    <Typography as="h1" size="xl" weight="bold" style={{ letterSpacing: '-0.015em' }}>
+                    <Typography as="h1" size="xl" weight="bold" animation="blur" animationDuration={700} style={{ letterSpacing: '-0.015em' }}>
                         Settings
                     </Typography>
                 </Container>
@@ -1450,7 +1455,7 @@ const SettingsPage = () => {
                                         <Typography size="sm" weight={tab === t.id ? 'semibold' : 'medium'} color={tab === t.id ? 'primary' : 'default'}>
                                             {t.label}
                                         </Typography>
-                                        <Typography size="xxs" color="muted" style={{ display: 'block', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.desc}</Typography>
+                                        <Typography size="xxs" color="muted" truncate>{t.desc}</Typography>
                                     </Container>
                                 </Container>
                             ))}

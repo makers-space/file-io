@@ -12,7 +12,9 @@ import {
     Icon
 } from '@components/Components';
 
-export const ForgotPasswordPage = () => {
+export const BY_WORDS = { splitBy: 'words' };
+
+const ForgotPasswordPage = () => {
     const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -53,12 +55,12 @@ export const ForgotPasswordPage = () => {
 
     if (isSubmitted) {
         return (
-            <Page>
+            <Page background="dots" backgroundFade="radial">
                 <Container layout="flex" align="center" justify="center" style={{ minHeight: '100vh' }}>
                     <Card style={{ maxWidth: '400px', width: '100%' }}>
                         <Container layout="flex-column" gap="lg" justify="center">
                             <Icon name="FaCheckCircle" size="lg" color="success"/>
-                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary">
+                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary" animation="blur" animationDuration={700} animationConfig={BY_WORDS}>
                                 Check Your Email
                             </Typography>
                             <Typography align="center">
@@ -83,14 +85,14 @@ export const ForgotPasswordPage = () => {
     }
 
     return (
-        <Page>
+        <Page background="dots" backgroundFade="radial">
             <Container layout="flex" align="center" justify="center" style={{ minHeight: '100vh' }}>
                 <Card style={{ maxWidth: '400px', width: '100%' }}>
                     <Container layout="flex-column" gap="lg" align="center">
                         {/* Header */}
                         <Container layout="flex-column" gap="sm" align="center" justify="center" padding="none">
                             <Icon name="FaKey" size="lg" color="primary"/>
-                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary">
+                            <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary" animation="blur" animationDuration={700} animationConfig={BY_WORDS}>
                                 Forgot Password?
                             </Typography>
                             <Typography>

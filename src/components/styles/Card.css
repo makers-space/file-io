@@ -377,19 +377,15 @@
 
 /* Center child elements in centered cards */
 .card.align-center > .button,
-.card.align-center > .button-group-container,
 .card.align-center > .input-container,
 .card.align-center > .select-container,
 .card.justify-center > .button,
-.card.justify-center > .button-group-container,
 .card.justify-center.input-container,
 .card.justify-center > .select-container,
 .themed-card.align-center > .button,
-.themed-card.align-center > .button-group-container,
 .themed-card.align-center.input-container,
 .themed-card.align-center > .select-container,
 .themed-card.justify-center > .button,
-.themed-card.justify-center > .button-group-container,
 .themed-card.justify-center.input-container,
 .themed-card.justify-center > .select-container {
     margin-left: auto;
@@ -422,6 +418,11 @@
 .card.themed-card-hover:has(.genie-container):hover,
 .themed-card.themed-card-hover:has(.genie-container):hover {
     box-shadow: 0 10px 15px -3px var(--shadow-color-hover);
+}
+
+.card.card-borderless,
+.themed-card.card-borderless {
+    border: none;
 }
 
 /* ===== Card Layout Behavior ===== */

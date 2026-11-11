@@ -16,10 +16,13 @@ import {
     Input,
     CircularProgress,
     Divider,
-    Select
+    Select,
+    ButtonGroup
 } from '@components/Components';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const BY_WORDS = { splitBy: 'words' };
 
 const formatBytes = (bytes) => {
     if (!bytes || bytes === 0) return '0 B';
@@ -75,11 +78,14 @@ const InitialsAvatar = ({ user: u, size = 30 }) => {
     );
 };
 
+// Status colors tint the icon only; the tile behind it stays neutral.
+const tileFill = (color) => (/(success|warning|error)-color/.test(color) ? tint('var(--text-color)', 8) : tint(color, 14));
+
 const IconTile = ({ icon, color = 'var(--primary-color)', size = 44, radius = 12, iconSize = 'sm' }) => (
     <Container
         layout="flex" align="center" justify="center" padding="none" wrap={false}
         width={`${size}px`} height={`${size}px`}
-        style={{ borderRadius: radius, flexShrink: 0, background: tint(color, 14) }}
+        style={{ borderRadius: radius, flexShrink: 0, background: tileFill(color) }}
     >
         <Icon name={icon} size={iconSize} style={{ color }} />
     </Container>
@@ -195,7 +201,7 @@ const FilesPanel = ({ navigate, userId }) => {
                 {recentFiles.length === 0 ? (
                     <Container layout="flex-column" align="center" gap="sm" padding="lg" width="100%">
                         <IconTile icon="FiUploadCloud" size={52} radius={14} iconSize="md" />
-                        <Typography size="sm" weight="medium">Your drive is empty</Typography>
+                        <Typography size="sm" weight="medium" animation="fade" animationDuration={800}>Your drive is empty</Typography>
                         <Typography size="xs" color="muted" align="center" maxWidth="300px">
                             Upload a file or create a document to see it here.
                         </Typography>
@@ -517,7 +523,7 @@ const SocialPanel = ({ userId, navigate, onCountsChange }) => {
                     <Container
                         layout="flex-column" gap="xs" padding="sm" maxHeight="170px" overflow="auto"
                         style={{
-                            background: tint('var(--warning-color)', 8),
+                            background: tint('var(--primary-color)', 6),
                             border: `1px solid ${tint('var(--warning-color)', 30)}`,
                             borderRadius: 10,
                         }}
@@ -534,14 +540,14 @@ const SocialPanel = ({ userId, navigate, onCountsChange }) => {
                                         <Typography size="xs" weight="medium">{u.username || u.email}</Typography>
                                         {u.firstName && <Typography size="xxs" color="secondary">{u.firstName} {u.lastName || ''}</Typography>}
                                     </Container>
-                                    <Container layout="flex" gap="xs" padding="none" wrap={false}>
+                                    <ButtonGroup spaced selectable={false} justify="start" wrap={false}>
                                         <Button size="xs" color="primary" onClick={() => handleRespond(uid, 'accept')} disabled={!!responding[uid]}>
                                             {responding[uid] === 'accept' ? <CircularProgress size="xs" /> : 'Accept'}
                                         </Button>
                                         <Button size="xs" color="secondary" onClick={() => handleRespond(uid, 'reject')} disabled={!!responding[uid]}>
                                             Decline
                                         </Button>
-                                    </Container>
+                                    </ButtonGroup>
                                 </Container>
                             );
                         })}
@@ -575,7 +581,7 @@ const SocialPanel = ({ userId, navigate, onCountsChange }) => {
                     title="Groups"
                     count={groups.length}
                     action={
-                        <Container layout="flex" gap="xs" padding="none" wrap={false}>
+                        <ButtonGroup spaced selectable={false} justify="start" wrap={false}>
                             <Button size="xs" color="secondary" onClick={handleDiscover}>
                                 <Icon name="FiCompass" size="xs" />
                                 {showDiscover ? 'Hide' : 'Discover'}
@@ -584,7 +590,7 @@ const SocialPanel = ({ userId, navigate, onCountsChange }) => {
                                 <Icon name={showCreateGroup ? 'FiChevronUp' : 'FiPlus'} size="xs" />
                                 {showCreateGroup ? 'Cancel' : 'New'}
                             </Button>
-                        </Container>
+                        </ButtonGroup>
                     }
                 />
 
@@ -723,10 +729,10 @@ const DashboardPage = () => {
 
     if (isLoading) {
         return (
-            <Page layout="flex" align="center" justify="center">
+            <Page layout="flex" align="center" justify="center" background="rings" backgroundMotion="drift" backgroundFade="radial">
                 <Container layout="flex-column" align="center" gap="md">
                     <CircularProgress size="lg" />
-                    <Typography>Loading dashboard...</Typography>
+                    <Typography animation="shiny" animationDuration={2200}>Loading dashboard...</Typography>
                 </Container>
             </Page>
         );
@@ -735,7 +741,7 @@ const DashboardPage = () => {
     const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
     return (
-        <Page layout="flex-column" padding="none" gap="none">
+        <Page layout="flex-column" padding="none" gap="none" background="dots" backgroundFade="bottom">
             <Container
                 layout="flex-column" gap="lg" padding="none" width="100%" maxWidth="1360px" margin="auto" wrap={false}
                 style={{ padding: 'clamp(20px, 3vw, 36px)' }}
@@ -746,18 +752,18 @@ const DashboardPage = () => {
                         <Typography size="xs" color="muted" weight="medium" style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             {today}
                         </Typography>
-                        <Typography as="h1" size="2xl" weight="bold" style={{ letterSpacing: '-0.015em' }}>
-                            {greeting()}, {user?.firstName || user?.username || 'there'}
+                        <Typography as="h1" size="2xl" weight="bold" animation="blur" animationDuration={700} animationConfig={BY_WORDS} style={{ letterSpacing: '-0.015em' }}>
+                            {`${greeting()}, ${user?.firstName || user?.username || 'there'}`}
                         </Typography>
                     </Container>
-                    <Container layout="flex" gap="sm" padding="none" wrap={false}>
+                    <ButtonGroup spaced selectable={false} justify="start" wrap={false}>
                         <Button color="secondary" onClick={() => navigate('/settings')}>
                             <Icon name="FiSettings" size="xs" /> Settings
                         </Button>
                         <Button color="primary" onClick={() => navigate('/files')}>
                             <Icon name="FiFolder" size="xs" /> Open Files
                         </Button>
-                    </Container>
+                    </ButtonGroup>
                 </Container>
 
                 {/* ── KPI cards ── */}

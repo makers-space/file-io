@@ -4,6 +4,74 @@ import Typography from './Typography';
 import Container from './Container';
 import { useGeniePortal } from './Genie';
 
+// =============================================================================
+// DECORATIVE BACKGROUNDS
+// =============================================================================
+// Shared by Page, Container and Card through the `background*` props. Every
+// pattern is drawn in CSS (styles/Page.css) from the active theme's color
+// variables, so it follows theme changes and nested themes.
+
+export const BACKGROUND_PATTERNS = [
+    'grid', 'graph', 'dots', 'lines', 'diagonal', 'crosshatch',
+    'checker', 'hex', 'plus', 'waves', 'zigzag', 'rings'
+];
+
+// Animated by default; pass backgroundMotion="none" for a still version.
+export const BACKGROUND_DYNAMIC = ['aurora', 'gradient'];
+
+export const BACKGROUNDS = [...BACKGROUND_PATTERNS, ...BACKGROUND_DYNAMIC];
+export const BACKGROUND_TONES = ['auto', 'primary', 'secondary', 'tertiary', 'neutral', 'text', 'contrast'];
+
+// Fill colors a pattern has to stay readable against (the backgroundColor prop).
+const BACKGROUND_SURFACES = ['primary', 'secondary', 'tertiary'];
+
+// Success, warning and error signal state; Page, Container and Card do not
+// accept them as a fill color.
+export const STATUS_COLORS = ['success', 'warning', 'error'];
+export const BACKGROUND_INTENSITIES = ['subtle', 'medium', 'strong'];
+export const BACKGROUND_SIZES = ['sm', 'md', 'lg'];
+export const BACKGROUND_MOTIONS = ['none', 'drift', 'pulse'];
+export const BACKGROUND_FADES = ['none', 'radial', 'top', 'bottom'];
+
+const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+
+/**
+ * Class names for the background props shared by Page, Container and Card.
+ *
+ * background          pattern or dynamic background name ('none' / null for no background)
+ * backgroundTone      theme color the pattern is drawn in; 'auto' picks one that contrasts with backgroundColor
+ * backgroundColor     the component's own fill color, used by the 'auto' tone
+ * backgroundIntensity how strongly the pattern shows
+ * backgroundSize      scale of the repeating pattern
+ * backgroundMotion    'drift' scrolls a pattern, 'pulse' breathes it, 'none' stops any animation
+ * backgroundFade      fades the background out: 'radial' toward the edges, 'top' / 'bottom' toward that side
+ */
+export function getBackgroundClass({
+    background = null,
+    backgroundTone = 'auto',
+    backgroundIntensity = 'subtle',
+    backgroundSize = 'md',
+    backgroundMotion = null,
+    backgroundFade = 'none',
+    backgroundColor = null
+} = {}) {
+    if (!background || !BACKGROUNDS.includes(background)) return '';
+
+    const classes = [
+        'has-background',
+        `bg-${background}`,
+        `bg-tone-${pick(backgroundTone, BACKGROUND_TONES, 'auto')}`,
+        `bg-intensity-${pick(backgroundIntensity, BACKGROUND_INTENSITIES, 'subtle')}`,
+        `bg-size-${pick(backgroundSize, BACKGROUND_SIZES, 'md')}`
+    ];
+    if (BACKGROUND_SURFACES.includes(backgroundColor)) classes.push(`bg-on-${backgroundColor}`);
+    if (BACKGROUND_MOTIONS.includes(backgroundMotion)) classes.push(`bg-motion-${backgroundMotion}`);
+    if (backgroundFade && backgroundFade !== 'none' && BACKGROUND_FADES.includes(backgroundFade)) {
+        classes.push(`bg-fade-${backgroundFade}`);
+    }
+    return classes.join(' ');
+}
+
 /**
  * Page - Enhanced base container component for all pages
  * Provides consistent layout structure and theme integration
@@ -33,6 +101,14 @@ export const Page = forwardRef(({
     maxWidth = null, // Maximum width
     maxHeight = null, // Maximum height
     theme = null, // Optional theme override for this page and its children
+    // Decorative background drawn from the theme colors
+    background = null, // 'grid', 'graph', 'dots', 'lines', 'diagonal', 'crosshatch', 'checker', 'hex', 'plus', 'waves', 'zigzag', 'rings', 'aurora', 'gradient'
+    backgroundTone = 'auto', // 'auto' contrasts with backgroundColor; or 'primary', 'secondary', 'tertiary', 'neutral', 'text', 'contrast'
+    backgroundIntensity = 'subtle', // 'subtle', 'medium', 'strong'
+    backgroundSize = 'md', // 'sm', 'md', 'lg' - scale of the repeating pattern
+    backgroundMotion = null, // 'drift', 'pulse', or 'none' to stop an animated background
+    backgroundFade = 'none', // 'none', 'radial', 'top', 'bottom'
+    backgroundColor = null, // Fill color: 'background' (the default), 'surface', 'primary', 'secondary', 'tertiary' (status colors are not fills)
     // Genie integration props
     genie = null, // Genie content to show OR object with {trigger, content, position}
     genieTrigger = 'click', // 'click', 'hover', 'contextmenu'
@@ -132,11 +208,17 @@ export const Page = forwardRef(({
         return `justify-${justify}`;
     };
 
+    const backgroundClass = getBackgroundClass({
+        background, backgroundTone, backgroundIntensity, backgroundSize, backgroundMotion, backgroundFade, backgroundColor
+    });
+
     // Pass all props to DOM
     const domProps = props;
 
     // Merge user style
+    const hasFill = backgroundColor && !STATUS_COLORS.includes(backgroundColor);
     const mergedStyle = {
+        ...(hasFill && { backgroundColor: `var(--${backgroundColor}-color)` }),
         ...props.style
     };
 
@@ -146,7 +228,7 @@ export const Page = forwardRef(({
             {...domProps}
             {...triggerProps}
             style={mergedStyle}
-            className={`page themed-page ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${genieConfig ? 'genie-trigger' : ''} theme-${pageTheme} ${className}`}
+            className={`page themed-page ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${genieConfig ? 'genie-trigger' : ''} ${backgroundClass} theme-${pageTheme} ${className}`}
             data-theme={pageTheme}
             data-theme-source={theme ? 'local' : 'inherited'}
             data-genie-position={genieConfig?.position || 'auto'}

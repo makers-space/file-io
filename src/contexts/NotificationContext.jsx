@@ -82,6 +82,19 @@ export const NotificationProvider = ({ children }) => {
         });
     }, [addNotification]);
 
+    // Asks a yes/no question as a persistent notification; resolves true or false.
+    const confirm = useCallback((message, options = {}) => new Promise((resolve) => {
+        addNotification({
+            type: options.type || 'warning',
+            title: options.title || 'Please confirm',
+            message,
+            actions: [
+                { label: options.confirmLabel || 'Confirm', color: options.color || 'primary', onClick: () => resolve(true) },
+                { label: options.cancelLabel || 'Cancel', color: 'secondary', onClick: () => resolve(false) }
+            ]
+        });
+    }), [addNotification]);
+
     const value = {
         notifications,
         addNotification,
@@ -90,7 +103,8 @@ export const NotificationProvider = ({ children }) => {
         success,
         error,
         warning,
-        info
+        info,
+        confirm
     };
 
     return (

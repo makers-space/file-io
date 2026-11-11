@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNotification } from '@contexts/NotificationContext';
-import { Button, Card, Container, Icon, Typography } from './Components';
+import { Button, ButtonGroup, Card, Container, Icon, Typography } from './Components';
 
 /**
  * NotificationDisplay - Component to display notifications from NotificationContext
@@ -124,9 +124,26 @@ export const NotificationDisplay = ({
                                 >
                                     {notification.message}
                                 </Typography>
+
+                                {notification.actions?.length > 0 && (
+                                    <ButtonGroup size="xs" selectable={false} wrap={false} justify="start" marginTop="xs">
+                                        {notification.actions.map((action, index) => (
+                                            <Button
+                                                key={action.label}
+                                                color={action.color || (index === 0 ? 'primary' : 'secondary')}
+                                                onClick={() => {
+                                                    removeNotification(notification.id);
+                                                    action.onClick?.();
+                                                }}
+                                            >
+                                                {action.label}
+                                            </Button>
+                                        ))}
+                                    </ButtonGroup>
+                                )}
                             </Container>
 
-                            <Button
+                            {!(notification.actions?.length > 0) && <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => removeNotification(notification.id)}
@@ -140,7 +157,7 @@ export const NotificationDisplay = ({
                                 aria-label="Close notification"
                             >
                                 <Icon name="FiX" size="xs"/>
-                            </Button>
+                            </Button>}
                         </Container>
                     </Card>
                 ))}

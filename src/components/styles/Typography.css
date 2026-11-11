@@ -14,6 +14,14 @@ label.typography {
     margin: 0;
 }
 
+.typography.typography-truncate {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Size classes are defined in the responsive section below */
 /* Letter-spacing for each size */
 .typography-size-xxs {

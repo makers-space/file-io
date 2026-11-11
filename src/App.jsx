@@ -17,6 +17,7 @@ import AdminPage from './pages/AdminPage';
 
 // Import Navigation and NotificationDisplay components
 import { Navigation, NotificationDisplay, RouteAccessControl } from '@components/Components';
+import FileNotifications from '@components/FileNotifications';
 
 // Main App Router
 function AppRouter() {
@@ -94,6 +95,7 @@ function AppRouter() {
 
       {/* Global Notification Display */}
       <NotificationDisplay position="top-right" />
+      <FileNotifications />
     </>
   );
 }

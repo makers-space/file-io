@@ -23,8 +23,8 @@ export const NotificationProvider = ({ children }) => {
 
         setNotifications(prev => [...prev, newNotification]);
 
-        // Auto-remove notification after duration
-        if (notification.duration !== 0) { // 0 means persist until manually dismissed
+        const hasActions = Array.isArray(notification.actions) && notification.actions.length > 0;
+        if (notification.duration !== 0 && !hasActions) { // 0 or actions: persist until dismissed
             setTimeout(() => {
                 removeNotification(id);
             }, notification.duration || 5000);

@@ -563,7 +563,6 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
     setIsSubmitting(true);
     try {
       await fileService.shareFile(filePath, selectedUsers, permission);
-      showSuccess(`${isDirectory ? 'Directory' : 'File'} shared with ${selectedUsers.length} user${selectedUsers.length !== 1 ? 's' : ''}`);
       await fetchSharing();
       setSelectedUsers([]);
       onSuccess?.(filePath, 'share');
@@ -579,7 +578,6 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
       setUpdatingUser(prev => ({ ...prev, [uid]: 'revoke' }));
       try {
         await fileService.unshareFile(filePath, [uid], 'both');
-        showSuccess('Access revoked');
         await fetchSharing();
       } catch (err) {
         showError(err?.response?.data?.message || 'Failed to revoke access');
@@ -592,10 +590,8 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
     try {
       if (newPerm === 'write') {
         await fileService.shareFile(filePath, [uid], 'write');
-        showSuccess('Permission upgraded to Read & Write');
       } else {
         await fileService.unshareFile(filePath, [uid], 'write');
-        showSuccess('Permission downgraded to Read Only');
       }
       await fetchSharing();
     } catch (err) {
@@ -914,7 +910,8 @@ export const CreateItemForm = ({ type, targetPath: initialPath, fileTree, onSucc
   const [description, setDescription] = useState('');
   const [targetPath, setTargetPath] = useState(initialPath || '/');
   const [validationErrors, setValidationErrors] = useState({});
-  const { error: showError, success: showSuccess } = useNotification();
+  const { error: showError } = useNotification();
+  const withConflictPrompt = useConflictPrompt();
 
   const handleValidation = (validation, inputName) => {
     setValidationErrors(prev => ({
@@ -937,19 +934,18 @@ export const CreateItemForm = ({ type, targetPath: initialPath, fileTree, onSucc
       showError('Please fix validation errors before submitting');
       return;
     }
-    try {
-      if (isDir) {
-        await fileService.createDirectory(fullPath, description || 'Directory created via FilesPage');
-        showSuccess(`Directory created: ${name}`);
-        onSuccess?.(fullPath, 'directory');
-      } else {
-        await fileService.createFile(fullPath, content, description || 'File created via FilesPage');
-        showSuccess(`File created: ${name}`);
-        onSuccess?.(fullPath, 'file');
+    await withConflictPrompt(
+      (onConflict) => isDir
+        ? fileService.createDirectory(fullPath, description || 'Directory created via FilesPage', { onConflict })
+        : fileService.createFile(fullPath, content, description || 'File created via FilesPage', { onConflict }),
+      {
+        verb: `create the ${isDir ? 'folder' : 'file'}`,
+        onDone: (result) => onSuccess?.(
+          (isDir ? result?.directory?.filePath : result?.file?.filePath) || fullPath,
+          isDir ? 'directory' : 'file'
+        )
       }
-    } catch (err) {
-      showError(`Failed to create ${isDir ? 'directory' : 'file'}: ${err.message}`);
-    }
+    );
   };
 
   return (
@@ -1025,35 +1021,58 @@ export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCan
   const [extractZips, setExtractZips] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const { error: showError, success: showSuccess } = useNotification();
+  const { error: showError, success: showSuccess, addNotification } = useNotification();
   const fileInputRef = useRef(null);
 
   const hasZipFiles = files.some(f => f.name?.toLowerCase().endsWith('.zip'));
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (files.length === 0) {
       showError('Please select files to upload');
       return;
     }
-    
+    return runUpload(files);
+  };
+
+  const runUpload = async (filesToUpload, onConflict = null) => {
     setIsUploading(true);
     setUploadProgress(0);
-    
+
     try {
       const safePath = destinationPath || '/';
-      const textImports = await buildDocxUploadImports(files);
+      const textImports = await buildDocxUploadImports(filesToUpload);
       const response = await fileService.uploadFiles(
-        files, 
-        safePath, 
+        filesToUpload,
+        safePath,
         (progress) => {
           setUploadProgress(progress);
         },
         overwrite,
-        { textImports }
+        { textImports, onConflict }
       );
       const uploadedFiles = response.files || [];
       const uploadedPaths = uploadedFiles.map(file => file.filePath);
-      
+
+      const conflicts = response.conflicts || [];
+      if (conflicts.length > 0) {
+        const conflictNames = new Set(conflicts.map(c => c.fileName));
+        const pending = Array.from(filesToUpload).filter(f => conflictNames.has(f.webkitRelativePath || f.name));
+        addNotification({
+          type: 'warning',
+          title: 'Name already taken',
+          message: conflicts.length === 1
+            ? `"${conflicts[0].fileName}" already exists in this folder. Keep both as "${conflicts[0].suggestedName}", or replace the existing one?`
+            : `${conflicts.length} of these files already exist in this folder. Keep both under new names, or replace the existing ones?`,
+          actions: conflictActions({
+            canReplace: conflicts.every(c => c.canReplace),
+            onKeepBoth: () => runUpload(pending, 'rename'),
+            onReplace: () => runUpload(pending, 'replace'),
+            cancelLabel: conflicts.length === 1 ? "Don't upload" : 'Skip them'
+          })
+        });
+        if (uploadedFiles.length === 0) return;
+      }
+
       // Extract zip files if option is enabled
       if (extractZips && hasZipFiles) {
         const zipFiles = uploadedFiles.filter(f => f.filePath?.toLowerCase().endsWith('.zip'));
@@ -1067,12 +1086,8 @@ export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCan
           }
         }
         if (extractedCount > 0) {
-          showSuccess(`Uploaded ${uploadedPaths.length} file(s) and extracted ${extractedCount} item(s)`);
-        } else {
-          showSuccess(`Successfully uploaded ${uploadedPaths.length} file(s)`);
+          showSuccess(`Extracted ${extractedCount} item(s)`);
         }
-      } else {
-        showSuccess(`Successfully uploaded ${uploadedPaths.length} file(s)`);
       }
       onSuccess?.(uploadedPaths[0], 'file');
     } catch (err) {
@@ -1220,7 +1235,6 @@ const VersionManagement = ({ file, onSuccess }) => {
     
     try {
       await fileService.saveFileVersion(file.filePath, message);
-      showSuccess('Version saved successfully');
       await loadVersions();
       setActiveAction(null);
       onSuccess({ refreshVersionData: true });
@@ -1454,7 +1468,47 @@ const DeleteConfirmForm = ({ node, onConfirm, onBack }) => {
   );
 };
 
+const conflictActions = ({ canReplace, onKeepBoth, onReplace, cancelLabel }) => [
+  { label: 'Keep both', onClick: onKeepBoth },
+  ...(canReplace ? [{ label: 'Replace', color: 'error', onClick: onReplace }] : []),
+  { label: cancelLabel, color: 'secondary' }
+];
+
+// Runs operation(onConflict). If the server reports a name conflict, asks the
+// user to keep both, replace, or cancel, and re-runs with that choice.
+const useConflictPrompt = () => {
+  const { addNotification, error: showError } = useNotification();
+  return useCallback(async (operation, { verb, onDone } = {}) => {
+    const attempt = async (onConflict) => {
+      try {
+        const result = await operation(onConflict);
+        onDone?.(result);
+      } catch (err) {
+        const body = err.response?.data;
+        if (onConflict || err.response?.status !== 409 || body?.code !== 'NAME_CONFLICT') {
+          showError(`Failed to ${verb}: ${err.message}`);
+          return;
+        }
+        const { suggestedName, canReplace } = body.conflict;
+        addNotification({
+          type: 'warning',
+          title: 'Name already taken',
+          message: `${body.message}. Keep both as "${suggestedName}"${canReplace ? ', or replace the existing one' : ''}?`,
+          actions: conflictActions({
+            canReplace,
+            onKeepBoth: () => attempt('rename'),
+            onReplace: () => attempt('replace'),
+            cancelLabel: `Don't ${verb}`
+          })
+        });
+      }
+    };
+    await attempt();
+  }, [addNotification, showError]);
+};
+
 const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => {
+  const withConflictPrompt = useConflictPrompt();
   // TreeView converts data into its own internal shape ({ id, label, metadata }).
   // Normalise back to the raw node ({ filePath, fileName, type }) at this single
   // entry point so every sub-form and handler below receives the correct shape.
@@ -1506,11 +1560,10 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
         node={node}
         onBack={() => setView('menu')}
         onSuccess={async (newName) => {
-          try {
-            await fileService.renameFile(node.filePath, newName);
-            showSuccess(`Renamed to "${newName}"`);
-            doRefresh();
-          } catch (err) { showError(`Rename failed: ${err.message}`); }
+          await withConflictPrompt(
+            (onConflict) => fileService.renameFile(node.filePath, newName, { onConflict }),
+            { verb: 'rename', onDone: doRefresh }
+          );
         }}
       />
     );
@@ -1523,11 +1576,10 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
         onBack={() => setView('menu')}
         onSuccess={async (destDir) => {
           const destPath = `${destDir}/${nodeName}`.replace(/\/+/g, '/');
-          try {
-            await fileService.moveFile(node.filePath, destPath);
-            showSuccess(`Moved to "${destDir}"`);
-            doRefresh();
-          } catch (err) { showError(`Move failed: ${err.message}`); }
+          await withConflictPrompt(
+            (onConflict) => fileService.moveFile(node.filePath, destPath, { onConflict }),
+            { verb: 'move', onDone: doRefresh }
+          );
         }}
       />
     );
@@ -1540,11 +1592,10 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
         onBack={() => setView('menu')}
         onSuccess={async (destDir) => {
           const destPath = `${destDir}/${nodeName}`.replace(/\/+/g, '/');
-          try {
-            await fileService.copyFile(node.filePath, destPath);
-            showSuccess(`Copied to "${destDir}"`);
-            doRefresh();
-          } catch (err) { showError(`Copy failed: ${err.message}`); }
+          await withConflictPrompt(
+            (onConflict) => fileService.copyFile(node.filePath, destPath, { onConflict }),
+            { verb: 'copy', onDone: doRefresh }
+          );
         }}
       />
     );
@@ -1558,7 +1609,6 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
         onConfirm={async () => {
           try {
             await fileService.deleteFile(node.filePath);
-            showSuccess(`Deleted "${nodeName}"`);
             doRefresh();
           } catch (err) { showError(`Delete failed: ${err.message}`); }
         }}
@@ -2246,6 +2296,7 @@ const sortFiles = (files, sortKey) => {
 
 const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   const { success: showSuccess, error: showError } = useNotification();
+  const withConflictPrompt = useConflictPrompt();
   const driveNavigate = useNavigate();
   const driveLocation = useLocation();
 
@@ -2286,8 +2337,8 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   useEffect(() => { clearSelection(); }, [folderPath, clearSelection]);
 
   // Load directory contents from the server (source of truth).
-  const loadContents = useCallback(async () => {
-    setIsLoading(true);
+  const loadContents = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await fileService.getDirectoryContents(folderPath);
       setFiles(res.contents);
@@ -2302,6 +2353,7 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   }, [folderPath]);
 
   useEffect(() => { loadContents(); }, [loadContents]);
+  const refreshContents = useCallback(() => loadContents({ silent: true }), [loadContents]);
 
   // Build breadcrumbs from the server-returned directory path.
   // Build breadcrumbs from the server-returned directory path — no path manipulation.
@@ -2322,15 +2374,14 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
 
   // Expose refresh to parent
   useEffect(() => {
-    if (onRefresh) onRefresh.current = loadContents;
-  }, [onRefresh, loadContents]);
+    if (onRefresh) onRefresh.current = refreshContents;
+  }, [onRefresh, refreshContents]);
 
   const handleDelete = async (file, confirmed) => {
     if (!confirmed && !window.confirm(`Delete "${file.fileName}"?`)) return;
     try {
       await fileService.deleteFile(file.filePath);
-      showSuccess(`Deleted "${file.fileName}"`);
-      loadContents();
+      refreshContents();
     } catch (err) {
       showError(`Failed to delete: ${err.message}`);
     }
@@ -2341,13 +2392,10 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
       newName = window.prompt('New name:', file.fileName);
     }
     if (!newName || newName === file.fileName) return;
-    try {
-      await fileService.renameFile(file.filePath, newName);
-      showSuccess(`Renamed to "${newName}"`);
-      loadContents();
-    } catch (err) {
-      showError(`Failed to rename: ${err.message}`);
-    }
+    await withConflictPrompt(
+      (onConflict) => fileService.renameFile(file.filePath, newName, { onConflict }),
+      { verb: 'rename', onDone: refreshContents }
+    );
   };
 
   const handleDownload = async (file) => {
@@ -2383,41 +2431,48 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
         failed++;
       }
     }
-    if (deleted > 0) showSuccess(`Deleted ${deleted} item(s)`);
     if (failed > 0) showError(`Failed to delete ${failed} item(s)`);
     clearSelection();
-    loadContents();
+    refreshContents();
   };
 
   const renderShareForm = useCallback(({ file: f, onBack }) => (
-    <ShareForm filePath={f.filePath} isDirectory={f.type === 'directory'} onSuccess={() => { onBack(); loadContents(); }} onCancel={onBack} />
-  ), [loadContents]);
+    <ShareForm filePath={f.filePath} isDirectory={f.type === 'directory'} onSuccess={() => { onBack(); refreshContents(); }} onCancel={onBack} />
+  ), [refreshContents]);
 
   const renderMoveForm = useCallback(({ file: f, onBack }) => (
     <MoveOrCopyForm node={f} fileTree={fileTree} label="Move" onBack={onBack}
       onSuccess={async (destDir) => {
         const name = f.fileName || f.filePath.split('/').pop();
-        try {
-          await fileService.moveFile(f.filePath, `${destDir}/${name}`.replace(/\/+/g, '/'));
-          showSuccess(`Moved to "${destDir}"`);
-          onBack(); loadContents();
-        } catch (err) { showError(`Move failed: ${err.message}`); }
+        const destPath = `${destDir}/${name}`.replace(/\/+/g, '/');
+        await withConflictPrompt(
+          (onConflict) => fileService.moveFile(f.filePath, destPath, { onConflict }),
+          {
+            verb: 'move',
+            onDone: () => {
+              if (fileService.normalizePath(destDir) === fileService.normalizePath(folderPath)) refreshContents();
+              else driveNavigate('/files' + fileService.normalizePath(destDir));
+            }
+          }
+        );
+        onBack();
       }}
     />
-  ), [fileTree, loadContents, showSuccess, showError]);
+  ), [fileTree, folderPath, driveNavigate, refreshContents, withConflictPrompt]);
 
   const renderCopyForm = useCallback(({ file: f, onBack }) => (
     <MoveOrCopyForm node={f} fileTree={fileTree} label="Copy" onBack={onBack}
       onSuccess={async (destDir) => {
         const name = f.fileName || f.filePath.split('/').pop();
-        try {
-          await fileService.copyFile(f.filePath, `${destDir}/${name}`.replace(/\/+/g, '/'));
-          showSuccess(`Copied to "${destDir}"`);
-          onBack(); loadContents();
-        } catch (err) { showError(`Copy failed: ${err.message}`); }
+        const destPath = `${destDir}/${name}`.replace(/\/+/g, '/');
+        await withConflictPrompt(
+          (onConflict) => fileService.copyFile(f.filePath, destPath, { onConflict }),
+          { verb: 'copy', onDone: refreshContents }
+        );
+        onBack();
       }}
     />
-  ), [fileTree, loadContents, showSuccess, showError]);
+  ), [fileTree, refreshContents, withConflictPrompt]);
 
   const filtered = useMemo(() => {
     let result = files;
@@ -2653,6 +2708,9 @@ const ActiveEditors = ({ provider, user }) => {
   );
 };
 
+const isSameOrInside = (path, ancestor) =>
+  !!path && !!ancestor && (path === ancestor || path.startsWith(ancestor.replace(/\/+$/, '') + '/'));
+
 export const FilesPage = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -2758,56 +2816,44 @@ export const FilesPage = () => {
 
   // ─── Notifications ─────────────────────────────────────────────────────────
   useEffect(() => {
-    window.showNotification = (message, type = 'info') => {
-      switch (type) {
-        case 'info': showInfo(message); break;
-        case 'success': showSuccess(message); break;
-        case 'warning': showWarning(message); break;
-        case 'error': showError(message); break;
-        default: showInfo(message);
-      }
-    };
-
     const cleanup = fileService.onFileNotification(
       (changeType, data) => {
         const currentPath = viewer.pathRef.current;
         switch (changeType) {
           case 'shared':
           case 'unshared':
-          case 'created':
             loadFileTree(false);
             break;
+          case 'created':
+          case 'directory_created':
+          case 'uploaded':
+            loadFileTree(false);
+            driveRefreshRef.current?.();
+            break;
           case 'deleted':
-            if (currentPath) {
-              const parentPath = fileService.getParentPath(currentPath) || userRoot;
+            if (isSameOrInside(currentPath, data.filePath)) {
+              const parentPath = fileService.getParentPath(data.filePath) || userRoot;
               navigate('/files' + parentPath, { replace: true });
             }
             loadFileTree(false);
+            driveRefreshRef.current?.();
             break;
           case 'renamed':
-            if (data.newFilePath && currentPath === data.oldFilePath) {
-              navigate('/files' + data.newFilePath, { replace: true });
-            }
-            loadFileTree(false);
-            break;
           case 'moved':
-            if (data.newFilePath && currentPath === data.oldFilePath) {
-              navigate('/files' + data.newFilePath, { replace: true });
+            if (data.newFilePath && isSameOrInside(currentPath, data.oldFilePath)) {
+              navigate('/files' + data.newFilePath + currentPath.slice(data.oldFilePath.length), { replace: true });
             }
             loadFileTree(false);
+            driveRefreshRef.current?.();
             break;
           case 'version_saved':
             refreshLatestVersionContent();
             break;
         }
-      },
-      { showToast: true }
+      }
     );
 
-    return () => {
-      cleanup();
-      delete window.showNotification;
-    };
+    return cleanup;
   }, [loadFileTree, refreshLatestVersionContent, navigate, showInfo, showSuccess, showWarning, showError, userRoot]); // eslint-disable-line react-hooks/exhaustive-deps
   
   const handleVersionLoaded = useCallback((versionData) => {
@@ -2897,10 +2943,8 @@ export const FilesPage = () => {
     driveRefreshRef.current?.();
     if (resultPath && type === 'file' && action !== 'delete') {
       navigateToPath(resultPath);
-    } else {
-      clearFileSelection();
     }
-  }, [loadFileTree, navigateToPath, clearFileSelection]);
+  }, [loadFileTree, navigateToPath]);
 
   useEffect(() => {
     loadFileTree(true);
@@ -3434,7 +3478,6 @@ export const FilesPage = () => {
               fileTree={fileTree}
               onActionComplete={async (path, type) => {
                 await handleFileAction('create', path, type);
-                showInfo('Action completed successfully');
               }}
             />
           ),

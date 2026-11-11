@@ -7,7 +7,6 @@
     flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
-    margin: var(--spacing-xs);
     border-radius: var(--button-radius, var(--border-radius-md));
     overflow: visible;
     gap: var(--spacing-xs) 0;
@@ -55,14 +54,23 @@
 
 .button-group.spaced.xs,
 .button-group.spaced.sm {
-    margin: var(--spacing-xs);
     gap: var(--spacing-xs);
 }
 
 .button-group.spaced.lg,
 .button-group.spaced.xl {
-    margin: var(--spacing-md);
     gap: var(--spacing-sm);
+}
+
+/* A spaced group sits flush in its container; the container's justify/align
+   props and the parent's gap decide where it goes. */
+.button-group.spaced,
+.button-group.spaced.nowrap {
+    margin: 0;
+}
+
+.button-group.spaced.nowrap {
+    gap: var(--spacing-xs);
 }
 
 .button-group.spaced .button.themed-button.themed-button-secondary {

@@ -26,6 +26,14 @@ const ROLE_OPTIONS = [
     { value: 'WRITE', label: 'Write' },
 ];
 
+const BY_WORDS = { splitBy: 'words' };
+
+const TEXT_CHIP = {
+    background: 'var(--background-color)',
+    padding: '2px 8px',
+    borderRadius: 'var(--card-radius, var(--border-radius))',
+};
+
 const ROLE_COLORS = { OWNER: 'primary', WRITE: 'warning', READ: 'secondary' };
 
 const FILE_ICONS = {
@@ -45,7 +53,7 @@ const GroupDetailPage = () => {
     const { groupId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { success: showSuccess, error: showError } = useNotification();
+    const { success: showSuccess, error: showError, confirm } = useNotification();
 
     const [group, setGroup] = useState(null);
     const [fileTree, setFileTree] = useState({});
@@ -126,7 +134,7 @@ const GroupDetailPage = () => {
     }, [memberSearch, group?.members]);
 
     const handleLeave = async () => {
-        if (!window.confirm('Leave this group?')) return;
+        if (!(await confirm('Leave this group?', { title: 'Leave group', confirmLabel: 'Leave' }))) return;
         try {
             await userService.leaveGroup(groupId);
             showSuccess('Left group');
@@ -137,7 +145,7 @@ const GroupDetailPage = () => {
     };
 
     const handleDelete = async () => {
-        if (!window.confirm('Delete this group and all its files? This cannot be undone.')) return;
+        if (!(await confirm('Delete this group and all its files? This cannot be undone.', { title: 'Delete group', confirmLabel: 'Delete', color: 'error' }))) return;
         try {
             await userService.deleteGroup(groupId);
             showSuccess('Group deleted');
@@ -160,7 +168,7 @@ const GroupDetailPage = () => {
     };
 
     const handleRemoveMember = async (memberId) => {
-        if (!window.confirm('Remove this member?')) return;
+        if (!(await confirm('Remove this member?', { title: 'Remove member', confirmLabel: 'Remove', color: 'error' }))) return;
         try {
             await userService.removeMember(groupId, memberId);
             showSuccess('Member removed');
@@ -198,7 +206,7 @@ const GroupDetailPage = () => {
 
     if (isLoading) {
         return (
-            <Page layout="flex" align="center" justify="center">
+            <Page layout="flex" align="center" justify="center" background="rings" backgroundMotion="drift" backgroundFade="radial">
                 <CircularProgress size="xl" />
             </Page>
         );
@@ -208,7 +216,7 @@ const GroupDetailPage = () => {
         return (
             <Page layout="flex-column" align="center" justify="center" gap="md">
                 <Icon name="FiAlertCircle" size="xl" color="error" />
-                <Typography size="lg">Group not found</Typography>
+                <Typography size="lg" animation="glitch" animationDuration={600}>Group not found</Typography>
                 <Button onClick={() => navigate('/dashboard')}><Icon name="FiArrowLeft" size="xs" />Back</Button>
             </Page>
         );
@@ -217,7 +225,7 @@ const GroupDetailPage = () => {
     const hasFiles = Object.keys(fileTree).length > 0;
 
     return (
-        <Page layout="flex-column" align="center" padding="md">
+        <Page layout="flex-column" align="center" padding="md" background="hex" backgroundFade="bottom">
             <Container layout="flex-column" gap="md" style={{ width: '100%', maxWidth: '900px' }}>
 
                 {/* Top bar */}
@@ -253,7 +261,7 @@ const GroupDetailPage = () => {
                     }}>
                         <Icon name="FiUsers" size="xs" color="surface" />
                     </Container>
-                    <Typography as="h1" size="lg" weight="bold" align="center">{group.name}</Typography>
+                    <Typography as="h1" size="lg" weight="bold" align="center" animation="blur" animationDuration={700} animationConfig={BY_WORDS}>{group.name}</Typography>
                     {group.description && (
                         <Typography size="xs" color="secondary" align="center">{group.description}</Typography>
                     )}
@@ -348,7 +356,7 @@ const GroupDetailPage = () => {
                         {!hasFiles ? (
                             <Container layout="flex-column" align="center" justify="center" gap="sm" padding="lg">
                                 <Icon name="FiFolder" size="lg" color="secondary" />
-                                <Typography size="xs" color="secondary">No files yet</Typography>
+                                <Typography size="xs" color="secondary" animation="fade" animationDuration={800}>No files yet</Typography>
                             </Container>
                         ) : (
                             <TreeView
@@ -404,9 +412,9 @@ const GroupDetailPage = () => {
                                                 const uid = (u._id || u.id)?.toString();
                                                 return (
                                                     <Container key={uid} layout="flex" align="center" justify="between" gap="xs" width="100%" style={{ padding: '2px 0' }}>
-                                                        <Typography size="xs" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        <Typography size="xs" truncate style={{ flex: 1 }}>
                                                             {u.username || u.email}
-                                                            {u.firstName && <span style={{ opacity: 0.55, marginLeft: 5 }}>{u.firstName} {u.lastName || ''}</span>}
+                                                            {u.firstName && <Typography as="span" size="xs" color="muted"> {u.firstName} {u.lastName || ''}</Typography>}
                                                         </Typography>
                                                         <Button size="xs" color="primary" onClick={() => handleAddMember(u)} disabled={addingMember === uid}>
                                                             {addingMember === uid ? <CircularProgress size="xs" /> : 'Add'}
@@ -431,12 +439,12 @@ const GroupDetailPage = () => {
                                 const memberIsOwner = memberRole === 'OWNER';
                                 const roleColor = ROLE_COLORS[memberRole] || 'secondary';
                                 return (
-                                    <Container key={memberId} layout="flex" align="center" gap="xs" width="100%"
+                                    <Container key={memberId} layout="flex" align="center" gap="xs" width="100%" wrap={false}
                                         style={{ padding: '5px 2px', borderTop: idx > 0 ? '1px solid var(--border-color, rgba(255,255,255,0.06))' : 'none' }}
                                     >
-                                        <Typography size="xs" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <Typography size="xs" truncate style={{ ...TEXT_CHIP, marginRight: 'auto' }}>
                                             {memberName}
-                                            {isSelf && <span style={{ opacity: 0.45, marginLeft: 4, fontSize: '0.75em' }}>you</span>}
+                                            {isSelf && <Typography as="span" size="xxs" color="muted"> you</Typography>}
                                         </Typography>
                                         {isOwner && !isSelf && !memberIsOwner ? (
                                             <>
@@ -452,7 +460,7 @@ const GroupDetailPage = () => {
                                                 </Button>
                                             </>
                                         ) : (
-                                            <Typography size="xxs" color={roleColor} style={{ opacity: 0.7 }}>
+                                            <Typography size="xxs" color={roleColor} style={TEXT_CHIP}>
                                                 {memberRole.charAt(0) + memberRole.slice(1).toLowerCase()}
                                             </Typography>
                                         )}

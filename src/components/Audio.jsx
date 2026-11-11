@@ -10,6 +10,7 @@ import { AudioWave, useMediaAudio } from '@audiowave/react';
 import { ThemeProvider, useTheme } from '@contexts/ThemeContext';
 import { clamp, formatTime, getMediaButtonColor, useMediaKeyboardShortcuts } from './Video';
 import Button from './Button';
+import ButtonGroup from './ButtonGroup';
 import Icon from './Icon';
 import Input from './Input';
 import Container from './Container';
@@ -180,12 +181,12 @@ const AudioMetadataForm = ({ initial, onSave, onClose }) => {
                 <Typography size="xs" color="error">{error}</Typography>
             )}
 
-            <Container layout="flex" gap="sm" justify="end" padding="none">
+            <ButtonGroup spaced selectable={false} justify="end">
                 <Button color="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
                 <Button color="primary" size="sm" onClick={handleSave} disabled={busy || !onSave}>
                     {busy ? 'Saving…' : 'Save'}
                 </Button>
-            </Container>
+            </ButtonGroup>
         </Container>
     );
 };

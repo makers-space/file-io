@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Container, Icon, Input, Typography } from './Components';
+import { Button, Container, Icon, Input, Typography, ButtonGroup } from './Components';
 import { getFileIcon } from './FileCard';
 import './styles/FileCard.css';
 
@@ -39,7 +39,7 @@ const FileListRow = ({ file, onDelete, onRename, onDownload, selected, onSelect,
             {menuView === 'actions' && (
                 <>
                     <Container layout="flex-column" gap="none" padding="xs" style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Typography size="xs" weight="medium" truncate>
                             {file.fileName}
                         </Typography>
                         {file.type !== 'directory' && (
@@ -51,7 +51,7 @@ const FileListRow = ({ file, onDelete, onRename, onDownload, selected, onSelect,
                             Modified {formatDate(file.updatedAt)}
                         </Typography>
                         {file.filePath && (
-                            <Typography size="xs" color="secondary" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <Typography size="xs" color="secondary" truncate>
                                 {file.filePath}
                             </Typography>
                         )}
@@ -106,16 +106,18 @@ const FileListRow = ({ file, onDelete, onRename, onDownload, selected, onSelect,
                         autoFocus
                         width="100%"
                     />
-                    <Container layout="flex" gap="xs" justify="end" width="100%">
-                        <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
-                        <Button
-                            size="xs"
-                            color="primary"
-                            disabled={!renameValue.trim() || renameValue === file.fileName}
-                            onClick={() => { onRename?.(file, renameValue.trim()); resetMenu(); }}
-                        >
-                            Rename
-                        </Button>
+                    <Container layout="flex" justify="end" width="100%">
+                        <ButtonGroup spaced selectable={false} justify="end">
+                            <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
+                            <Button
+                                size="xs"
+                                color="primary"
+                                disabled={!renameValue.trim() || renameValue === file.fileName}
+                                onClick={() => { onRename?.(file, renameValue.trim()); resetMenu(); }}
+                            >
+                                Rename
+                            </Button>
+                        </ButtonGroup>
                     </Container>
                 </>
             )}
@@ -124,11 +126,13 @@ const FileListRow = ({ file, onDelete, onRename, onDownload, selected, onSelect,
                 <>
                     <Typography size="xs" weight="semibold">Delete "{file.fileName}"?</Typography>
                     <Typography size="xs" color="secondary">This action cannot be undone.</Typography>
-                    <Container layout="flex" gap="xs" justify="end" width="100%">
-                        <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
-                        <Button size="xs" color="error" onClick={() => { onDelete?.(file, true); resetMenu(); }}>
-                            Delete
-                        </Button>
+                    <Container layout="flex" justify="end" width="100%">
+                        <ButtonGroup spaced selectable={false} justify="end">
+                            <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
+                            <Button size="xs" color="error" onClick={() => { onDelete?.(file, true); resetMenu(); }}>
+                                Delete
+                            </Button>
+                        </ButtonGroup>
                     </Container>
                 </>
             )}
@@ -155,7 +159,7 @@ const FileListRow = ({ file, onDelete, onRename, onDownload, selected, onSelect,
             <div style={cellStyle} onClick={handleOpen}>
                 <Container layout="flex" align="center" gap="sm">
                     <Icon name={getFileIcon(file)} size="sm" color={file.type === 'directory' ? 'primary' : 'secondary'} />
-                    <Typography size="sm" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Typography size="sm" weight="medium" truncate>
                         {file.fileName}
                     </Typography>
                 </Container>

@@ -1,9 +1,13 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@contexts/ThemeContext';
 import Icon from './Icon';
 import Badge from './Badge';
 import './styles/Select.css';
+
+const DROPDOWN_MAX_HEIGHT = 200;
+const DROPDOWN_MIN_HEIGHT = 80;
+const VIEWPORT_MARGIN = 8;
 
 const SELECT_VALIDATION_STATES = new Set(['default', 'success', 'warning', 'error']);
 const SELECT_COLOR_OPTIONS = ['primary', 'secondary', 'tertiary'];
@@ -148,20 +152,57 @@ export const Select = ({
         }
     }, [multiSelect, normalizedValue]);
 
-    // Compute portal dropdown position from the container's bounding rect
+    // Place the portal dropdown against the field: below it by default, above it
+    // when the list would run off the bottom of the viewport and there is more
+    // room above. The list is capped to the space on the side it opens.
+    const positionDropdown = useCallback(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const field = container.querySelector('.select-input-container') || container;
+        const fieldRect = field.getBoundingClientRect();
+
+        const spaceBelow = window.innerHeight - containerRect.bottom - VIEWPORT_MARGIN;
+        const spaceAbove = fieldRect.top - VIEWPORT_MARGIN;
+        const listHeight = Math.min(listRef.current?.scrollHeight || DROPDOWN_MAX_HEIGHT, DROPDOWN_MAX_HEIGHT);
+        const openUp = spaceBelow < listHeight && spaceAbove > spaceBelow;
+        const available = openUp ? spaceAbove : spaceBelow;
+
+        setDropdownStyle({
+            position: 'fixed',
+            left: containerRect.left,
+            width: containerRect.width,
+            zIndex: 'var(--z-select-dropdown, 10000)',
+            maxHeight: Math.max(DROPDOWN_MIN_HEIGHT, Math.min(DROPDOWN_MAX_HEIGHT, available)),
+            ...(openUp
+                ? { top: 'auto', bottom: window.innerHeight - fieldRect.top }
+                : { top: containerRect.bottom, bottom: 'auto' })
+        });
+    }, []);
+
     const toggleDropdown = (open) => {
-        if (open && containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            setDropdownStyle({
-                position: 'fixed',
-                top: rect.bottom,
-                left: rect.left,
-                width: rect.width,
-                zIndex: 'var(--z-select-dropdown, 10000)',
-            });
-        }
+        if (open) positionDropdown();
         setIsOpen(open);
     };
+
+    // Re-measure once the list has rendered (its real height decides the side),
+    // when the options change, and while the page scrolls or resizes.
+    useLayoutEffect(() => {
+        if (!isOpen) return undefined;
+        positionDropdown();
+
+        const reposition = (event) => {
+            if (event?.target instanceof Node && listRef.current?.contains(event.target)) return;
+            positionDropdown();
+        };
+        window.addEventListener('resize', reposition);
+        window.addEventListener('scroll', reposition, true);
+        return () => {
+            window.removeEventListener('resize', reposition);
+            window.removeEventListener('scroll', reposition, true);
+        };
+    }, [isOpen, filteredOptions.length, positionDropdown]);
 
     // Close dropdown when clicking outside
     useEffect(() => {

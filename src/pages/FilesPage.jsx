@@ -10,6 +10,7 @@ import {
   Container,
   Card,
   Button,
+  ButtonGroup,
   Typography,
   Icon,
   Input,
@@ -612,7 +613,7 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
     return (
       <Container layout="flex-column" gap="sm" padding="md" align="center">
         <CircularProgress size="sm" />
-        <Typography size="xs">Loading...</Typography>
+        <Typography size="xs" animation="shiny" animationDuration={2200}>Loading...</Typography>
       </Container>
     );
   }
@@ -666,7 +667,7 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
                     >
                       {!shareStatus && <Icon name={isSelected ? 'FiCheckSquare' : 'FiSquare'} size="xs" color={isSelected ? 'primary' : 'secondary'} />}
                       {shareStatus && <Icon name="FiCheckCircle" size="xs" color="success" />}
-                      <Typography size="xs" weight="medium" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <Typography size="xs" weight="medium" truncate style={{ flex: 1 }}>
                         {u.username || u.email}
                       </Typography>
                       {shareStatus && (
@@ -771,7 +772,7 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
           {appIntegrations === null && (
             <Container layout="flex" align="center" gap="sm" padding="sm">
               <CircularProgress size="sm" />
-              <Typography size="xs" color="secondary">Loading integrations...</Typography>
+              <Typography size="xs" color="secondary" animation="shiny" animationDuration={2200}>Loading integrations...</Typography>
             </Container>
           )}
           {appIntegrations !== null && appIntegrations.length === 0 && (
@@ -795,10 +796,10 @@ const ShareForm = ({ filePath, isDirectory, onSuccess, onCancel }) => {
                     >
                       <Icon name={isSelected ? 'FiCheckSquare' : 'FiSquare'} size="xs" color={isSelected ? 'primary' : 'secondary'} />
                       <Container layout="flex-column" gap="2px" style={{ flex: 1, overflow: 'hidden' }}>
-                        <Typography size="xs" weight="medium" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <Typography size="xs" weight="medium" truncate>
                           {integration.name}
                         </Typography>
-                        <Typography size="xs" color="secondary" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <Typography size="xs" color="secondary" truncate>
                           {integration.baseUrl}
                         </Typography>
                       </Container>
@@ -992,18 +993,20 @@ export const CreateItemForm = ({ type, targetPath: initialPath, fileTree, onSucc
         width="100%"
       />
 
-      <Container layout="flex" gap="sm" justify="end" width="100%">
-        <Button color="secondary" onClick={onCancel} width="80px">
-          Cancel
-        </Button>
-        <Button
-          color="primary"
-          onClick={handleSubmit}
-          disabled={!name.trim()}
-          width={isDir ? '140px' : '120px'}
-        >
-          {isDir ? 'Create Directory' : 'Create File'}
-        </Button>
+      <Container layout="flex" justify="end" width="100%">
+        <ButtonGroup spaced selectable={false} justify="end">
+          <Button color="secondary" onClick={onCancel} width="80px">
+            Cancel
+          </Button>
+          <Button
+            color="primary"
+            onClick={handleSubmit}
+            disabled={!name.trim()}
+            width={isDir ? '140px' : '120px'}
+          >
+            {isDir ? 'Create Directory' : 'Create File'}
+          </Button>
+        </ButtonGroup>
       </Container>
 
       <Typography size="xs" color="success" margin="none" padding="none">
@@ -1178,23 +1181,25 @@ export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCan
         </Container>
       )}
       
-      <Container layout="flex" gap="sm" justify="end" width="100%">
-        <Button 
-          color="secondary" 
-          onClick={onCancel}
-          disabled={isUploading}
-          width="80px"
-        >
-          Cancel
-        </Button>
-        <Button
-          color="primary"
-          onClick={handleSubmit}
-          disabled={files.length === 0 || isUploading}
-          width="120px"
-        >
-          {isUploading ? <CircularProgress size="sm" /> : `Upload ${files.length} Files`}
-        </Button>
+      <Container layout="flex" justify="end" width="100%">
+        <ButtonGroup spaced selectable={false} justify="end">
+          <Button 
+            color="secondary" 
+            onClick={onCancel}
+            disabled={isUploading}
+            width="80px"
+          >
+            Cancel
+          </Button>
+          <Button
+            color="primary"
+            onClick={handleSubmit}
+            disabled={files.length === 0 || isUploading}
+            width="120px"
+          >
+            {isUploading ? <CircularProgress size="sm" /> : `Upload ${files.length} Files`}
+          </Button>
+        </ButtonGroup>
       </Container>
 
       <Typography size="xs" color="success" margin="none" padding="none">
@@ -1326,22 +1331,24 @@ const VersionManagement = ({ file, onSuccess }) => {
                       {new Date(version.timestamp).toLocaleString()}
                     </Typography>
                   </Container>
-                  <Container layout="flex" gap="xs">
-                    <Button
-                      color="secondary"
-                      size="sm"
-                      onClick={() => handleLoadVersion(version.version)}
-                      title="View this version (read-only)"
-                    >
-                      <Icon name="FiEye" size="xs" />
-                    </Button>
-                    <Button
-                      color="error"
-                      size="sm"
-                      onClick={() => handleDeleteVersion(version.version)}
-                    >
-                      <Icon name="FiTrash2" size="xs" />
-                    </Button>
+                  <Container layout="flex">
+                    <ButtonGroup spaced selectable={false} justify="start">
+                      <Button
+                        color="secondary"
+                        size="sm"
+                        onClick={() => handleLoadVersion(version.version)}
+                        title="View this version (read-only)"
+                      >
+                        <Icon name="FiEye" size="xs" />
+                      </Button>
+                      <Button
+                        color="error"
+                        size="sm"
+                        onClick={() => handleDeleteVersion(version.version)}
+                      >
+                        <Icon name="FiTrash2" size="xs" />
+                      </Button>
+                    </ButtonGroup>
                   </Container>
                 </Container>
               </Card>
@@ -1376,13 +1383,15 @@ const SaveVersionForm = ({ onSave, onCancel }) => {
         width="100%"
       />
 
-      <Container layout="flex" gap="sm" justify="end" width="100%">
-        <Button color="secondary" onClick={onCancel} width="80px">
-          Cancel
-        </Button>
-        <Button color="primary" onClick={handleSubmit} width="120px">
-          Save Version
-        </Button>
+      <Container layout="flex" justify="end" width="100%">
+        <ButtonGroup spaced selectable={false} justify="end">
+          <Button color="secondary" onClick={onCancel} width="80px">
+            Cancel
+          </Button>
+          <Button color="primary" onClick={handleSubmit} width="120px">
+            Save Version
+          </Button>
+        </ButtonGroup>
       </Container>
     </Container>
   );
@@ -1414,14 +1423,14 @@ const RenameItemForm = ({ node, onSuccess, onBack }) => {
         width="100%"
         autoFocus
       />
-      <Container layout="flex" gap="sm" justify="end" padding="none">
+      <ButtonGroup spaced selectable={false} justify="end">
         <Button color="secondary" size="sm" onClick={onBack}>Cancel</Button>
         <Button
           color="primary" size="sm"
           disabled={!name.trim() || name.trim() === nodeName}
           onClick={() => onSuccess(name.trim())}
         >Rename</Button>
-      </Container>
+      </ButtonGroup>
     </Container>
   );
 };
@@ -1437,14 +1446,14 @@ const MoveOrCopyForm = ({ node, fileTree, label, onSuccess, onBack }) => {
       <Typography size="xs" color="secondary">Select destination folder:</Typography>
       <DirectoryPicker fileTree={fileTree} writableOnly selectedPath={destDir} onSelect={path => setDestDir(path || '/')} />
       <Typography size="xs">→ {destFull}</Typography>
-      <Container layout="flex" gap="sm" justify="end" padding="none">
+      <ButtonGroup spaced selectable={false} justify="end">
         <Button color="secondary" size="sm" onClick={onBack}>Cancel</Button>
         <Button
           color="primary" size="sm"
           disabled={label === 'Move' && destDir === parentPath}
           onClick={() => onSuccess(destDir)}
         >{label}</Button>
-      </Container>
+      </ButtonGroup>
     </Container>
   );
 };
@@ -1460,10 +1469,10 @@ const DeleteConfirmForm = ({ node, onConfirm, onBack }) => {
         {isDir && ' All contents inside will be deleted.'}
       </Typography>
       <Typography size="xs" color="error">This action cannot be undone.</Typography>
-      <Container layout="flex" gap="sm" justify="end" padding="none">
+      <ButtonGroup spaced selectable={false} justify="end">
         <Button color="secondary" size="sm" onClick={onBack}>Cancel</Button>
         <Button color="error" size="sm" onClick={onConfirm}>Delete</Button>
-      </Container>
+      </ButtonGroup>
     </Container>
   );
 };
@@ -1654,13 +1663,13 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
     );
   }
 
-  const sep = <div style={{ height: '1px', background: 'var(--border-color)', margin: '2px 0' }} />;
+  const sep = <Divider margin="xs" />;
 
   return (
     <Container layout="flex-column" gap="none" padding="xs" width="220px">
       <Container layout="flex" align="center" gap="xs" padding="xs">
         <Icon name={isDir ? 'FiFolder' : 'FiFile'} size="xs" color="secondary" />
-        <Typography size="xs" weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <Typography size="xs" weight="semibold" truncate>
           {nodeName}
         </Typography>
       </Container>
@@ -1927,10 +1936,10 @@ const CommentPanel = ({ file }) => {
               rows={2}
               width="100%"
             />
-            <Container layout="flex" gap="xs" width="100%" padding="none">
+            <ButtonGroup spaced selectable={false} justify="start" width="100%">
               <Button size="sm" color="primary" onClick={() => handleUpdate(comment._id)}>Save</Button>
               <Button size="sm" color="secondary" onClick={() => setEditingId(null)}>Cancel</Button>
-            </Container>
+            </ButtonGroup>
           </Container>
         ) : (
           <Typography size="xs" style={{ whiteSpace: 'pre-wrap' }}>{comment.body}</Typography>
@@ -1972,10 +1981,10 @@ const CommentPanel = ({ file }) => {
               rows={2}
               width="100%"
             />
-            <Container layout="flex" gap="xs" width="100%" padding="none">
+            <ButtonGroup spaced selectable={false} justify="start" width="100%">
               <Button size="sm" color="primary" onClick={() => handleReply(comment._id)} disabled={isSubmitting}>Reply</Button>
               <Button size="sm" color="secondary" onClick={() => setReplyingTo(null)}>Cancel</Button>
-            </Container>
+            </ButtonGroup>
           </Container>
         )}
 
@@ -2295,7 +2304,7 @@ const sortFiles = (files, sortKey) => {
 };
 
 const DriveView = ({ onRefresh, userRoot, fileTree }) => {
-  const { success: showSuccess, error: showError } = useNotification();
+  const { error: showError, confirm } = useNotification();
   const withConflictPrompt = useConflictPrompt();
   const driveNavigate = useNavigate();
   const driveLocation = useLocation();
@@ -2378,7 +2387,7 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   }, [onRefresh, refreshContents]);
 
   const handleDelete = async (file, confirmed) => {
-    if (!confirmed && !window.confirm(`Delete "${file.fileName}"?`)) return;
+    if (!confirmed && !(await confirm(`Delete "${file.fileName}"?`, { title: 'Delete', confirmLabel: 'Delete', color: 'error' }))) return;
     try {
       await fileService.deleteFile(file.filePath);
       refreshContents();
@@ -2388,9 +2397,6 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   };
 
   const handleRename = async (file, newName) => {
-    if (!newName) {
-      newName = window.prompt('New name:', file.fileName);
-    }
     if (!newName || newName === file.fileName) return;
     await withConflictPrompt(
       (onConflict) => fileService.renameFile(file.filePath, newName, { onConflict }),
@@ -2420,7 +2426,7 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
       clearSelection();
       return;
     }
-    if (!window.confirm(`Delete ${toDelete.length} item(s)? This cannot be undone.`)) return;
+    if (!(await confirm(`Delete ${toDelete.length} item(s)? This cannot be undone.`, { title: 'Delete', confirmLabel: 'Delete', color: 'error' }))) return;
     let deleted = 0;
     let failed = 0;
     for (const f of toDelete) {
@@ -2521,13 +2527,15 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
           size="sm"
         />
         <Container flexFill />
-        <Container layout="flex" gap="xs">
-          <Button size="sm" variant={viewMode === 'grid' ? 'primary' : 'ghost'} onClick={() => setViewMode('grid')} title="Grid view">
-            <Icon name="FiGrid" size="xs" />
-          </Button>
-          <Button size="sm" variant={viewMode === 'list' ? 'primary' : 'ghost'} onClick={() => setViewMode('list')} title="List view">
-            <Icon name="FiList" size="xs" />
-          </Button>
+        <Container layout="flex">
+          <ButtonGroup spaced selectable={false} justify="start">
+            <Button size="sm" variant={viewMode === 'grid' ? 'primary' : 'ghost'} onClick={() => setViewMode('grid')} title="Grid view">
+              <Icon name="FiGrid" size="xs" />
+            </Button>
+            <Button size="sm" variant={viewMode === 'list' ? 'primary' : 'ghost'} onClick={() => setViewMode('list')} title="List view">
+              <Icon name="FiList" size="xs" />
+            </Button>
+          </ButtonGroup>
         </Container>
 
         {allIds.length > 0 && (
@@ -2555,14 +2563,16 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
         )}
 
         {selectionMode && selectedFiles.length > 0 && (
-          <Container layout="flex" align="center" gap="sm">
-            <Button size="sm" color="error" variant="ghost" onClick={handleBulkDelete}>
-              <Icon name="FiTrash2" size="xs" />
-              Delete ({selectedFiles.length})
-            </Button>
-            <Button size="sm" variant="ghost" onClick={clearSelection}>
-              Clear
-            </Button>
+          <Container layout="flex" align="center">
+            <ButtonGroup spaced selectable={false} justify="start" align="center">
+              <Button size="sm" color="error" variant="ghost" onClick={handleBulkDelete}>
+                <Icon name="FiTrash2" size="xs" />
+                Delete ({selectedFiles.length})
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearSelection}>
+                Clear
+              </Button>
+            </ButtonGroup>
           </Container>
         )}
       </Container>
@@ -2652,9 +2662,7 @@ const EDITOR_PEER_COLORS = [
   'var(--primary-color)',
   'var(--secondary-color)',
   'var(--tertiary-color)',
-  'var(--success-color)',
-  'var(--error-color)',
-  'var(--warning-color)',
+  'var(--neutral-color)',
 ];
 
 const ActiveEditors = ({ provider, user }) => {
@@ -2706,6 +2714,34 @@ const ActiveEditors = ({ provider, user }) => {
       </Typography>
     </Container>
   );
+};
+
+const FROM_BELOW = { direction: 'bottom', splitBy: 'words' };
+
+const LOADING_BACKGROUND = { background: 'rings', backgroundMotion: 'drift', backgroundFade: 'radial' };
+
+// The pattern behind each kind of file; the drive falls back to a grid.
+// Both are drawn in the secondary tone.
+const getFilePattern = (viewerType, filePath) => {
+  switch (viewerType) {
+    case 'text':
+      if (/\.docx?$/i.test(filePath)) return { background: 'lines' };
+      if (/\.(md|mdx|txt)$/i.test(filePath)) return { background: 'lines', backgroundSize: 'lg' };
+      return { background: 'plus' };
+    case 'image': return { background: 'checker' };
+    case 'video': return { background: 'diagonal' };
+    case 'audio': return { background: 'waves' };
+    case 'pdf': return { background: 'graph' };
+    case '3d': return { background: 'graph' };
+    case 'binary':
+      return /\.zip$/i.test(filePath) ? { background: 'zigzag' } : { background: 'crosshatch' };
+    default: return null;
+  }
+};
+
+const getViewBackground = (viewerType, filePath = '') => {
+  const pattern = getFilePattern(viewerType, filePath);
+  return { ...(pattern || { background: 'grid', backgroundFade: 'bottom' }), backgroundTone: 'secondary' };
 };
 
 const isSameOrInside = (path, ancestor) =>
@@ -3050,7 +3086,7 @@ export const FilesPage = () => {
         <Container layout="flex" align="center" justify="center" minHeight="100vh" width="100%">
           <Container layout="flex-column" align="center" gap="md">
             <CircularProgress size="lg" />
-            <Typography>Loading...</Typography>
+            <Typography animation="shiny" animationDuration={2200}>Loading...</Typography>
           </Container>
         </Container>
       );
@@ -3099,7 +3135,7 @@ export const FilesPage = () => {
           <Container layout="flex" align="center" justify="center" minHeight="100vh" width="100%">
             <Container layout="flex-column" align="center" gap="md">
               <CircularProgress size="lg" />
-              <Typography>Loading...</Typography>
+              <Typography animation="shiny" animationDuration={2200}>Loading...</Typography>
             </Container>
           </Container>
         );
@@ -3141,13 +3177,13 @@ export const FilesPage = () => {
                 {connectionStatus === 'connected' && (
                   <>
                     <Icon name="FiWifi" size="sm" color="success" />
-                    <Typography size="xs" color="success">Live Editing</Typography>
+                    <Typography size="xs" color="success" animation="shiny" animationDuration={3200}>Live Editing</Typography>
                   </>
                 )}
                 {connectionStatus === 'connecting' && (
                   <>
                     <CircularProgress size="xs" color="warning" />
-                    <Typography size="xs" color="warning">Connecting...</Typography>
+                    <Typography size="xs" color="warning" animation="shiny" animationDuration={2200}>Connecting...</Typography>
                   </>
                 )}
                 {connectionStatus === 'disconnected' && (
@@ -3332,50 +3368,52 @@ export const FilesPage = () => {
                 {metadata.filePath?.match(/\.zip$/i) ? (
                   <>
                     <Icon name="FiArchive" size="48" />
-                    <Typography size="lg">Zip Archive</Typography>
+                    <Typography size="lg" animation="slide" animationDuration={700} animationConfig={FROM_BELOW}>Zip Archive</Typography>
                     <Typography size="sm">
                       Extract the contents of this archive into a new folder.
                     </Typography>
-                    <Container layout="flex" gap="sm">
-                      <Button
-                        color="primary"
-                        size="md"
-                        disabled={isExtracting}
-                        onClick={async () => {
-                          const parentPath = fileService.getParentPath(metadata.filePath) || '/';
-                          setIsExtracting(true);
-                          try {
-                            const result = await fileService.extractZip(metadata.filePath, parentPath);
-                            const count = result.extracted?.length || 0;
-                            showSuccess(`Extracted ${count} item(s) into ${result.targetPath}`);
-                            await loadFileTree(false);
-                            driveRefreshRef.current?.();
-                          } catch (err) {
-                            showError(`Failed to extract: ${err.message}`);
-                          } finally {
-                            setIsExtracting(false);
-                          }
-                        }}
-                      >
-                        {isExtracting ? (
-                          <><Icon name="FaSpinner" size="xs" /> Extracting...</>
-                        ) : (
-                          <><Icon name="FiArchive" size="xs" /> Extract Here</>
-                        )}
-                      </Button>
-                      <Button
-                        color="secondary"
-                        size="md"
-                        onClick={handleFileDownload}
-                      >
-                        <Icon name="FiDownload" size="xs" /> Download
-                      </Button>
+                    <Container layout="flex">
+                      <ButtonGroup spaced selectable={false} justify="start">
+                        <Button
+                          color="primary"
+                          size="md"
+                          disabled={isExtracting}
+                          onClick={async () => {
+                            const parentPath = fileService.getParentPath(metadata.filePath) || '/';
+                            setIsExtracting(true);
+                            try {
+                              const result = await fileService.extractZip(metadata.filePath, parentPath);
+                              const count = result.extracted?.length || 0;
+                              showSuccess(`Extracted ${count} item(s) into ${result.targetPath}`);
+                              await loadFileTree(false);
+                              driveRefreshRef.current?.();
+                            } catch (err) {
+                              showError(`Failed to extract: ${err.message}`);
+                            } finally {
+                              setIsExtracting(false);
+                            }
+                          }}
+                        >
+                          {isExtracting ? (
+                            <><Icon name="FaSpinner" size="xs" /> Extracting...</>
+                          ) : (
+                            <><Icon name="FiArchive" size="xs" /> Extract Here</>
+                          )}
+                        </Button>
+                        <Button
+                          color="secondary"
+                          size="md"
+                          onClick={handleFileDownload}
+                        >
+                          <Icon name="FiDownload" size="xs" /> Download
+                        </Button>
+                      </ButtonGroup>
                     </Container>
                   </>
                 ) : (
                   <>
                     <Icon name="FiFile" size="48" />
-                    <Typography size="lg">Binary File</Typography>
+                    <Typography size="lg" animation="decrypt" animationDuration={900}>Binary File</Typography>
                     <Typography size="sm">
                       This file cannot be edited directly. Use the download button above.
                     </Typography>
@@ -3405,17 +3443,23 @@ export const FilesPage = () => {
 
   if (isLoading) {
     return (
-      <Page layout="flex" align="center" justify="center">
+      <Page layout="flex" align="center" justify="center" background="rings" backgroundMotion="drift" backgroundFade="radial">
         <Container layout="flex-column" align="center" gap="md">
           <CircularProgress size="lg" />
-          <Typography>Loading files...</Typography>
+          <Typography animation="shiny" animationDuration={2200}>Loading files...</Typography>
         </Container>
       </Page>
     );
   }
 
+  const viewBackground = viewer.status === 'loading' && looksLikeFile
+    ? LOADING_BACKGROUND
+    : viewer.status === 'error'
+      ? { background: 'crosshatch', backgroundFade: 'radial' }
+      : getViewBackground(viewer.viewerType, activePath || '');
+
   return (
-    <Page layout="flex" padding="none">
+    <Page layout="flex" padding="none" {...viewBackground}>
       <Container
         layout="flex-column"
         padding="none"

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Button, Card, Container, Icon, Input, Typography } from './Components';
+import { Badge, Button, Card, Container, Icon, Input, Typography, ButtonGroup } from './Components';
 import './styles/FileCard.css';
 
 // Shared file-extension → icon mapping used by FileCard, FileListRow,
@@ -162,7 +162,7 @@ const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, se
                 <>
                     {/* Metadata */}
                     <Container layout="flex-column" gap="none" padding="xs" style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Typography size="xs" weight="medium" truncate>
                             {file.fileName}
                         </Typography>
                         {file.type !== 'directory' && (
@@ -179,7 +179,7 @@ const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, se
                             </Typography>
                         )}
                         {file.filePath && (
-                            <Typography size="xs" color="secondary" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <Typography size="xs" color="secondary" truncate>
                                 {file.filePath}
                             </Typography>
                         )}
@@ -235,16 +235,18 @@ const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, se
                         autoFocus
                         width="100%"
                     />
-                    <Container layout="flex" gap="xs" justify="end" width="100%">
-                        <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
-                        <Button
-                            size="xs"
-                            color="primary"
-                            disabled={!renameValue.trim() || renameValue === file.fileName}
-                            onClick={() => { onRename?.(file, renameValue.trim()); resetMenu(); }}
-                        >
-                            Rename
-                        </Button>
+                    <Container layout="flex" justify="end" width="100%">
+                        <ButtonGroup spaced selectable={false} justify="end">
+                            <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
+                            <Button
+                                size="xs"
+                                color="primary"
+                                disabled={!renameValue.trim() || renameValue === file.fileName}
+                                onClick={() => { onRename?.(file, renameValue.trim()); resetMenu(); }}
+                            >
+                                Rename
+                            </Button>
+                        </ButtonGroup>
                     </Container>
                 </>
             )}
@@ -253,11 +255,13 @@ const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, se
                 <>
                     <Typography size="xs" weight="semibold">Delete "{file.fileName}"?</Typography>
                     <Typography size="xs" color="secondary">This action cannot be undone.</Typography>
-                    <Container layout="flex" gap="xs" justify="end" width="100%">
-                        <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
-                        <Button size="xs" color="error" onClick={() => { onDelete?.(file, true); resetMenu(); }}>
-                            Delete
-                        </Button>
+                    <Container layout="flex" justify="end" width="100%">
+                        <ButtonGroup spaced selectable={false} justify="end">
+                            <Button size="xs" variant="ghost" onClick={resetMenu}>Cancel</Button>
+                            <Button size="xs" color="error" onClick={() => { onDelete?.(file, true); resetMenu(); }}>
+                                Delete
+                            </Button>
+                        </ButtonGroup>
                     </Container>
                 </>
             )}
@@ -302,7 +306,7 @@ const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, se
 
             {/* Name */}
             <Container layout="flex-column" gap="none" onClick={handleOpen}>
-                <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Typography size="xs" weight="medium" truncate>
                     {file.fileName}
                 </Typography>
             </Container>

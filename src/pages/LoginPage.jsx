@@ -12,7 +12,9 @@ import {
   Icon 
 } from '@components/Components';
 
-export const LoginPage = () => {
+export const BY_WORDS = { splitBy: 'words' };
+
+const LoginPage = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     identifier: '',
@@ -80,12 +82,12 @@ export const LoginPage = () => {
     : formData.identifier && formData.password;
 
   return (
-    <Page layout="flex" align="center" justify="center">
+    <Page layout="flex" align="center" justify="center" background="dots" backgroundFade="radial">
         <Card layout="flex-column" padding="xl" align="center" gap="lg" width="100%" maxWidth="560px">
             {/* Header */}
             <Container layout="flex-column" gap="sm" align="center" padding="none">
               <Icon name={twoFactorStep ? 'FaShieldAlt' : 'FaLock'} size="lg" color="primary" />
-              <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary" style={{ textAlign: 'center' }}>
+              <Typography as="h1" size="2xl" weight="bold" font="secondary" color="primary" animation="blur" animationDuration={700} animationConfig={BY_WORDS} style={{ textAlign: 'center' }}>
                 {twoFactorStep ? 'Two-Factor Authentication' : 'Sign In'}
               </Typography>
               <Typography size="sm" align="center" style={{ display: 'block', width: '100%', textAlign: 'center' }}>

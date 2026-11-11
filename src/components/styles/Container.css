@@ -471,19 +471,15 @@
 
 /* Center child elements in centered containers */
 .container.align-center > .button,
-.container.align-center > .button-group-container,
 .container.align-center > .input-container,
 .container.align-center > .select-container,
 .container.justify-center > .button,
-.container.justify-center > .button-group-container,
 .container.justify-center > .input-container,
 .container.justify-center > .select-container,
 .themed-container.align-center > .button,
-.themed-container.align-center > .button-group-container,
 .themed-container.align-center > .input-container,
 .themed-container.align-center > .select-container,
 .themed-container.justify-center > .button,
-.themed-container.justify-center > .button-group-container,
 .themed-container.justify-center > .input-container,
 .themed-container.justify-center > .select-container {
     margin-left: auto;

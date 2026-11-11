@@ -1,6 +1,7 @@
 import React, { forwardRef, useMemo, useRef } from 'react';
 import { ThemeProvider, useTheme } from '@contexts/ThemeContext';
 import { useGeniePortal } from './Genie';
+import { getBackgroundClass, STATUS_COLORS } from './Page';
 
 /**
  * Card - Themed card component for content containers
@@ -17,6 +18,7 @@ export const Card = forwardRef(({
     gap = 'lg', // 'none', 'xs', 'sm', 'md', 'lg', 'xl'
     padding = 'lg', // 'none', 'xs', 'sm', 'md', 'lg', 'xl'
     hover = true, // true, false - enable/disable hover effects
+    bordered = true, // false removes the outline, for a card that is only a filled surface
     width = null, // Custom width: string value like '100px', '50%', 'auto', etc.
     height = null, // Custom height: string value like '100px', '50%', 'auto', '90vh', etc.
     minWidth = null, // Custom minimum width
@@ -26,7 +28,7 @@ export const Card = forwardRef(({
     align = 'start', // 'start', 'center', 'end', 'stretch', 'baseline'
     justify = 'start', // 'start', 'center', 'end', 'between', 'around', 'evenly', 'wrap'
     wrap = true, // true, false (for flex layouts)
-    backgroundColor, // Custom background color: 'primary', 'secondary', 'tertiary', 'success', 'warning', 'error', 'surface', 'background', etc.
+    backgroundColor, // Fill color: 'surface', 'background', 'primary', 'secondary', 'tertiary' (status colors are not fills)
     theme = null, // Optional theme override for this card and its children
     margin = 'none', // 'auto', 'none' or null - none prevents interference with parent flex alignment
     marginTop = null, // Margin top: 'none', 'xs', 'sm', 'md', 'lg', 'xl' or custom value
@@ -34,6 +36,13 @@ export const Card = forwardRef(({
     justifySelf = null, // CSS justify-self property: 'auto', 'start', 'end', 'center', 'stretch'
     flexFill = false, // Whether the card should fill available space in flex layouts
     span = null, // Grid item spanning inside a parent grid: 2, 3, or 'full'
+    // Decorative background drawn from the theme colors (defined in Page.jsx)
+    background = null, // 'grid', 'graph', 'dots', 'lines', 'diagonal', 'crosshatch', 'checker', 'hex', 'plus', 'waves', 'zigzag', 'rings', 'aurora', 'gradient'
+    backgroundTone = 'auto', // 'auto' contrasts with backgroundColor; or 'primary', 'secondary', 'tertiary', 'neutral', 'text', 'contrast'
+    backgroundIntensity = 'subtle', // 'subtle', 'medium', 'strong'
+    backgroundSize = 'md', // 'sm', 'md', 'lg' - scale of the repeating pattern
+    backgroundMotion = null, // 'drift', 'pulse', or 'none' to stop an animated background
+    backgroundFade = 'none', // 'none', 'radial', 'top', 'bottom'
     // Genie integration props
     genie = null, // Genie content to show
     genieTrigger = 'click', // 'click', 'hover', 'contextmenu'
@@ -233,9 +242,10 @@ export const Card = forwardRef(({
     };
 
     const hoverClass = hover ? 'themed-card-hover' : '';
+    const borderClass = bordered ? '' : 'card-borderless';
     // Get background color style
     const getBackgroundStyle = () => {
-        if (!backgroundColor) {
+        if (!backgroundColor || STATUS_COLORS.includes(backgroundColor)) {
             return {};
         }
 
@@ -248,6 +258,10 @@ export const Card = forwardRef(({
         }
         return '';
     };
+
+    const backgroundClass = getBackgroundClass({
+        background, backgroundTone, backgroundIntensity, backgroundSize, backgroundMotion, backgroundFade, backgroundColor
+    });
 
     // Pass all props to DOM
     const domProps = {...props};
@@ -263,7 +277,7 @@ export const Card = forwardRef(({
             ref={cardRef}
             {...domProps}
             {...triggerProps}
-            className={`card themed-card ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getWrapClass()} ${getMarginClass()} ${hoverClass} ${flexFillClass} ${spanClass} ${getJustifySelfClass()} ${genie ? 'genie-trigger' : ''} theme-${cardTheme} ${className}`}
+            className={`card themed-card ${getLayoutClass()} ${getColumnsClass()} ${getGapClass()} ${getPaddingClass()} ${getAlignClass()} ${getJustifyClass()} ${getWrapClass()} ${getMarginClass()} ${hoverClass} ${borderClass} ${flexFillClass} ${spanClass} ${getJustifySelfClass()} ${genie ? 'genie-trigger' : ''} ${backgroundClass} theme-${cardTheme} ${className}`}
             data-theme={cardTheme}
             data-theme-source={theme ? 'local' : 'inherited'}
 

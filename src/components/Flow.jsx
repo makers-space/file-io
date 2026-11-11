@@ -50,6 +50,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import Genie from './Genie';
 import { Input } from './Input';
 import { Button } from './Button';
+import { ButtonGroup } from './ButtonGroup';
 import { Container } from './Container';
 import { Typography } from './Typography';
 import { Select } from './Select';
@@ -674,10 +675,10 @@ export const Flow = ({
               width="100%"
               options={COLOR_OPTIONS}
             />
-            <Container layout="flex" justify="end" gap="sm" padding="none">
+            <ButtonGroup spaced selectable={false} justify="end">
               <Button size="sm" color="secondary" onClick={() => setNodeEditor(null)}>Cancel</Button>
               <Button size="sm" color="primary" onClick={saveNode}>Save</Button>
-            </Container>
+            </ButtonGroup>
           </Container>
         ) : (
           <Container layout="flex-column" gap="sm" padding="none" width="100%">
@@ -800,10 +801,10 @@ export const Flow = ({
                 <span className="flow-node-label">{nodeEditor?.label || 'Preview'}</span>
               </div>
             </div>
-            <Container layout="flex" justify="end" gap="sm" padding="none">
+            <ButtonGroup spaced selectable={false} justify="end">
               <Button size="sm" color="secondary" onClick={() => setNodeEditor(null)}>Cancel</Button>
               <Button size="sm" color="primary" onClick={saveNode}>Save</Button>
-            </Container>
+            </ButtonGroup>
           </Container>
         )}
       </Genie>
@@ -930,10 +931,10 @@ export const Flow = ({
             </svg>
           </div>
           
-          <Container layout="flex" justify="end" gap="sm" padding="none">
+          <ButtonGroup spaced selectable={false} justify="end">
             <Button size="sm" color="secondary" onClick={() => setEdgeEditor(null)}>Cancel</Button>
             <Button size="sm" color="primary" onClick={saveEdge}>Save</Button>
-          </Container>
+          </ButtonGroup>
         </Container>
       </Genie>
 

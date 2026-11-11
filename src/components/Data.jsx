@@ -996,7 +996,7 @@ export const Data = forwardRef(({
                                     <Container layout="flex-column" gap="sm" padding="md">
                                         <Container layout="flex" align="center" justify="between" padding="none">
                                             <Typography size={getTypographySize()} weight="medium">Select Columns</Typography>
-                                            <Container layout="flex" gap="xs" padding="none">
+                                            <ButtonGroup spaced selectable={false} justify="start">
                                                 <Button
                                                     variant="tertiary"
                                                     size={getButtonSize()}
@@ -1023,7 +1023,7 @@ export const Data = forwardRef(({
                                                 >
                                                     None
                                                 </Button>
-                                            </Container>
+                                            </ButtonGroup>
                                         </Container>
                                         {displayFields.map(column => (
                                             <Container key={column} layout="flex" align="center" gap="sm"

@@ -252,6 +252,7 @@ const getColorStyle = (color) => {
         'success': 'var(--success-color)',
         'warning': 'var(--warning-color)',
         'error': 'var(--error-color)',
+        'muted': 'var(--text-muted, color-mix(in srgb, var(--text-color) 65%, transparent))',
         'neutral': 'var(--neutral-color)',
         'info': 'var(--tertiary-color)',
         'header': 'var(--header-text-color, var(--text-color))',

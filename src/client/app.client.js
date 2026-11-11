@@ -163,6 +163,9 @@ api.interceptors.response.use(
             }
         }
 
+        if (error.response?.data?.message) {
+            error.message = error.response.data.message;
+        }
         throw error;
     }
 );

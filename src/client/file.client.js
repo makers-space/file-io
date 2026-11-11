@@ -405,11 +405,12 @@ export const fileService = {
      * @param {string} description - File description
      * @returns {Promise<object>} Created file metadata
      */
-    async createFile(filePath, content = '', description = '') {
+    async createFile(filePath, content = '', description = '', { onConflict } = {}) {
         return await api.post('/files', {
             filePath: this.normalizePath(filePath),
             content,
-            description
+            description,
+            ...(onConflict && { onConflict })
         });
     },
 
@@ -419,10 +420,11 @@ export const fileService = {
      * @param {string} description - Directory description
      * @returns {Promise<object>} Created directory metadata
      */
-    async createDirectory(dirPath, description = '') {
+    async createDirectory(dirPath, description = '', { onConflict } = {}) {
         return await api.post('/files/directory', {
             dirPath: this.normalizePath(dirPath),
-            description
+            description,
+            ...(onConflict && { onConflict })
         });
     },
 
@@ -492,10 +494,11 @@ export const fileService = {
      * @param {string} destinationPath - Destination directory path
      * @returns {Promise<object>} Move response
      */
-    async moveFile(sourcePath, destinationPath) {
+    async moveFile(sourcePath, destinationPath, { onConflict } = {}) {
         return await api.post('/files/move', {
             sourcePath: this.normalizePath(sourcePath),
-            destinationPath: this.normalizePath(destinationPath)
+            destinationPath: this.normalizePath(destinationPath),
+            ...(onConflict && { onConflict })
         });
     },
 
@@ -505,10 +508,11 @@ export const fileService = {
      * @param {string} destinationPath - Destination directory path
      * @returns {Promise<object>} Copy response
      */
-    async copyFile(sourcePath, destinationPath) {
+    async copyFile(sourcePath, destinationPath, { onConflict } = {}) {
         return await api.post('/files/copy', {
             sourcePath: this.normalizePath(sourcePath),
-            destinationPath: this.normalizePath(destinationPath)
+            destinationPath: this.normalizePath(destinationPath),
+            ...(onConflict && { onConflict })
         });
     },
 
@@ -518,10 +522,11 @@ export const fileService = {
      * @param {string} newName - New file name
      * @returns {Promise<object>} Rename response
      */
-    async renameFile(filePath, newName) {
+    async renameFile(filePath, newName, { onConflict } = {}) {
         const encodedPath = encodeURIComponent(this.normalizePath(filePath));
         return await api.post(`/files/${encodedPath}/rename`, {
-            newName: newName.trim()
+            newName: newName.trim(),
+            ...(onConflict && { onConflict })
         });
     },
 
@@ -680,7 +685,7 @@ export const fileService = {
     async uploadFiles(files, targetPath = '/', onProgress = null, overwrite = false, options = {}) {
         const normalizedPath = this.normalizePath(targetPath);
         const formData = new FormData();
-        const { textImports = null } = options;
+        const { textImports = null, onConflict = null } = options;
         
         // Append files and capture relative paths explicitly (browsers may strip
         // path separators from filenames, so we send paths as a separate field)
@@ -699,6 +704,9 @@ export const fileService = {
         }
         if (overwrite) {
             formData.append('overwrite', 'true');
+        }
+        if (onConflict) {
+            formData.append('onConflict', onConflict);
         }
 
         const config = {
@@ -1073,50 +1081,25 @@ export const fileService = {
 
     /**
      * Subscribe to file operation notifications
-     * @param {Function} callback - Callback to handle notifications
-     * @param {Object} options - Options for notification handling
+     * @param {Function} callback - (action, data) for each event
      */
-    onFileNotification(callback, options = {}) {
-        const { showToast = false } = options;
-
-        // Handle file operations
+    onFileNotification(callback) {
         const fileEvents = [
-            { event: 'file:created', action: 'created', icon: '📁' },
-            { event: 'file:deleted', action: 'deleted', icon: '🗑️' },
-            { event: 'file:renamed', action: 'renamed', icon: '✏️' },
-            { event: 'file:moved', action: 'moved', icon: '📦' },
-            { event: 'file:shared', action: 'shared', icon: '🤝' },
-            { event: 'file:unshared', action: 'unshared', icon: '🚫' },
-            { event: 'directory:created', action: 'directory_created', icon: '📁' },
-            { event: 'version:saved', action: 'version_saved', icon: '🔖' }
+            { event: 'file:created', action: 'created' },
+            { event: 'file:uploaded', action: 'uploaded' },
+            { event: 'file:deleted', action: 'deleted' },
+            { event: 'file:renamed', action: 'renamed' },
+            { event: 'file:moved', action: 'moved' },
+            { event: 'file:shared', action: 'shared' },
+            { event: 'file:unshared', action: 'unshared' },
+            { event: 'directory:created', action: 'directory_created' },
+            { event: 'version:saved', action: 'version_saved' }
         ];
 
         const eventCallbacks = [];
 
-        fileEvents.forEach(({ event, action, icon }) => {
-            const eventCallback = (data) => {
-                if (showToast && window.showNotification) {
-                    let message;
-                    if (action === 'renamed') {
-                        message = `${icon} File renamed to ${data.newFileName}`;
-                    } else if (action === 'moved') {
-                        message = `${icon} ${data.fileName} moved to new location`;
-                    } else if (action === 'shared') {
-                        const userCount = Array.isArray(data.sharedWith) ? data.sharedWith.length : 1;
-                        message = `${icon} ${data.fileName} shared with ${userCount} user${userCount !== 1 ? 's' : ''}`;
-                    } else if (action === 'unshared') {
-                        message = `${icon} Sharing removed from ${data.fileName}`;
-                    } else {
-                        message = `${icon} ${data.fileName} ${action.replace('_', ' ')}`;
-                    }
-                    window.showNotification(message, 'info');
-                }
-                
-                if (callback) {
-                    callback(action, data);
-                }
-            };
-            
+        fileEvents.forEach(({ event, action }) => {
+            const eventCallback = (data) => callback?.(action, data);
             eventCallbacks.push({ event, callback: eventCallback });
             notificationClient.on(event, eventCallback);
         });

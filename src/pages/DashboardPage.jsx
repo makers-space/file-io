@@ -113,10 +113,10 @@ const FileRow = ({ file, navigate, showOwner = false }) => (
     >
         <IconTile icon={getFileIcon(file)} size={34} radius={9} />
         <Container layout="flex-column" gap="none" padding="none" flexFill wrap={false} style={{ minWidth: 0 }}>
-            <Typography size="sm" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography size="sm" weight="medium" truncate>
                 {file.fileName || file.filePath?.split('/').pop() || 'Untitled'}
             </Typography>
-            <Typography size="xs" color="muted">
+            <Typography size="xs" color="muted" truncate>
                 {timeAgo(file.updatedAt)}
                 {showOwner && file.owner?.username ? ` · shared by ${file.owner.username}` : ''}
             </Typography>
@@ -180,9 +180,9 @@ const FilesPanel = ({ navigate, userId }) => {
     }
 
     return (
-        <Container layout="flex-column" gap="md" padding="none" width="100%" wrap={false} style={{ minWidth: 0 }}>
+        <>
             {/* Recent */}
-            <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" style={{ minWidth: 0 }}>
+            <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" span="full" style={{ minWidth: 0 }}>
                 <SectionHeader
                     icon="FiClock"
                     title="Recent files"
@@ -204,7 +204,7 @@ const FilesPanel = ({ navigate, userId }) => {
                         </Button>
                     </Container>
                 ) : (
-                    <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
+                    <Container layout="grid" columns="auto" gap="xs" padding="none" width="100%">
                         {recentFiles.map(f => <FileRow key={f._id || f.filePath} file={f} navigate={navigate} />)}
                     </Container>
                 )}
@@ -230,7 +230,7 @@ const FilesPanel = ({ navigate, userId }) => {
                                 }}
                             >
                                 <Icon name={getFileIcon(f)} size="xs" color="primary" />
-                                <Typography size="xs" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+                                <Typography size="xs" weight="medium" truncate maxWidth="180px">
                                     {f.fileName || f.filePath?.split('/').pop() || 'Untitled'}
                                 </Typography>
                             </Container>
@@ -247,12 +247,12 @@ const FilesPanel = ({ navigate, userId }) => {
                         Files that teammates share with you will show up here.
                     </Typography>
                 ) : (
-                    <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
+                    <Container layout="grid" columns="auto" gap="xs" padding="none" width="100%">
                         {sharedFiles.map(f => <FileRow key={f._id || f.filePath} file={f} navigate={navigate} showOwner />)}
                     </Container>
                 )}
             </Card>
-        </Container>
+        </>
     );
 };
 
@@ -498,8 +498,7 @@ const SocialPanel = ({ userId, navigate, onCountsChange }) => {
     );
 
     return (
-        <Container layout="flex-column" gap="md" padding="none" width="100%" wrap={false} style={{ minWidth: 0 }}>
-
+        <>
             {/* ── People ── */}
             <Card layout="flex-column" gap="sm" padding="lg" hover={false} width="100%" style={{ minWidth: 0 }}>
                 <SectionHeader
@@ -678,7 +677,7 @@ const SocialPanel = ({ userId, navigate, onCountsChange }) => {
                     </Container>
                 )}
             </Card>
-        </Container>
+        </>
     );
 };
 
@@ -791,14 +790,10 @@ const DashboardPage = () => {
                     />
                 </Container>
 
-                {/* ── Main content: files (left) + social rail (right) ── */}
-                <Container layout="flex" gap="lg" padding="none" width="100%" align="start" wrap>
-                    <Container layout="flex-column" gap="none" padding="none" wrap={false} style={{ flex: '2 1 480px', minWidth: 0 }}>
-                        <FilesPanel navigate={navigate} userId={user?.id} />
-                    </Container>
-                    <Container layout="flex-column" gap="none" padding="none" wrap={false} style={{ flex: '1 1 310px', minWidth: 0 }}>
-                        <SocialPanel userId={user?.id} navigate={navigate} onCountsChange={handleCountsChange} />
-                    </Container>
+                {/* ── Main content: recent files full width, then a 2×2 section grid ── */}
+                <Container layout="grid" columns={2} gap="lg" padding="none" width="100%">
+                    <FilesPanel navigate={navigate} userId={user?.id} />
+                    <SocialPanel userId={user?.id} navigate={navigate} onCountsChange={handleCountsChange} />
                 </Container>
             </Container>
         </Page>

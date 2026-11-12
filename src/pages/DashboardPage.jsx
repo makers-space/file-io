@@ -15,6 +15,7 @@ import {
     Badge,
     Input,
     CircularProgress,
+    LoadingText,
     Divider,
     Select,
     ButtonGroup
@@ -731,8 +732,7 @@ const DashboardPage = () => {
         return (
             <Page layout="flex" align="center" justify="center" background="rings" backgroundMotion="drift" backgroundFade="radial">
                 <Container layout="flex-column" align="center" gap="md">
-                    <CircularProgress size="lg" />
-                    <Typography animation="shiny" animationDuration={2200}>Loading dashboard...</Typography>
+                    <LoadingText />
                 </Container>
             </Page>
         );

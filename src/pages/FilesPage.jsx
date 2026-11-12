@@ -18,6 +18,7 @@ import {
   Editor,
   FloatingActionButton,
   CircularProgress,
+  LoadingText,
   ProgressBar,
   Switch,
   Select,
@@ -2303,6 +2304,8 @@ const sortFiles = (files, sortKey) => {
   return sorted;
 };
 
+const CRUMB_LABEL = { maxWidth: '32ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+
 const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   const { error: showError, confirm } = useNotification();
   const withConflictPrompt = useConflictPrompt();
@@ -2500,12 +2503,13 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
             <React.Fragment key={crumb.path}>
               {i > 0 && <Icon name="FiChevronRight" size="xs" color="secondary" />}
               <Button
-                size="sm"
+                size="xs"
                 variant={i === breadcrumb.length - 1 ? 'primary' : 'ghost'}
                 onClick={() => driveNavigate('/files' + crumb.path)}
+                title={crumb.name}
               >
                 {i === 0 && <Icon name="FiHardDrive" size="xs" />}
-                {crumb.name}
+                <span style={CRUMB_LABEL}>{crumb.name}</span>
               </Button>
             </React.Fragment>
           ))}
@@ -2581,7 +2585,7 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
       <Container flexFill overflow="auto" padding="md" width="100%" height="100%">
         {isLoading ? (
           <Container layout="flex" align="center" justify="center" padding="xl" width="100%" height="100%">
-            <CircularProgress size="lg" />
+            <LoadingText />
           </Container>
         ) : filtered.length === 0 ? (
           <Container layout="flex-column" align="center" justify="center" gap="md" padding="xl" width="100%" height="100%">
@@ -2612,7 +2616,7 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
             ))}
           </Container>
         ) : (
-          <div style={{ display: 'table', width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ display: 'table', width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             {/* List header */}
             <div style={{ display: 'table-row', borderBottom: '2px solid var(--border-color)' }}>
               {selectionMode && (
@@ -2725,9 +2729,8 @@ const LOADING_BACKGROUND = { background: 'rings', backgroundMotion: 'drift', bac
 const getFilePattern = (viewerType, filePath) => {
   switch (viewerType) {
     case 'text':
-      if (/\.docx?$/i.test(filePath)) return { background: 'lines' };
       if (/\.(md|mdx|txt)$/i.test(filePath)) return { background: 'lines', backgroundSize: 'lg' };
-      return { background: 'plus' };
+      return { background: 'lines' };
     case 'image': return { background: 'checker' };
     case 'video': return { background: 'diagonal' };
     case 'audio': return { background: 'waves' };
@@ -3085,8 +3088,7 @@ export const FilesPage = () => {
       return (
         <Container layout="flex" align="center" justify="center" minHeight="100vh" width="100%">
           <Container layout="flex-column" align="center" gap="md">
-            <CircularProgress size="lg" />
-            <Typography animation="shiny" animationDuration={2200}>Loading...</Typography>
+            <LoadingText />
           </Container>
         </Container>
       );
@@ -3134,8 +3136,7 @@ export const FilesPage = () => {
         return (
           <Container layout="flex" align="center" justify="center" minHeight="100vh" width="100%">
             <Container layout="flex-column" align="center" gap="md">
-              <CircularProgress size="lg" />
-              <Typography animation="shiny" animationDuration={2200}>Loading...</Typography>
+              <LoadingText />
             </Container>
           </Container>
         );
@@ -3445,8 +3446,7 @@ export const FilesPage = () => {
     return (
       <Page layout="flex" align="center" justify="center" background="rings" backgroundMotion="drift" backgroundFade="radial">
         <Container layout="flex-column" align="center" gap="md">
-          <CircularProgress size="lg" />
-          <Typography animation="shiny" animationDuration={2200}>Loading files...</Typography>
+          <LoadingText />
         </Container>
       </Page>
     );

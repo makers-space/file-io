@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Container, Icon, Input, Typography, ButtonGroup } from './Components';
-import { getFileIcon } from './FileCard';
+import { FileName, getFileIcon } from './FileCard';
 import './styles/FileCard.css';
 
 const formatSize = (bytes) => {
@@ -156,12 +156,10 @@ const FileListRow = ({ file, onDelete, onRename, onDownload, selected, onSelect,
                     <Input type="checkbox" checked={!!selected} onChange={() => onSelect?.(file._id)} />
                 </div>
             )}
-            <div style={cellStyle} onClick={handleOpen}>
-                <Container layout="flex" align="center" gap="sm">
+            <div style={{ ...cellStyle, overflow: 'hidden' }} onClick={handleOpen} title={file.fileName}>
+                <Container layout="flex" align="center" gap="sm" wrap={false} width="100%" style={{ minWidth: 0 }}>
                     <Icon name={getFileIcon(file)} size="sm" color={file.type === 'directory' ? 'primary' : 'secondary'} />
-                    <Typography size="sm" weight="medium" truncate>
-                        {file.fileName}
-                    </Typography>
+                    <FileName file={file} style={{ flex: 1 }} />
                 </Container>
             </div>
             <div style={{ ...cellStyle, width: '120px' }}>

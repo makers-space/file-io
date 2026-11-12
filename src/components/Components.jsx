@@ -9,7 +9,7 @@ export {default as Container} from './Container';
 export {default as Button} from './Button';
 export {default as ButtonGroup} from './ButtonGroup';
 export {default as FloatingActionButton} from './FloatingActionButton';
-export {default as Navigation, RouteAccessControl, PageLoading} from './Navigation';
+export {default as Navigation, RouteAccessControl, PageLoading, LoadingText} from './Navigation';
 export {default as NotificationDisplay} from './NotificationDisplay';
 export {default as Card} from './Card';
 export {

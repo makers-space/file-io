@@ -6,7 +6,7 @@
     min-width: 250px;
     border-radius: var(--border-radius);
     border: 1px solid var(--border-color);
-    background: var(--background-color);
+    background: transparent;
     overflow-y: auto;
     transition: all 0.2s ease;
 }
@@ -502,7 +502,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    background: var(--background-color, #fff);
+    background: transparent;
     transition: border-color 0.2s ease;
 }
 

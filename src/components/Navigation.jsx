@@ -1,16 +1,44 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useTheme } from '@contexts/ThemeContext';
 import { Badge, Button, CircularProgress, Container, FloatingActionButton, Icon, Page, Typography, ButtonGroup } from './Components';
 
+const LOADING_MESSAGES = [
+    'Loading page',
+    'Fetching page',
+    'Retrieving page',
+    'Rendering page',
+    'Preparing page',
+    'Assembling page',
+    'Requesting page',
+    'Building page',
+    'Opening page',
+    'Initializing page',
+];
+
+export const LoadingText = ({ children, messages = LOADING_MESSAGES, interval = 1400, size = '2xl', ...props }) => {
+    const [index, setIndex] = useState(() => Math.floor(Math.random() * messages.length));
+
+    useEffect(() => {
+        if (children || messages.length < 2) return undefined;
+        const timer = setInterval(() => setIndex(i => (i + 1) % messages.length), interval);
+        return () => clearInterval(timer);
+    }, [children, messages, interval]);
+
+    return (
+        <Typography as="div" size={size} weight="bold" font="monospace" color="primary" animation="glitch" animationDuration={900} {...props}>
+            {children || `${messages[index % messages.length]}...`}
+        </Typography>
+    );
+};
+
 // Standardized loading component for consistent UI across all pages
-export const PageLoading = ({ message = "Loading..." }) => {
+export const PageLoading = () => {
     return (
         <Page layout="flex" align="center" justify="center">
             <Container layout="flex-column" align="center" justify="center" gap="md">
-                <CircularProgress size="lg"/>
-                <Typography size="lg">{message}</Typography>
+                <LoadingText/>
             </Container>
         </Page>
     );

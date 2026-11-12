@@ -60,6 +60,8 @@ const _cssVar = (name) => {
 const _tokenColor  = (name) => { const v = _cssVar(name); return v ? v.replace(/^#/, '') : null; };
 const _editorColor = (name) => { const v = _cssVar(name); return v || null; };
 
+const TRANSPARENT = '#00000000';
+
 function buildMonacoTheme(themeName) {
     const base = MONACO_DARK_BASES.has(themeName) ? 'vs-dark' : 'vs';
     const rules = [
@@ -118,9 +120,10 @@ function buildMonacoTheme(themeName) {
     ].filter(r => r.foreground != null);
 
     const rawColors = {
-        'editor.background':                    _editorColor('--code-background'),
+        'editor.background':                    TRANSPARENT,
         'editor.foreground':                    _editorColor('--code-foreground'),
-        'editorGutter.background':              _editorColor('--code-gutter'),
+        'editorGutter.background':              TRANSPARENT,
+        'editorStickyScroll.background':        _editorColor('--code-background'),
         'editorLineNumber.foreground':          _editorColor('--code-line-number'),
         'editorLineNumber.activeForeground':    _editorColor('--code-cursor'),
         'editor.lineHighlightBackground':       _editorColor('--code-line-highlight'),
@@ -137,7 +140,8 @@ function buildMonacoTheme(themeName) {
         'scrollbarSlider.background':           _editorColor('--code-line-number'),
         'scrollbarSlider.hoverBackground':      _editorColor('--code-cursor'),
         'scrollbarSlider.activeBackground':     _editorColor('--code-cursor'),
-        'minimap.background':                   _editorColor('--code-gutter'),
+        'minimap.background':                   TRANSPARENT,
+        'editorOverviewRuler.background':       _editorColor('--code-gutter'),
         'minimapSlider.background':             _editorColor('--code-line-number'),
         'editorWidget.background':              _editorColor('--code-gutter'),
         'editorWidget.foreground':              _editorColor('--code-foreground'),

@@ -10,9 +10,13 @@
 
 /* ===== TABLE STRUCTURAL STYLES ===== */
 
+.card.data-container {
+    background-color: transparent;
+}
+
 .themed-table {
     border-collapse: collapse;
-    background-color: var(--background-color);
+    background-color: transparent;
     table-layout: auto;
     width: 100%;
     min-width: max-content; /* Ensures table doesn't compress below content needs */
@@ -58,7 +62,7 @@
 }
 
 .table-body {
-    background-color: var(--background-color);
+    background-color: transparent;
 }
 
 .table-row {
@@ -153,7 +157,7 @@
 }
 
 .data-variant-table .themed-table {
-    background-color: var(--surface-color);
+    background-color: transparent;
     color: var(--text-color);
     font-size: var(--font-size-sm);
 }
@@ -171,7 +175,7 @@
 }
 
 .data-variant-table .table-body {
-    background-color: var(--surface-color);
+    background-color: transparent;
 }
 
 .data-variant-table .table-cell {

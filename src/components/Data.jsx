@@ -953,7 +953,6 @@ export const Data = forwardRef(({
                 className={`data-container theme-${dataTheme} ${getJustifySelfClass()} ${className}`}
                 data-theme={dataTheme}
                 data-theme-source={theme ? 'local' : 'inherited'}
-                backgroundColor="background"
                 layout="block"
                 style={getDataStyle()}
                 {...props}

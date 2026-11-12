@@ -6,7 +6,7 @@
     width: 100%;
     font-family: var(--font-family);
     color: var(--text-color);
-    background-color: var(--surface-color);
+    background-color: transparent;
     position: relative;
     border-radius: var(--border-radius);
     overflow: visible; /* Allow genies to overflow */
@@ -17,12 +17,15 @@
  * Each background variant sets both text color and icon color for optimal contrast.
  * This consolidation eliminates the need for separate JavaScript logic to determine icon variants.
  * 
- * Available variants: default (surface), primary, secondary, tertiary, background
+ * Available variants: default (transparent), surface, primary, secondary, tertiary, background
  */
 
 /* Background color variants with consolidated color rules */
 
-/* Default background - uses surface color */
+.tree-view-bg-transparent {
+    background-color: transparent;
+}
+
 .tree-view-bg-surface {
     background-color: var(--surface-color);
 }
@@ -126,6 +129,10 @@
 }
 
 /* Hover states - variant specific */
+.tree-view-bg-transparent .tree-node-content:hover {
+    background-color: color-mix(in srgb, var(--text-color) 8%, transparent);
+}
+
 .tree-view-bg-surface .tree-node-content:hover {
     background-color: var(--background-color);
 }
@@ -147,6 +154,12 @@
 }
 
 /* Selected states - variant specific */
+.tree-view-bg-transparent .tree-node-selected .tree-node-content,
+.tree-view-bg-transparent .tree-node-selected .tree-node-content:hover {
+    background-color: color-mix(in srgb, var(--primary-color) 16%, transparent);
+    color: var(--text-color);
+}
+
 .tree-view-bg-surface .tree-node-selected .tree-node-content {
     background-color: var(--background-color);
     color: var(--text-color);

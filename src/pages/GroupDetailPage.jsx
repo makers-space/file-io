@@ -14,6 +14,7 @@ import {
     Input,
     Badge,
     CircularProgress,
+    LoadingText,
     Select,
     Divider,
     TreeView,
@@ -207,7 +208,7 @@ const GroupDetailPage = () => {
     if (isLoading) {
         return (
             <Page layout="flex" align="center" justify="center" background="rings" backgroundMotion="drift" backgroundFade="radial">
-                <CircularProgress size="xl" />
+                <LoadingText />
             </Page>
         );
     }

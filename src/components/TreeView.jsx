@@ -279,7 +279,7 @@ export const TreeView = forwardRef(({
     iconMapping = {}, // Custom icon overrides: { 'node-id': 'FiCustomIcon', 'pattern': 'FiIcon' }
     children = null, // Optional children content (rendered after tree)
     className = '',
-    color: providedColor = undefined, // Preferred background color prop
+    color: providedColor = undefined, // 'default' (transparent), 'surface', 'background', 'primary', 'secondary', 'tertiary'
     variant: deprecatedVariant = undefined, // Deprecated alias for background color
     size: providedSize = 'md', // 'xs', 'sm', 'md', 'lg', 'xl' (legacy: 'small', 'default', 'large')
     iconSize = null, // Override icon size if needed: 'xs', 'sm', 'md', 'lg', 'xl', '2xl' (defaults based on size prop)
@@ -449,7 +449,7 @@ export const TreeView = forwardRef(({
 
     // Build class names
     const resolvedColor = providedColor ?? deprecatedVariant ?? 'default';
-    const backgroundClass = resolvedColor === 'default' ? 'tree-view-bg-surface' : `tree-view-bg-${resolvedColor}`;
+    const backgroundClass = resolvedColor === 'default' ? 'tree-view-bg-transparent' : `tree-view-bg-${resolvedColor}`;
     const sizeClass = normalizedSize !== 'md' ? `tree-view-${normalizedSize}` : '';
 
     const classes = [

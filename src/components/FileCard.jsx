@@ -138,6 +138,29 @@ const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+const NAME_ROW = { display: 'flex', flexWrap: 'nowrap', minWidth: 0, maxWidth: '100%', whiteSpace: 'nowrap' };
+const NAME_STEM = { flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' };
+const NAME_EXT = { flex: '0 0 auto' };
+
+export const FileName = ({ file, centered = false, style, ...props }) => {
+    const name = file.fileName || '';
+    const dot = file.type === 'directory' ? -1 : name.lastIndexOf('.');
+    const stem = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : '';
+    return (
+        <Typography
+            size="xs"
+            weight="medium"
+            title={name}
+            style={{ ...NAME_ROW, justifyContent: centered ? 'center' : 'flex-start', ...(centered && { width: '100%' }), ...style }}
+            {...props}
+        >
+            <span style={NAME_STEM}>{stem}</span>
+            {ext && <span style={NAME_EXT}>{ext}</span>}
+        </Typography>
+    );
+};
+
 const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, selectionMode, renderShareForm, renderMoveForm, renderCopyForm }) => {
     const navigate = useNavigate();
     const [menuView, setMenuView] = useState('actions'); // 'actions' | 'rename' | 'delete'
@@ -277,7 +300,8 @@ const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, se
             padding="xs"
             className={`file-card${selected ? ' file-card--selected' : ''}`}
             genie={{ trigger: 'contextmenu', content: contextMenu, position: 'auto' }}
-            style={{ cursor: 'pointer', userSelect: 'none', position: 'relative' }}
+            title={file.fileName}
+            style={{ cursor: 'pointer', userSelect: 'none', position: 'relative', width: '208px', minWidth: 0 }}
         >
             {/* Checkbox — only in selection mode */}
             {selectionMode && (
@@ -305,10 +329,8 @@ const FileCard = ({ file, onDelete, onRename, onDownload, selected, onSelect, se
             </Container>
 
             {/* Name */}
-            <Container layout="flex-column" gap="none" onClick={handleOpen}>
-                <Typography size="xs" weight="medium" truncate>
-                    {file.fileName}
-                </Typography>
+            <Container layout="flex-column" gap="none" width="100%" onClick={handleOpen} style={{ minWidth: 0 }}>
+                <FileName file={file} centered />
             </Container>
         </Card>
     );

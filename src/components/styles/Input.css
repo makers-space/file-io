@@ -901,3 +901,31 @@ input[type="date"]:in-range::-webkit-datetime-edit-text {
 .input-container.justify-self-stretch {
     justify-self: stretch;
 }
+
+.input.themed-input.input-text-inherit {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.input-container.input-file {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.input-field-wrapper.has-dictation {
+    position: relative;
+}
+
+.input-field-wrapper.has-dictation .input.themed-input {
+    padding-right: 2.25rem;
+}
+
+.input-dictation {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    display: flex;
+}

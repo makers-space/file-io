@@ -1116,6 +1116,7 @@ export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCan
         key={uploadFolder ? 'folder' : 'file'}
         ref={fileInputRef}
         type="file"
+        size="sm"
         multiple={!uploadFolder}
         webkitdirectory={uploadFolder ? '' : undefined}
         directory={uploadFolder ? '' : undefined}

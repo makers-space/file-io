@@ -6,7 +6,7 @@ import { useNotification } from '@contexts/NotificationContext';
 import { authService } from '@/client/auth.client';
 import { userService } from '@/client/user.client';
 import { themeService } from '@/client/theme.client';
-import { listFontKeys, getFontFamily, ensureFontsLoaded } from '@/styles/font.registry';
+import { listFontKeys, ensureFontsLoaded } from '@/styles/font.registry';
 import { integrationService } from '@/client/integration.client';
 import {
     Page,
@@ -939,451 +939,340 @@ const IntegrationsTab = () => {
 
 // ─── Appearance Tab (themes & personalisation) ───────────────────────────────
 
-// Swatch fallbacks so built-ins render before the server presets are seeded
-const BUILTIN_SWATCHES = {
-    modern:  ['#12355B', '#FF570A', '#FFFFFF'],
-    dark:    ['#A5D8FF', '#FF570A', '#0C2240'],
-    minimal: ['#374151', '#9CA3AF', '#F9FAFB'],
-    vibrant: ['#556303', '#BF3100', '#F5BB00'],
-    admin:   ['#EEC643', '#83C5BE', '#141414'],
-    pink:    ['#CC0C49', '#7663F2', '#FDE8F0'],
-};
+const failText = (error, fallback) => error?.response?.data?.message || fallback;
 
+const Section = ({ title, note, action, children }) => (
+    <Container layout="flex-column" gap="sm" padding="none" width="100%">
+        <Container layout="flex" justify="between" align="center" gap="sm" padding="none" width="100%">
+            <Container layout="flex-column" gap="none" padding="none">
+                <Typography as="h3" size="sm" weight="semibold">{title}</Typography>
+                {note && <Typography size="xs" color="muted">{note}</Typography>}
+            </Container>
+            {action}
+        </Container>
+        {children}
+    </Container>
+);
+
+const BUILT_IN = ['modern', 'dark', 'minimal', 'vibrant', 'admin', 'pink'];
 const COLOR_FIELDS = [
     ['primary', 'Primary'], ['primaryAccent', 'Primary accent'],
     ['secondary', 'Secondary'], ['secondaryAccent', 'Secondary accent'],
     ['tertiary', 'Tertiary'], ['tertiaryAccent', 'Tertiary accent'],
     ['success', 'Success'], ['warning', 'Warning'], ['error', 'Error'],
     ['background', 'Background'], ['surface', 'Surface'], ['surfaceAccent', 'Surface accent'],
-    ['border', 'Border'], ['text', 'Text'], ['textContrast', 'Contrast text'],
+    ['border', 'Border'], ['text', 'Text'], ['textContrast', 'Contrast text']
 ];
+const RADII_FIELDS = [
+    ['base', 'Base'], ['card', 'Cards'], ['input', 'Inputs'], ['button', 'Buttons'],
+    ['checkbox', 'Checkboxes'], ['fab', 'Round buttons'], ['progress', 'Progress bars'], ['notification', 'Notifications']
+];
+const NEW_THEME = {
+    name: '', slug: '', description: '', visibility: 'private', darkMode: false,
+    colors: {
+        primary: '#12355B', primaryAccent: '#1A4A7A', secondary: '#FF570A', secondaryAccent: '#CC4000',
+        tertiary: '#A5D8FF', tertiaryAccent: '#70BFFF', success: '#1E7A3A', warning: '#E88500', error: '#CC2200',
+        background: '#FFFFFF', surface: '#EAF5FF', surfaceAccent: '#C8EAFF', border: '#A5D8FF', text: '#12355B', textContrast: '#FFFFFF'
+    },
+    fonts: { primary: 'urbanist', secondary: 'montserrat-alternates', monospace: 'jetbrains-mono' },
+    radii: { base: '0.375rem', card: '0.5rem', input: '0.375rem', button: '0.375rem', checkbox: '0.25rem', fab: '50%', progress: '9999px', notification: '0.5rem' }
+};
+const slugify = (value = '') => value.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 50);
+const idOf = (doc) => doc.id || doc._id;
+const fontOptions = (kind) => listFontKeys(kind).map((key) => ({ value: key, label: key }));
 
-const slugify = (value = '') => value.toLowerCase().trim()
-    .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 50);
-
-const SwatchStrip = ({ colors = [], size = 22 }) => (
-    <Container layout="flex" gap="none" padding="none" wrap={false} style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-color)', width: 'fit-content' }}>
-        {colors.filter(Boolean).map((color, i) => (
-            <Container key={i} padding="none" width={`${size}px`} height={`${size}px`} style={{ background: color }} />
+const Swatches = ({ colors }) => (
+    <Container layout="flex" gap="none" padding="none" wrap={false}>
+        {colors.filter(Boolean).map((color, index) => (
+            <Input key={index} type="color" size="xxs" width="26px" value={color} disabled aria-label={`Colour ${color}`} />
         ))}
     </Container>
 );
-
-const themeSwatches = (doc) => {
-    const c = doc?.tokens?.colors || {};
-    return [c.primary, c.secondary, c.tertiary, c.background, c.surface];
+const swatchesOf = (doc) => {
+    const colors = doc?.tokens?.colors || {};
+    return [colors.primary, colors.secondary, colors.tertiary, colors.background, colors.surface];
 };
 
-// ─── Theme editor (create / edit / fork) ─────────────────────────────────────
-
-const DEFAULT_EDITOR = {
-    name: '', slug: '', description: '', visibility: 'private',
-    darkMode: false,
-    colors: {
-        primary: '#12355B', primaryAccent: '#1A4A7A',
-        secondary: '#FF570A', secondaryAccent: '#CC4000',
-        tertiary: '#A5D8FF', tertiaryAccent: '#70BFFF',
-        success: '#1E7A3A', warning: '#E88500', error: '#CC2200',
-        background: '#FFFFFF', surface: '#EAF5FF', surfaceAccent: '#C8EAFF',
-        border: '#A5D8FF', text: '#12355B', textContrast: '#FFFFFF',
-    },
-    fonts: { primary: 'urbanist', secondary: 'montserrat-alternates', monospace: 'jetbrains-mono' },
-    radii: {
-        base: '0.375rem', card: '0.5rem', input: '0.375rem', button: '0.375rem',
-        checkbox: '0.25rem', fab: '50%', progress: '9999px', notification: '0.5rem',
-    },
-};
-
-const RADII_FIELDS = [
-    ['base', 'Base'], ['card', 'Cards'], ['input', 'Inputs'], ['button', 'Buttons'],
-    ['checkbox', 'Checkboxes'], ['fab', 'FAB'], ['progress', 'Progress bars'], ['notification', 'Notifications'],
-];
+const ThemePreview = ({ theme }) => (
+    <Container theme={theme} layout="flex" align="center" gap="xs" padding="sm" width="100%" backgroundColor="background" wrap={false}>
+        <Button size="xxs" color="primary">Aa</Button>
+        <Button size="xxs" color="secondary">Aa</Button>
+        <Badge size="xs" color="tertiary">Tag</Badge>
+        <Typography size="xxs" color="muted">Sample text</Typography>
+    </Container>
+);
 
 const ThemeEditor = ({ initial, editingId, onSaved, onCancel }) => {
-    const { error: showError, success: showSuccess } = useNotification();
-    const [form, setForm] = useState(initial || DEFAULT_EDITOR);
-    const [slugTouched, setSlugTouched] = useState(!!editingId);
-    const [isSaving, setIsSaving] = useState(false);
+    const { success, error: notifyError } = useNotification();
+    const [form, setForm] = useState(initial || NEW_THEME);
+    const [slugTouched, setSlugTouched] = useState(Boolean(editingId));
+    const [saving, setSaving] = useState(false);
 
-    // Load every registry font once so the pickers can preview them
-    useEffect(() => { ensureFontsLoaded(listFontKeys()); }, []);
+    useEffect(() => {
+        ensureFontsLoaded(listFontKeys());
+    }, []);
 
-    const setColor = (key, value) => setForm(f => ({ ...f, colors: { ...f.colors, [key]: value } }));
-    const setFont = (key, value) => setForm(f => ({ ...f, fonts: { ...f.fonts, [key]: value } }));
-    const setRadius = (key, value) => setForm(f => ({ ...f, radii: { ...f.radii, [key]: value } }));
+    const part = (group, key, value) => setForm((now) => ({ ...now, [group]: { ...now[group], [key]: value } }));
 
-    const handleSave = async () => {
-        if (!form.name.trim() || !form.slug.trim()) { showError('Name and slug are required'); return; }
-        setIsSaving(true);
+    const save = async () => {
+        if (!form.name.trim() || !form.slug.trim()) {
+            notifyError('A theme needs a name and a short name.');
+            return;
+        }
+        setSaving(true);
         const payload = {
             name: form.name.trim(),
             slug: form.slug,
             description: form.description.trim(),
             visibility: form.visibility,
-            tokens: {
-                darkMode: form.darkMode,
-                colors: form.colors,
-                fonts: form.fonts,
-                ...(form.radii ? { radii: form.radii } : {}),
-            },
-            ...(form.forkedFrom ? { forkedFrom: form.forkedFrom } : {}),
+            tokens: { darkMode: form.darkMode, colors: form.colors, fonts: form.fonts, ...(form.radii ? { radii: form.radii } : {}) },
+            ...(form.forkedFrom ? { forkedFrom: form.forkedFrom } : {})
         };
         try {
-            const res = editingId
-                ? await themeService.updateTheme(editingId, payload)
-                : await themeService.createTheme(payload);
-            showSuccess(editingId ? 'Theme updated' : 'Theme created');
-            onSaved(res.theme);
-        } catch (err) {
-            showError(err?.response?.data?.message || 'Failed to save theme');
+            const result = editingId ? await themeService.updateTheme(editingId, payload) : await themeService.createTheme(payload);
+            success(editingId ? 'Theme updated.' : 'Theme created.');
+            onSaved(result.theme);
+        } catch (error) {
+            notifyError(failText(error, 'The theme could not be saved.'));
         } finally {
-            setIsSaving(false);
+            setSaving(false);
         }
     };
 
     return (
-        <Card layout="flex-column" gap="md" padding="lg" hover={false} width="100%">
-            <Container layout="flex" align="center" justify="between" padding="none" width="100%">
+        <Card layout="flex-column" gap="sm" padding="md" hover={false} shadow={false} borderColor="primary" width="100%">
+            <Container layout="flex" align="center" justify="between" gap="sm" padding="none" width="100%">
                 <Typography size="sm" weight="semibold">
-                    {editingId ? 'Edit theme' : form.forkedFrom ? `Fork of ${form.forkedFromName || 'theme'}` : 'New theme'}
+                    {editingId ? 'Edit theme' : form.forkedFrom ? `Copy of ${form.forkedFromName || 'theme'}` : 'New theme'}
                 </Typography>
-                <SwatchStrip colors={[form.colors.primary, form.colors.secondary, form.colors.tertiary, form.colors.background, form.colors.surface]} />
+                <Swatches colors={[form.colors.primary, form.colors.secondary, form.colors.tertiary, form.colors.background, form.colors.surface]} />
             </Container>
-
-            <Container layout="grid" columns={2} gap="md" padding="none" width="100%">
-                <Input label="Name" value={form.name} width="100%"
-                    onChange={e => {
-                        const name = e.target.value;
-                        setForm(f => ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }));
-                    }} />
-                <Input label="Slug" value={form.slug} width="100%"
-                    onChange={e => { setSlugTouched(true); setForm(f => ({ ...f, slug: slugify(e.target.value) })); }} />
+            <Container layout="grid" columns={2} gap="sm" padding="none" width="100%">
+                <Input
+                    size="sm"
+                    label="Name"
+                    value={form.name}
+                    width="100%"
+                    onChange={(event) => {
+                        const name = event.target.value;
+                        setForm((now) => ({ ...now, name, slug: slugTouched ? now.slug : slugify(name) }));
+                    }}
+                />
+                <Input
+                    size="sm"
+                    label="Short name (used in links)"
+                    value={form.slug}
+                    width="100%"
+                    onChange={(event) => { setSlugTouched(true); setForm((now) => ({ ...now, slug: slugify(event.target.value) })); }}
+                />
             </Container>
-            <Input label="Description (optional)" value={form.description} width="100%"
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-
-            <Container layout="flex" gap="lg" align="end" padding="none" wrap>
+            <Input size="sm" label="Description (optional)" value={form.description} width="100%" onChange={(event) => setForm((now) => ({ ...now, description: event.target.value }))} />
+            <Container layout="flex" gap="md" align="end" padding="none">
                 <Select
-                    label="Visibility"
+                    label="Who can see it"
+                    width="260px"
                     options={[
-                        { value: 'private', label: 'Private — only you' },
-                        { value: 'unlisted', label: 'Unlisted — anyone with the link' },
-                        { value: 'public', label: 'Public — listed in the gallery' },
+                        { value: 'private', label: 'Private: only you' },
+                        { value: 'unlisted', label: 'Unlisted: anyone with the link' },
+                        { value: 'public', label: 'Public: listed for everyone' }
                     ]}
                     value={form.visibility}
-                    onChange={val => setForm(f => ({ ...f, visibility: val }))}
-                    width="260px"
+                    onChange={(value) => setForm((now) => ({ ...now, visibility: value }))}
                 />
-                <Container layout="flex" align="center" gap="sm" padding="none">
-                    <Switch checked={form.darkMode} onChange={e => setForm(f => ({ ...f, darkMode: e.target.checked }))} />
-                    <Typography size="sm">Dark theme</Typography>
-                </Container>
+                <Switch label="Dark theme" checked={form.darkMode} onChange={(event) => setForm((now) => ({ ...now, darkMode: event.target.checked }))} />
             </Container>
 
-            <Divider margin="xs" />
-            <Typography size="sm" weight="semibold">Colors</Typography>
+            <Divider color="surface" margin="xs" />
+            <Typography size="xs" weight="semibold">Colours</Typography>
             <Container layout="grid" columns="auto-sm" gap="sm" padding="none" width="100%">
                 {COLOR_FIELDS.map(([key, label]) => (
                     <Container key={key} layout="flex" align="center" gap="sm" padding="none" wrap={false}>
-                        <Input
-                            type="color"
-                            value={form.colors[key] || '#000000'}
-                            onChange={e => setColor(key, e.target.value)}
-                            width="52px"
-                            aria-label={label}
-                            style={{ flex: '0 0 auto' }}
-                        />
-                        <Container layout="flex-column" gap="none" padding="none" flexFill style={{ minWidth: 0, textAlign: 'left' }}>
+                        <Input type="color" size="sm" width="48px" value={form.colors[key] || '#000000'} onChange={(event) => part('colors', key, event.target.value)} aria-label={label} />
+                        <Container layout="flex-column" gap="none" padding="none" minWidth="0">
                             <Typography size="xs" weight="medium">{label}</Typography>
-                            <Typography size="xs" color="muted" font="monospace">{form.colors[key]}</Typography>
+                            <Typography size="xxs" color="muted" font="monospace">{form.colors[key]}</Typography>
                         </Container>
                     </Container>
                 ))}
             </Container>
 
-            <Divider margin="xs" />
-            <Typography size="sm" weight="semibold">Fonts</Typography>
-            <Container layout="grid" columns={3} gap="md" padding="none" width="100%">
-                <Select label="Primary" options={listFontKeys('sans').map(k => ({ value: k, label: k, style: { fontFamily: getFontFamily(k) } }))}
-                    value={form.fonts.primary} onChange={val => setFont('primary', val)} width="100%" />
-                <Select label="Display / headings" options={listFontKeys().map(k => ({ value: k, label: k, style: { fontFamily: getFontFamily(k) } }))}
-                    value={form.fonts.secondary} onChange={val => setFont('secondary', val)} width="100%" />
-                <Select label="Monospace" options={listFontKeys('mono').map(k => ({ value: k, label: k, style: { fontFamily: getFontFamily(k) } }))}
-                    value={form.fonts.monospace} onChange={val => setFont('monospace', val)} width="100%" />
+            <Divider color="surface" margin="xs" />
+            <Typography size="xs" weight="semibold">Fonts</Typography>
+            <Container layout="grid" columns={3} gap="sm" padding="none" width="100%">
+                <Select label="Main text" options={fontOptions('sans')} value={form.fonts.primary} onChange={(value) => part('fonts', 'primary', value)} width="100%" />
+                <Select label="Headings" options={fontOptions()} value={form.fonts.secondary} onChange={(value) => part('fonts', 'secondary', value)} width="100%" />
+                <Select label="Code" options={fontOptions('mono')} value={form.fonts.monospace} onChange={(value) => part('fonts', 'monospace', value)} width="100%" />
             </Container>
 
-            <Divider margin="xs" />
-            <Typography size="sm" weight="semibold">Corners</Typography>
-            <Typography size="xxs" color="muted">
-                Border radii — any CSS length works (0 for sharp, 9999px for pills, 50% for circles).
-            </Typography>
+            <Divider color="surface" margin="xs" />
+            <Typography size="xs" weight="semibold">Corners</Typography>
+            <Typography size="xxs" color="muted">Any CSS length works: 0 for sharp, 9999px for pills, 50% for circles.</Typography>
             <Container layout="grid" columns="auto-sm" gap="sm" padding="none" width="100%">
                 {RADII_FIELDS.map(([key, label]) => (
-                    <Input
-                        key={key}
-                        size="sm"
-                        label={label}
-                        value={form.radii?.[key] ?? ''}
-                        onChange={e => setRadius(key, e.target.value)}
-                        placeholder={DEFAULT_EDITOR.radii[key]}
-                        width="100%"
-                    />
+                    <Input key={key} size="sm" label={label} value={form.radii?.[key] ?? ''} placeholder={NEW_THEME.radii[key]} onChange={(event) => part('radii', key, event.target.value)} width="100%" />
                 ))}
             </Container>
 
-            <ButtonGroup spaced selectable={false} justify="start">
-                <Button color="primary" onClick={handleSave} disabled={isSaving}>
-                    <Icon name={isSaving ? 'FiLoader' : 'FiSave'} size="xs" />
-                    {isSaving ? 'Saving…' : editingId ? 'Save changes' : 'Create theme'}
-                </Button>
-                <Button color="secondary" onClick={onCancel} disabled={isSaving}>Cancel</Button>
-            </ButtonGroup>
+            <Container layout="flex" gap="xs" padding="none">
+                <Button size="sm" disabled={saving} onClick={save}><Icon name="FiSave" size="xs" />{saving ? 'Saving…' : editingId ? 'Save changes' : 'Create theme'}</Button>
+                <Button size="sm" color="secondary" disabled={saving} onClick={onCancel}>Cancel</Button>
+            </Container>
         </Card>
     );
 };
 
-// ─── Theme list card ─────────────────────────────────────────────────────────
-
-const ThemeCard = ({ doc, isApplied, onApply, onFork, onEdit, onDelete }) => (
-    <Card layout="flex-column" gap="sm" padding="md" hover={false} style={{ minWidth: 0 }}>
+const ThemeCard = ({ doc, applied, onApply, onFork, onEdit, onDelete }) => (
+    <Card layout="flex-column" gap="xs" padding="sm" hover={false} shadow={false} minWidth="0" borderColor={applied ? 'primary' : null}>
         <Container layout="flex" align="center" gap="xs" padding="none" width="100%" wrap={false}>
             <Typography size="sm" weight="semibold" truncate>{doc.name}</Typography>
-            {isApplied && <Badge size="xs" color="success">Applied</Badge>}
-            {doc.isPreset && <Badge size="xs" color="secondary">Built-in</Badge>}
-            {!doc.isPreset && doc.visibility && doc.visibility !== 'private' && (
-                <Badge size="xs" color="tertiary">{doc.visibility}</Badge>
-            )}
+            {applied && <Badge size="xs" color="success">In use</Badge>}
+            {!doc.isPreset && doc.visibility && doc.visibility !== 'private' && <Badge size="xs" color="tertiary">{doc.visibility}</Badge>}
         </Container>
-        {doc.description && (
-            <Typography size="xs" color="muted" truncate>
-                {doc.description}
-            </Typography>
-        )}
-        <SwatchStrip colors={themeSwatches(doc)} />
-        <Container layout="flex" gap="xs" padding="none" wrap>
-            <Button size="xs" color="primary" onClick={onApply} disabled={isApplied}>
-                <Icon name="FiCheck" size="xs" />{isApplied ? 'Applied' : 'Apply'}
-            </Button>
-            {onFork && (
-                <Button size="xs" color="secondary" onClick={onFork}>
-                    <Icon name="FiCopy" size="xs" />Fork
-                </Button>
-            )}
-            {onEdit && (
-                <Button size="xs" color="secondary" onClick={onEdit}>
-                    <Icon name="FiEdit2" size="xs" />Edit
-                </Button>
-            )}
-            {onDelete && (
-                <Button size="xs" color="error" onClick={onDelete}>
-                    <Icon name="FiTrash2" size="xs" />Delete
-                </Button>
-            )}
+        {doc.description && <Typography size="xs" color="muted" truncate>{doc.description}</Typography>}
+        <Swatches colors={swatchesOf(doc)} />
+        <Container layout="flex" gap="xs" padding="none">
+            <Button size="xs" disabled={applied} onClick={onApply}><Icon name="FiCheck" size="xs" />{applied ? 'In use' : 'Use'}</Button>
+            {onFork && <Button size="xs" color="secondary" onClick={onFork}><Icon name="FiCopy" size="xs" />Copy</Button>}
+            {onEdit && <Button size="xs" color="secondary" onClick={onEdit}><Icon name="FiEdit2" size="xs" />Edit</Button>}
+            {onDelete && <Button size="xs" color="error" onClick={onDelete}><Icon name="FiTrash2" size="xs" />Delete</Button>}
         </Container>
     </Card>
 );
 
-
-
-const AppearanceTab = () => {
-    const { user } = useAuth();
+const AppearanceTab = ({ user }) => {
     const { currentTheme, switchTheme, applyCustomTheme, clearCustomTheme, customTheme, themes } = useTheme();
-    const { success: showSuccess, error: showError } = useNotification();
-
+    const { success, error: notifyError } = useNotification();
     const [presets, setPresets] = useState([]);
-    const [myThemes, setMyThemes] = useState([]);
-    const [publicThemes, setPublicThemes] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [editor, setEditor] = useState(null); // { initial, editingId }
-
-    const roles = user?.roles || [];
-    const canCreate = ['CREATOR', 'SUPER_CREATOR', 'ADMIN', 'OWNER'].some(r => roles.includes(r));
+    const [mine, setMine] = useState([]);
+    const [shared, setShared] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [editor, setEditor] = useState(null);
+    const canCreate = ['CREATOR', 'SUPER_CREATOR', 'ADMIN', 'OWNER'].some((name) => (user?.roles || []).includes(name));
 
     const load = useCallback(async () => {
-        setIsLoading(true);
+        setLoading(true);
         try {
-            const [presetRes, mineRes, publicRes] = await Promise.all([
+            const [presetResult, mineResult, publicResult] = await Promise.all([
                 themeService.getPresets().catch(() => ({ themes: [] })),
                 themeService.getMyThemes().catch(() => ({ themes: [] })),
-                themeService.getPublicThemes({ limit: 12 }).catch(() => ({ themes: [] })),
+                themeService.getPublicThemes({ limit: 12 }).catch(() => ({ themes: [] }))
             ]);
-            setPresets(presetRes.themes || []);
-            setMyThemes(mineRes.themes || []);
-            const mineIds = new Set((mineRes.themes || []).map(t => (t.id || t._id).toString()));
-            setPublicThemes((publicRes.themes || []).filter(t => !mineIds.has((t.id || t._id).toString())));
+            setPresets(presetResult.themes || []);
+            setMine(mineResult.themes || []);
+            const own = new Set((mineResult.themes || []).map((doc) => String(idOf(doc))));
+            setShared((publicResult.themes || []).filter((doc) => !own.has(String(idOf(doc)))));
         } finally {
-            setIsLoading(false);
+            setLoading(false);
         }
     }, []);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        load();
+    }, [load]);
 
-    const openFork = (doc) => {
-        const t = doc.tokens || {};
-        setEditor({
-            initial: {
-                name: `${doc.name} (fork)`,
-                slug: slugify(`${doc.slug}-fork`),
-                description: doc.description || '',
-                visibility: 'private',
-                darkMode: !!t.darkMode,
-                colors: { ...DEFAULT_EDITOR.colors, ...(t.colors || {}) },
-                fonts: { ...DEFAULT_EDITOR.fonts, ...(t.fonts || {}) },
-                radii: { ...DEFAULT_EDITOR.radii, ...(t.radii || {}) },
-                forkedFrom: doc.id || doc._id,
-                forkedFromName: doc.name,
-            },
-            editingId: null,
-        });
+    const draftFrom = (doc, fork) => {
+        const tokens = doc.tokens || {};
+        return {
+            name: fork ? `${doc.name} (copy)` : doc.name,
+            slug: fork ? slugify(`${doc.slug}-copy`) : doc.slug,
+            description: doc.description || '',
+            visibility: fork ? 'private' : doc.visibility || 'private',
+            darkMode: Boolean(tokens.darkMode),
+            colors: { ...NEW_THEME.colors, ...(tokens.colors || {}) },
+            fonts: { ...NEW_THEME.fonts, ...(tokens.fonts || {}) },
+            radii: { ...NEW_THEME.radii, ...(tokens.radii || {}) },
+            ...(fork ? { forkedFrom: idOf(doc), forkedFromName: doc.name } : {})
+        };
     };
+    const openFork = (doc) => setEditor({ initial: draftFrom(doc, true), editingId: null });
+    const openEdit = (doc) => setEditor({ initial: draftFrom(doc, false), editingId: idOf(doc) });
 
-    const openEdit = (doc) => {
-        const t = doc.tokens || {};
-        setEditor({
-            initial: {
-                name: doc.name,
-                slug: doc.slug,
-                description: doc.description || '',
-                visibility: doc.visibility || 'private',
-                darkMode: !!t.darkMode,
-                colors: { ...DEFAULT_EDITOR.colors, ...(t.colors || {}) },
-                fonts: { ...DEFAULT_EDITOR.fonts, ...(t.fonts || {}) },
-                radii: { ...DEFAULT_EDITOR.radii, ...(t.radii || {}) },
-            },
-            editingId: doc.id || doc._id,
-        });
-    };
-
-    const handleDelete = async (doc) => {
+    const remove = async (doc) => {
         try {
-            await themeService.deleteTheme(doc.id || doc._id);
-            showSuccess(`Theme "${doc.name}" deleted`);
+            await themeService.deleteTheme(idOf(doc));
+            success(`Theme "${doc.name}" deleted.`);
             if (customTheme?.slug === doc.slug) clearCustomTheme();
             load();
-        } catch (err) {
-            showError(err?.response?.data?.message || 'Failed to delete theme');
+        } catch (error) {
+            notifyError(failText(error, 'The theme could not be deleted.'));
         }
     };
 
-    const handleSaved = (theme) => {
+    const saved = (theme) => {
         setEditor(null);
         load();
-        if (theme && customTheme && (theme.slug === customTheme.slug)) {
-            applyCustomTheme(theme); // re-apply so edits show immediately
-        }
+        if (theme && customTheme && theme.slug === customTheme.slug) applyCustomTheme(theme);
     };
 
-    const appliedCustomSlug = customTheme?.slug;
+    const usingCustom = (doc) => customTheme?.slug === doc.slug && currentTheme === `custom-${doc.slug}`;
+    const applyDoc = (doc) => {
+        applyCustomTheme(doc);
+        success(`Theme "${doc.name}" is in use.`);
+    };
 
     return (
-        <Container layout="flex-column" gap="lg" padding="none" width="100%">
-            {/* Built-in themes */}
-            <Container layout="flex-column" gap="sm" padding="none" width="100%">
-                <Typography size="sm" weight="semibold">Built-in themes</Typography>
-                <Typography size="sm" color="muted">
-                    The six App Base themes. Apply one directly, or fork it as a starting point for your own.
-                </Typography>
+        <Container layout="flex-column" gap="md" padding="none" width="100%">
+            <Section title="Built-in themes" note="Use one as it is, or copy it as the start of your own.">
                 <Container layout="grid" columns="auto-sm" gap="sm" padding="none" width="100%">
-                    {Object.entries(BUILTIN_SWATCHES).map(([slug, swatches]) => {
-                        const preset = presets.find(p => p.slug === slug);
+                    {BUILT_IN.map((slug) => {
+                        const preset = presets.find((doc) => doc.slug === slug);
                         const applied = currentTheme === slug;
                         return (
-                            <Card key={slug} layout="flex-column" gap="sm" padding="md" hover={false} style={{ minWidth: 0 }}>
+                            <Card key={slug} layout="flex-column" gap="xs" padding="sm" hover={false} shadow={false} minWidth="0" borderColor={applied ? 'primary' : null}>
                                 <Container layout="flex" align="center" justify="between" padding="none" width="100%" wrap={false}>
-                                    <Typography size="sm" weight="semibold">{themes[slug]?.name || slug}</Typography>
-                                    {applied && <Badge size="xs" color="success">Applied</Badge>}
+                                    <Typography size="sm" weight="semibold">{themes?.[slug]?.name || slug}</Typography>
+                                    {applied && <Badge size="xs" color="success">In use</Badge>}
                                 </Container>
-                                <SwatchStrip colors={preset ? themeSwatches(preset) : swatches} />
+                                <ThemePreview theme={slug} />
                                 <Container layout="flex" gap="xs" padding="none" wrap={false}>
-                                    <Button size="xs" color="primary" onClick={() => switchTheme(slug)} disabled={applied}>
-                                        <Icon name="FiCheck" size="xs" />{applied ? 'Applied' : 'Apply'}
-                                    </Button>
-                                    {canCreate && preset && (
-                                        <Button size="xs" color="secondary" onClick={() => openFork(preset)}>
-                                            <Icon name="FiCopy" size="xs" />Fork
-                                        </Button>
-                                    )}
+                                    <Button size="xs" disabled={applied} onClick={() => switchTheme(slug)}><Icon name="FiCheck" size="xs" />{applied ? 'In use' : 'Use'}</Button>
+                                    {canCreate && preset && <Button size="xs" color="secondary" onClick={() => openFork(preset)}><Icon name="FiCopy" size="xs" />Copy</Button>}
                                 </Container>
                             </Card>
                         );
                     })}
                 </Container>
-            </Container>
+            </Section>
 
-            <Divider margin="xs" />
+            <Divider color="surface" margin="xs" />
 
-            {/* My themes */}
-            <Container layout="flex-column" gap="sm" padding="none" width="100%">
-                <Container layout="flex" align="center" justify="between" padding="none" width="100%">
-                    <Typography size="sm" weight="semibold">My themes</Typography>
-                    {canCreate && !editor && (
-                        <Button size="sm" color="primary" onClick={() => setEditor({ initial: null, editingId: null })}>
-                            <Icon name="FiPlus" size="xs" />New theme
-                        </Button>
-                    )}
-                </Container>
-                {!canCreate && (
-                    <Card padding="sm" hover={false} backgroundColor="surface">
-                        <Container layout="flex" align="center" gap="sm" padding="none">
-                            <Icon name="FiStar" size="xs" color="warning" />
-                            <Typography size="xs" color="muted">
-                                Creating custom themes requires a Creator account or above — request an upgrade in the Roles tab.
-                            </Typography>
-                        </Container>
-                    </Card>
-                )}
-
-                {editor && (
-                    <ThemeEditor
-                        initial={editor.initial}
-                        editingId={editor.editingId}
-                        onSaved={handleSaved}
-                        onCancel={() => setEditor(null)}
-                    />
-                )}
-
-                {isLoading ? (
-                    <CircularProgress size="sm" />
-                ) : myThemes.length === 0 && !editor ? (
-                    <Typography size="xs" color="muted">
-                        No custom themes yet — create one from scratch or fork a built-in.
-                    </Typography>
-                ) : (
-                    <Container layout="grid" columns={2} gap="sm" padding="none" width="100%">
-                        {myThemes.map(doc => (
+            <Section
+                title="My themes"
+                note={canCreate ? null : 'Making your own themes needs a Creator role or above. Ask for one under Roles.'}
+                action={canCreate && !editor ? (
+                    <Button size="sm" onClick={() => setEditor({ initial: null, editingId: null })}><Icon name="FiPlus" size="xs" />New theme</Button>
+                ) : null}
+            >
+                {editor && <ThemeEditor initial={editor.initial} editingId={editor.editingId} onSaved={saved} onCancel={() => setEditor(null)} />}
+                {loading && <CircularProgress size="sm" />}
+                {!loading && mine.length === 0 && !editor && <Typography size="xs" color="muted">No themes of your own yet.</Typography>}
+                {!loading && mine.length > 0 && (
+                    <Container layout="grid" columns="auto" gap="sm" padding="none" width="100%">
+                        {mine.map((doc) => (
                             <ThemeCard
-                                key={doc.id || doc._id}
+                                key={idOf(doc)}
                                 doc={doc}
-                                isApplied={appliedCustomSlug === doc.slug && currentTheme === `custom-${doc.slug}`}
-                                onApply={() => { applyCustomTheme(doc); showSuccess(`Theme "${doc.name}" applied`); }}
+                                applied={usingCustom(doc)}
+                                onApply={() => applyDoc(doc)}
                                 onFork={canCreate ? () => openFork(doc) : null}
                                 onEdit={canCreate ? () => openEdit(doc) : null}
-                                onDelete={canCreate ? () => handleDelete(doc) : null}
+                                onDelete={canCreate ? () => remove(doc) : null}
                             />
                         ))}
                     </Container>
                 )}
-            </Container>
+            </Section>
 
-            {/* Community gallery */}
-            {publicThemes.length > 0 && (
+            {shared.length > 0 && (
                 <>
-                    <Divider margin="xs" />
-                    <Container layout="flex-column" gap="sm" padding="none" width="100%">
-                        <Typography size="sm" weight="semibold">Community themes</Typography>
-                        <Typography size="sm" color="muted">Public themes shared by other users.</Typography>
-                        <Container layout="grid" columns={2} gap="sm" padding="none" width="100%">
-                            {publicThemes.map(doc => (
-                                <ThemeCard
-                                    key={doc.id || doc._id}
-                                    doc={doc}
-                                    isApplied={appliedCustomSlug === doc.slug && currentTheme === `custom-${doc.slug}`}
-                                    onApply={() => { applyCustomTheme(doc); showSuccess(`Theme "${doc.name}" applied`); }}
-                                    onFork={canCreate ? () => openFork(doc) : null}
-                                />
+                    <Divider color="surface" margin="xs" />
+                    <Section title="Shared themes" note="Public themes made by other people.">
+                        <Container layout="grid" columns="auto" gap="sm" padding="none" width="100%">
+                            {shared.map((doc) => (
+                                <ThemeCard key={idOf(doc)} doc={doc} applied={usingCustom(doc)} onApply={() => applyDoc(doc)} onFork={canCreate ? () => openFork(doc) : null} />
                             ))}
                         </Container>
-                    </Container>
+                    </Section>
                 </>
             )}
         </Container>
@@ -1411,7 +1300,7 @@ const SettingsPage = () => {
 
     const renderTab = () => {
         switch (tab) {
-            case 'appearance':   return <AppearanceTab />;
+            case 'appearance':   return <AppearanceTab user={user} />;
             case 'account':      return <AccountTab user={user} />;
             case 'security':     return <SecurityTab />;
             case 'roles':        return <RoleTab user={user} />;

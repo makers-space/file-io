@@ -609,3 +609,37 @@
         padding: 0 1.875rem;    /* 30px */
     }
 }
+
+/* Content alignment (align prop) */
+.button.themed-button.button-align-start,
+.button.themed-button.button-align-start .button-content {
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.button.themed-button.button-align-end,
+.button.themed-button.button-align-end .button-content {
+    justify-content: flex-end;
+    text-align: right;
+}
+
+.button.themed-button.button-align-start .button-content,
+.button.themed-button.button-align-end .button-content {
+    width: 100%;
+    min-width: 0;
+}
+
+/* Flat states (flat prop): no border, shadow or lift on hover and when selected */
+.button.themed-button.button-flat,
+.button.themed-button.button-flat:hover,
+.button.themed-button.button-flat.selected {
+    border-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.button.themed-button.button-round {
+    border-radius: 50%;
+    aspect-ratio: 1 / 1;
+    padding: 0;
+}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
 import fileService from '@/client/file.client';
+import { NotificationsCard } from '@components/AppNotifications';
 import { userService } from '@/client/user.client';
 import { getFileIcon } from '@components/FileCard';
 import {
@@ -741,7 +742,7 @@ const DashboardPage = () => {
     const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
     return (
-        <Page layout="flex-column" padding="none" gap="none" background="dots" backgroundFade="bottom">
+        <Page layout="flex-column" padding="none" gap="none" background="plus" backgroundFade="bottom">
             <Container
                 layout="flex-column" gap="lg" padding="none" width="100%" maxWidth="1360px" margin="auto" wrap={false}
                 style={{ padding: 'clamp(20px, 3vw, 36px)' }}
@@ -795,6 +796,8 @@ const DashboardPage = () => {
                         accent="var(--warning-color)"
                     />
                 </Container>
+
+                <NotificationsCard subscribe={(callback) => fileService.onFileNotification(callback)} />
 
                 {/* ── Main content: recent files full width, then a 2×2 section grid ── */}
                 <Container layout="grid" columns={2} gap="lg" padding="none" width="100%">

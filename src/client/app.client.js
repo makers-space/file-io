@@ -177,6 +177,21 @@ export const refreshCsrfToken = fetchCsrfToken;
 export { api as sharedAPI };
 
 export const appService = {
+    /**
+     * Notices the server kept for this person, newest first, with the number not yet read.
+     */
+    async getNotifications() {
+        return await api.get('/notifications');
+    },
+
+    async markNotificationsRead(id = null) {
+        return await api.post('/notifications/read', id ? { id } : {});
+    },
+
+    async clearNotifications(id = null) {
+        return await api.delete('/notifications', id ? { params: { id } } : {});
+    },
+
     async submitContactForm(data) {
         return api.post('/contact', data);
     },

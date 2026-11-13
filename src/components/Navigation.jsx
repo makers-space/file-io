@@ -155,6 +155,9 @@ export const Navigation = ({
     };
 
     const navigationItems = getNavigationItems();
+    // Admin panel goes last, or Settings when there is no admin panel; an odd last button spans both columns
+    const lastMenuId = navigationItems.some((item) => item.id === 'admin') ? 'admin' : 'settings';
+    const menuItems = [...navigationItems.filter((item) => item.id !== lastMenuId), ...navigationItems.filter((item) => item.id === lastMenuId)];
 
     const handleNavigation = (path) => {
         navigate(path);
@@ -224,32 +227,35 @@ export const Navigation = ({
                 <Typography as="p" size="xs" weight="medium">
                     MENU
                 </Typography>
-                {navigationItems.map(item => (
-                    <Button
-                        key={item.id}
-                        size="sm"
-                        align="left"
-                        width="100%"
-                        onClick={() => handleNavigation(item.path)}
-                        disabled={isNavigating}
-                    >
-                        <Icon name={item.icon} size="xs"/>
-                        {item.label}
-                        {item.badge && (
-                            <Badge color="tertiary" size="xs">
-                                {item.badge}
-                            </Badge>
-                        )}
-                    </Button>
-                ))}
+                <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
+                    {menuItems.map((item, index) => (
+                        <Container key={item.id} padding="none" width="100%" span={index === menuItems.length - 1 && menuItems.length % 2 === 1 ? 'full' : null}>
+                            <Button
+                                size="sm"
+                                align="left"
+                                width="100%"
+                                onClick={() => handleNavigation(item.path)}
+                                disabled={isNavigating}
+                            >
+                                <Icon name={item.icon} size="xs"/>
+                                {item.label}
+                                {item.badge && (
+                                    <Badge color="tertiary" size="xs">
+                                        {item.badge}
+                                    </Badge>
+                                )}
+                            </Button>
+                        </Container>
+                    ))}
+                </Container>
             </Container>
 
             {/* Theme Switcher */}
-            <Container layout="flex-column" gap="xs">
+            <Container layout="flex-column" gap="xs" width="100%">
                 <Typography as="p" size="xs" weight="medium">
                     THEME
                 </Typography>
-                <Container layout="flex" gap="xs" wrap justify="center" maxWidth="480px" width="100%">
+                <Container layout="flex" gap="xs" wrap justify="center" width="100%">
                     {availableThemes.map(themeName => (
                         <Button
                             key={themeName}

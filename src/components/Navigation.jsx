@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useTheme } from '@contexts/ThemeContext';
-import { Badge, Button, CircularProgress, Container, FloatingActionButton, Icon, Page, Typography, ButtonGroup } from './Components';
+import { Badge, Button, CircularProgress, Container, FloatingActionButton, Icon, Page, Typography } from './Components';
 
 const LOADING_MESSAGES = [
     'Loading page',
@@ -155,8 +155,8 @@ export const Navigation = ({
     };
 
     const navigationItems = getNavigationItems();
-    // Admin panel goes last, or Settings when there is no admin panel; an odd last button spans both columns
-    const lastMenuId = navigationItems.some((item) => item.id === 'admin') ? 'admin' : 'settings';
+    // Admin panel goes last, or Settings when there is no admin panel, or Home when signed out; an odd last button spans both columns
+    const lastMenuId = ['admin', 'settings', 'home-guest'].find((id) => navigationItems.some((item) => item.id === id));
     const menuItems = [...navigationItems.filter((item) => item.id !== lastMenuId), ...navigationItems.filter((item) => item.id === lastMenuId)];
 
     const handleNavigation = (path) => {
@@ -271,7 +271,7 @@ export const Navigation = ({
             </Container>
 
             {/* Actions */}
-            {user ? (
+            {user && (
                 <Container layout="flex-column" gap="xs" width="100%">
                     <Typography as="p" size="xs" weight="medium">
                         ACCOUNT
@@ -288,29 +288,6 @@ export const Navigation = ({
                         <Icon name="FiLogOut" size="xs"/>
                         Sign Out
                     </Button>
-                </Container>
-            ) : (
-                <Container layout="flex">
-                    <ButtonGroup spaced selectable={false} justify="start">
-                        <Button
-                            color="primary"
-                            size="sm"
-                            onClick={() => handleNavigation('/login')}
-                            disabled={isNavigating}
-                        >
-                            <Icon name="FiLogIn" size="sm"/>
-                            Sign In
-                        </Button>
-                        <Button
-                            color="secondary"
-                            size="sm"
-                            onClick={() => handleNavigation('/signup')}
-                            disabled={isNavigating}
-                        >
-                            <Icon name="FiUserPlus" size="sm"/>
-                            Sign Up
-                        </Button>
-                    </ButtonGroup>
                 </Container>
             )}
         </Container>

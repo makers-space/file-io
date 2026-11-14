@@ -42,12 +42,10 @@ const ForgotPasswordPage = () => {
             
             if (result.success) {
                 setIsSubmitted(true);
-                showSuccess('Password reset instructions have been sent to your email.');
             } else {
                 showError(result.error || 'Failed to send reset instructions. Please try again.');
             }
-        } catch (error) {
-            showError(error.message || 'Failed to send reset instructions. Please try again.');
+        } catch {
         } finally {
             setIsLoading(false);
         }

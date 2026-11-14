@@ -2,12 +2,27 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+// `npm run staging` runs this local web app against the hosted staging server. The browser only ever
+// talks to localhost: Vite passes API calls and live connections on to staging, so sign-in cookies work.
+const STAGING_SERVER = 'https://staging.api.filesystem.one';
+const STAGING_SITE = 'https://staging.filesystem.one';
+const toStaging = { target: STAGING_SERVER, changeOrigin: true, headers: { origin: STAGING_SITE } };
+// Live connections share their paths with pages, so only connection upgrades are passed on.
+const liveToStaging = { ...toStaging, ws: true, bypass: (req) => (req.headers.upgrade ? undefined : req.url) };
+const stagingProxy = { '/api': toStaging, '/notifications': liveToStaging, '/yjs': liveToStaging };
+const stagingValues = {
+  'import.meta.env.VITE_API_BASE_URL': JSON.stringify('/api/v1'),
+  'import.meta.env.VITE_WS_BASE_URL': JSON.stringify('ws://localhost:8083')
+};
+
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
-    port: 8083
+    port: 8083,
+    proxy: mode === 'staging' ? stagingProxy : undefined
   },
+  define: mode === 'staging' ? stagingValues : {},
   optimizeDeps: {
     // Exclude the PDF.js worker from Vite's pre-bundling so the
     // `new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url)`
@@ -42,4 +57,4 @@ export default defineConfig({
       '@service': path.resolve(__dirname, './src/service')
     }
   }
-});
+}));

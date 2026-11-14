@@ -5,6 +5,7 @@
   "description": "Filesystem One — Cloud File System",
   "scripts": {
     "dev": "vite",
+    "staging": "vite --mode staging",
     "build": "vite build",
     "preview": "vite preview"
   },

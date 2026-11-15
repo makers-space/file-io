@@ -14,6 +14,7 @@ export const ButtonGroup = forwardRef(({
     size = 'md', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl'
     spaced = false, // Add spacing between buttons instead of shared borders
     wrap = true, // false keeps all buttons on one line (no flex wrapping)
+    vertical = false, // Stack the buttons in a column, each as wide as the group
     theme = null, // Optional theme override
     width = null, // Custom width
     height = null, // Custom height
@@ -165,7 +166,13 @@ export const ButtonGroup = forwardRef(({
             const buttons = buttonRefs.current.filter(Boolean);
             if (!buttons.length) return;
 
-            buttons.forEach(btn => btn.classList.remove('button-group-edge-left', 'button-group-edge-right'));
+            buttons.forEach(btn => btn.classList.remove('button-group-edge-left', 'button-group-edge-right', 'button-group-edge-top', 'button-group-edge-bottom'));
+
+            if (vertical) {
+                buttons[0].classList.add('button-group-edge-top');
+                buttons[buttons.length - 1].classList.add('button-group-edge-bottom');
+                return;
+            }
 
             const rowsMap = new Map();
             buttons.forEach((button) => {
@@ -188,7 +195,7 @@ export const ButtonGroup = forwardRef(({
         return () => {
             window.removeEventListener('resize', updateEdges);
         };
-    }, [children, spaced, size, justify, align]);
+    }, [children, spaced, size, justify, align, vertical]);
 
     // Clone children and provide context
     buttonRefs.current = [];
@@ -226,11 +233,11 @@ export const ButtonGroup = forwardRef(({
         <div className="button-group-container" style={getButtonGroupStyle()}>
             <div
                 ref={ref}
-                className={`button-group ${getSizeClass()} ${getSpacedClass()} ${wrap ? '' : 'nowrap'} theme-${buttonGroupTheme} ${className}`}
+                className={`button-group ${getSizeClass()} ${getSpacedClass()} ${wrap ? '' : 'nowrap'} ${vertical ? 'vertical' : ''} theme-${buttonGroupTheme} ${className}`}
                 data-theme={buttonGroupTheme}
                 style={{
                     justifyContent: groupStyleProp.justifyContent ?? normalizeJustify(justify),
-                    alignItems: groupStyleProp.alignItems ?? normalizeAlign(align),
+                    alignItems: groupStyleProp.alignItems ?? (vertical ? 'stretch' : normalizeAlign(align)),
                     ...groupStyleProp
                 }}
                 {...restProps}

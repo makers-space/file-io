@@ -141,3 +141,23 @@
     margin: 0;
     padding: 0;
 }
+
+/* A vertical group stacks its buttons; only the top and bottom ones are rounded. */
+.button-group.vertical {
+    flex-direction: column;
+    flex-wrap: nowrap;
+}
+
+.button-group.vertical .button.themed-button {
+    width: 100%;
+}
+
+.button-group.vertical .button.themed-button.button-group-edge-top {
+    border-top-left-radius: var(--button-radius, var(--border-radius-md)) !important;
+    border-top-right-radius: var(--button-radius, var(--border-radius-md)) !important;
+}
+
+.button-group.vertical .button.themed-button.button-group-edge-bottom {
+    border-bottom-left-radius: var(--button-radius, var(--border-radius-md)) !important;
+    border-bottom-right-radius: var(--button-radius, var(--border-radius-md)) !important;
+}

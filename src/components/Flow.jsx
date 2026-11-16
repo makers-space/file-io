@@ -983,6 +983,36 @@ export const Flow = ({
     redo: historySize.redo > 0
   };
 
+  // After boxes are moved, every connector is put on the sides that face each other, so none doubles back.
+  // place holds the new positions of the boxes that moved.
+  const reroute = (place) => {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const spot = (node) => {
+      const own = place.get(node.id) || node.position;
+      const parent = node.parentId ? byId.get(node.parentId) : null;
+      const base = parent ? place.get(parent.id) || parent.position : { x: 0, y: 0 };
+      return { x: base.x + own.x, y: base.y + own.y, ...sizeOf(node, node.type === 'group' ? 300 : 120, node.type === 'group' ? 200 : 48) };
+    };
+    setEdges((current) => current.map((edge) => {
+      const from = byId.get(edge.source);
+      const to = byId.get(edge.target);
+      if (!from || !to) return edge;
+      const a = spot(from);
+      const b = spot(to);
+      const middle = { x: a.x + a.wide / 2, y: a.y + a.tall / 2 };
+      if (edge.type === 'member') {
+        const { side, along } = onBorder({ ...to, position: { x: b.x, y: b.y } }, middle);
+        return { ...edge, sourceHandle: `${side}-source`, data: { ...edge.data, side, along } };
+      }
+      const across = b.x + b.wide / 2 - middle.x;
+      const down = b.y + b.tall / 2 - middle.y;
+      const [out, into] = Math.abs(across) >= Math.abs(down)
+        ? (across >= 0 ? ['right', 'left'] : ['left', 'right'])
+        : (down >= 0 ? ['bottom', 'top'] : ['top', 'bottom']);
+      return { ...edge, sourceHandle: `${out}-source`, targetHandle: `${into}-target` };
+    }));
+  };
+
   const arrange = (kind) => {
     const steps = nodes.filter((node) => node.type !== 'group' && !node.parentId);
     if (steps.length === 0) return;
@@ -1011,10 +1041,7 @@ export const Flow = ({
       });
     }
     setNodes((current) => current.map((node) => (place.has(node.id) ? { ...node, position: place.get(node.id) } : node)));
-    if (kind === 'lr' || kind === 'tb') {
-      const [from, to] = kind === 'lr' ? ['right-source', 'left-target'] : ['bottom-source', 'top-target'];
-      setEdges((current) => current.map((edge) => (ids.has(edge.source) && ids.has(edge.target) ? { ...edge, sourceHandle: from, targetHandle: to } : edge)));
-    }
+    reroute(place);
     setTimeout(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }), 50);
   };
 
@@ -1032,6 +1059,7 @@ export const Flow = ({
       sorted.forEach((node, index) => place.set(node.id, { ...node.position, [axis]: Math.round(first + gap * index) }));
     }
     setNodes((current) => current.map((node) => (place.has(node.id) ? { ...node, position: place.get(node.id) } : node)));
+    reroute(place);
   };
 
   const runAction = (id) => {

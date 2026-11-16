@@ -616,8 +616,8 @@
 }
 
 .themed-flow .react-flow__node-group.selected {
-  border-style: solid;
-  box-shadow: 0 0 0 1px var(--text-color);
+  border-style: dashed;
+  box-shadow: none;
   background-color: color-mix(in srgb, var(--surface-color), transparent 60%);
 }
 

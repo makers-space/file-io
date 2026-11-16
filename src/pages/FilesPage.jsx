@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import fileService from '../client/file.client';
 import FileCard, { getFileIcon } from '../components/FileCard';
 import FileListRow from '../components/FileListRow';
+import Flow, { parseFlow } from '../components/Flow';
 import {
   Page,
   Container,
@@ -230,6 +231,7 @@ const getTypeBadge = (viewerType, filePath) => {
   const isDocx     = viewerType === 'text' && filePath?.match(/\.docx?$/i);
   const isMarkdown = viewerType === 'text' && filePath?.match(/\.(md|mdx)$/i);
   const isPlain    = viewerType === 'text' && filePath?.match(/\.txt$/i);
+  const isFlow     = viewerType === 'text' && filePath?.match(/\.flow$/i);
   const isZip      = viewerType === 'binary' && filePath?.match(/\.zip$/i);
   return (
     viewerType === 'image' ? { icon: 'TbImageInPicture', label: 'IMAGE',        color: 'primary' } :
@@ -240,6 +242,7 @@ const getTypeBadge = (viewerType, filePath) => {
     isDocx                 ? { icon: 'FiFileText',       label: 'DOCUMENT',     color: 'primary' } :
     isMarkdown             ? { icon: 'FiFileText',       label: 'MARKDOWN',     color: 'primary' } :
     isPlain                ? { icon: 'FiFileText',       label: 'TEXT',         color: 'primary' } :
+    isFlow                 ? { icon: 'FiGitMerge',       label: 'FLOW',         color: 'primary' } :
     viewerType === 'text'  ? { icon: 'FiCode',           label: 'CODE',         color: 'primary' } :
     isZip                  ? { icon: 'FiArchive',        label: 'ZIP ARCHIVE',  color: null      } :
     viewerType === 'binary'? { icon: 'FiFile',           label: 'BINARY',       color: null      } :
@@ -274,6 +277,7 @@ const useFileViewer = (filePath) => {
       if (oldEnd > start) ytext.delete(start, oldEnd - start);
       if (newEnd > start) ytext.insert(start, newContent.slice(start, newEnd));
     }, 'editor-change');
+    if (/\.flow$/i.test(pathRef.current || '')) setState(s => s.viewerType === 'text' ? { ...s, content: newContent } : s);
   }, [showError]);
 
   useEffect(() => {
@@ -1541,7 +1545,7 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
     'json', 'jsonc', 'html', 'htm', 'css', 'scss', 'less',
     'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf',
     'py', 'rb', 'go', 'java', 'rs', 'cpp', 'cc', 'c', 'h',
-    'sh', 'bash', 'zsh', 'ps1', 'sql', 'graphql', 'gql', 'hbs', 'svelte', 'vue',
+    'sh', 'bash', 'zsh', 'ps1', 'sql', 'graphql', 'gql', 'hbs', 'svelte', 'vue', 'flow',
   ].includes(ext);
 
   const doRefresh = useCallback(() => onRefresh?.(), [onRefresh]);
@@ -2765,6 +2769,7 @@ export const FilesPage = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSavingImage, setIsSavingImage] = useState(false);
   const [isStarred, setIsStarred] = useState(false);
+  const [flowAsText, setFlowAsText] = useState(false);
 
   const imageRef = useRef(null);
 
@@ -3159,6 +3164,10 @@ export const FilesPage = () => {
     // YJS plugin).  Editor's collab path ignores onChange, so we always pass it.
     const collabYText    = editorMode === 'code' ? ytext    : null;
     const collabProvider = editorMode === 'code' ? provider : null;
+    // A flow file is drawn as its diagram; its text can be shown instead, and is shown when it cannot be read as a flow.
+    const isFlowFile = viewerType === 'text' && /\.flow$/i.test(activePath || '');
+    const flowError = isFlowFile ? parseFlow(content).error : null;
+    const showFlowText = isFlowFile && (flowAsText || Boolean(flowError));
 
     return (
       <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
@@ -3218,6 +3227,11 @@ export const FilesPage = () => {
             <Typography size="xs">
               {metadata.filePath}
             </Typography>
+            {isFlowFile && !flowError && (
+              <Button size="sm" variant="ghost" onClick={() => setFlowAsText(shown => !shown)} title={flowAsText ? 'Show the diagram' : 'Show the text'}>
+                <Icon name={flowAsText ? 'FiGitMerge' : 'FiCode'} size="xs" />
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={handleToggleStar} title={isStarred ? 'Unstar file' : 'Star file'}>
               <Icon name={isStarred ? 'FiStar' : 'FiStar'} size="xs" color={isStarred ? 'warning' : 'secondary'} style={isStarred ? { fill: 'currentColor' } : {}} />
             </Button>
@@ -3225,7 +3239,26 @@ export const FilesPage = () => {
         </Card>
 
         <Container layout="flex" align="center" justify="center" flexFill width="100%" height="100%" padding="sm" overflow="auto">
-          {viewerType === 'text' ? (
+          {isFlowFile && !showFlowText ? (
+            <Flow
+              key={`flow-${metadata.filePath}`}
+              content={content}
+              onContentChange={updateContent}
+              readOnly={isReadOnly}
+              toolbar
+              minimap
+              width="100%"
+              height="100%"
+              minHeight="100%"
+            />
+          ) : viewerType === 'text' ? (
+            <Container layout="flex-column" gap="xs" padding="none" width="100%" height="100%">
+            {flowError && (
+              <Container layout="flex" align="center" gap="xs" padding="none">
+                <Icon name="FiAlertCircle" size="sm" color="warning" />
+                <Typography size="xs" color="warning">{flowError} Its text is shown so it can be corrected.</Typography>
+              </Container>
+            )}
             <Editor
               key={`text-editor-${metadata.filePath}`}
               mode={editorMode}
@@ -3242,6 +3275,7 @@ export const FilesPage = () => {
               height="100%"
               minHeight="100%"
             />
+            </Container>
           ) : viewerType === 'image' ? (
             <Container layout="flex" align="center" justify="center" width="100%">
               <Image

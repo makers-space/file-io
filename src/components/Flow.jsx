@@ -31,7 +31,7 @@
  * - Set expandParent: true to auto-expand parent when child is dragged to edge
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -195,12 +195,202 @@ const sanitizeEdge = (edge) => {
   };
 };
 
+// ===== Flow text =====
+// A flow is kept as plain text: <Flow> holding <Group />, <Node /> and <Edge /> lines.
+// parseFlow turns that text into nodes and edges; writeFlow turns nodes and edges back into the same text.
+export const FLOW_LIMITS = { nodes: 500, edges: 1000, text: 4000 };
+
+const FLOW_TAG = /<\s*(Node|Group|Edge)\b((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/\s*>|>([^<]*)<\/\s*\1\s*>|>)/gi;
+const FLOW_ATTRIBUTE = /([A-Za-z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\}|([^\s"'>/]+))/g;
+const FLOW_NODE_KEYS = ['id', 'label', 'color', 'shape', 'x', 'y', 'width', 'height', 'group', 'size', 'weight', 'align'];
+const FLOW_SHAPES = NODE_SHAPE_OPTIONS.map((option) => option.value);
+const FLOW_SIZES = ['xs', 'sm', 'md', 'lg', 'xl', '2xl'];
+const FLOW_WEIGHTS = ['light', 'normal', 'medium', 'semibold', 'bold', 'extrabold'];
+const FLOW_ALIGNS = ['left', 'center', 'right'];
+const FLOW_EDGE_TYPES = ['smoothstep', 'straight', 'default', 'step', 'simplebezier'];
+const FLOW_SIDES = ['top', 'right', 'bottom', 'left'];
+const FLOW_DETAIL_KEY = /^[a-z_][\w-]*$/;
+const FLOW_DROPPED_KEY = /^(style|class|classname|on(click|dblclick|load|error|focus|blur|change|submit|input|mouse\w+|key\w+|pointer\w+|touch\w+))$/;
+
+const unescapeFlow = (value) => String(value)
+  .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#10;/g, '\n').replace(/&amp;/g, '&');
+const escapeFlow = (value) => String(value)
+  .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, '&#10;');
+const flowNumber = (value) => (value !== undefined && value !== '' && Number.isFinite(Number(value)) ? Math.round(Number(value)) : null);
+const oneOf = (value, list) => (list.includes(String(value ?? '').toLowerCase()) ? String(value).toLowerCase() : null);
+const sideOf = (handle) => oneOf(String(handle ?? '').split('-')[0], FLOW_SIDES);
+
+export const parseFlow = (text) => {
+  const empty = { nodes: [], edges: [], error: null };
+  const source = String(text ?? '');
+  if (!source.trim()) return empty;
+  if (!/<\s*Flow[\s>/]/i.test(source)) return { ...empty, error: 'This file does not hold a flow.' };
+
+  const boxes = [];
+  const links = [];
+  for (const match of source.matchAll(FLOW_TAG)) {
+    const props = {};
+    for (const attribute of match[2].matchAll(FLOW_ATTRIBUTE)) {
+      props[attribute[1].toLowerCase()] = unescapeFlow(attribute[2] ?? attribute[3] ?? attribute[4] ?? attribute[5] ?? '').slice(0, FLOW_LIMITS.text);
+    }
+    if (props.label === undefined && match[4]?.trim()) props.label = unescapeFlow(match[4].trim()).slice(0, FLOW_LIMITS.text);
+    const kind = match[1].toLowerCase();
+    (kind === 'edge' ? links : boxes).push({ kind, props });
+  }
+  if (boxes.length > FLOW_LIMITS.nodes) return { ...empty, error: `This flow has more than ${FLOW_LIMITS.nodes} boxes, which is too many to open.` };
+  if (links.length > FLOW_LIMITS.edges) return { ...empty, error: `This flow has more than ${FLOW_LIMITS.edges} connectors, which is too many to open.` };
+
+  const seen = new Set();
+  const named = boxes.filter(({ props }) => {
+    if (!props.id || seen.has(props.id)) return false;
+    seen.add(props.id);
+    return true;
+  });
+  const groupIds = new Set(named.filter((box) => box.kind === 'group').map((box) => box.props.id));
+
+  const groups = named.filter((box) => box.kind === 'group').map(({ props }, index) => ({
+    id: props.id,
+    type: 'group',
+    position: { x: flowNumber(props.x) ?? index * 340, y: flowNumber(props.y) ?? 0 },
+    data: { label: props.label ?? '', color: resolveColorToken(props.color, 'neutral') },
+    style: { width: flowNumber(props.width) ?? 300, height: flowNumber(props.height) ?? 200 }
+  }));
+
+  const steps = named.filter((box) => box.kind === 'node');
+  const stepIds = new Set(steps.map((box) => box.props.id));
+  const wires = links.filter(({ props }) => stepIds.has(props.source) && stepIds.has(props.target));
+
+  // Boxes with no position are laid out left to right, following the connectors.
+  const level = new Map(steps.map((box) => [box.props.id, 0]));
+  for (let pass = 0; pass < steps.length; pass++) {
+    let moved = false;
+    for (const { props } of wires) {
+      if (level.get(props.target) <= level.get(props.source) && level.get(props.source) < steps.length) {
+        level.set(props.target, level.get(props.source) + 1);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  const rows = new Map();
+  const inGroup = new Map();
+
+  const nodes = steps.map(({ props }) => {
+    const parent = groupIds.has(props.group) ? props.group : null;
+    let position = flowNumber(props.x) !== null && flowNumber(props.y) !== null ? { x: flowNumber(props.x), y: flowNumber(props.y) } : null;
+    if (!position && parent) {
+      const place = inGroup.get(parent) || 0;
+      inGroup.set(parent, place + 1);
+      position = { x: 24, y: 40 + place * 70 };
+    }
+    if (!position) {
+      const column = level.get(props.id);
+      const row = rows.get(column) || 0;
+      rows.set(column, row + 1);
+      position = { x: column * 240, y: row * 110 };
+    }
+    const details = {};
+    for (const [key, value] of Object.entries(props)) {
+      if (!FLOW_NODE_KEYS.includes(key) && FLOW_DETAIL_KEY.test(key) && !FLOW_DROPPED_KEY.test(key)) details[key] = value;
+    }
+    const data = { label: props.label ?? props.id, color: resolveColorToken(props.color), shape: oneOf(props.shape, FLOW_SHAPES) || DEFAULT_NODE_SHAPE };
+    if (oneOf(props.size, FLOW_SIZES)) data.fontSize = oneOf(props.size, FLOW_SIZES);
+    if (oneOf(props.weight, FLOW_WEIGHTS)) data.fontWeight = oneOf(props.weight, FLOW_WEIGHTS);
+    if (oneOf(props.align, FLOW_ALIGNS)) data.textAlign = oneOf(props.align, FLOW_ALIGNS);
+    if (Object.keys(details).length > 0) data.details = details;
+    return {
+      id: props.id,
+      type: 'editable',
+      position,
+      data,
+      ...(parent ? { parentId: parent, extent: 'parent', expandParent: true } : {})
+    };
+  });
+
+  const edges = wires.map(({ props }, index) => {
+    const arrow = String(props.arrow ?? '').toLowerCase();
+    return {
+      id: `edge-${index}`,
+      source: props.source,
+      target: props.target,
+      sourceHandle: `${oneOf(props.from, FLOW_SIDES) || 'right'}-source`,
+      targetHandle: `${oneOf(props.to, FLOW_SIDES) || 'left'}-target`,
+      ...(props.label ? { label: props.label } : {}),
+      type: oneOf(props.type, FLOW_EDGE_TYPES) || 'smoothstep',
+      animated: props.animated === 'true',
+      data: { color: resolveColorToken(props.color, DEFAULT_EDGE_COLOR_TOKEN) },
+      style: { strokeWidth: Math.min(Math.max(flowNumber(props.width) ?? 2, 1), 10) },
+      ...(arrow === 'none' ? {} : { markerEnd: { type: arrow === 'open' ? 'arrow' : 'arrowclosed' } })
+    };
+  });
+
+  return { nodes: [...groups, ...nodes], edges, error: null };
+};
+
+export const writeFlow = (nodes = [], edges = []) => {
+  const line = (tag, pairs) => `  <${tag} ${pairs.filter(([, value]) => value !== undefined && value !== null && value !== '').map(([key, value]) => `${key}="${escapeFlow(value)}"`).join(' ')} />`;
+  const groupIds = new Set(nodes.filter((node) => node.type === 'group').map((node) => node.id));
+  const stepIds = new Set(nodes.filter((node) => node.type !== 'group').map((node) => node.id));
+  const lines = [];
+
+  for (const node of nodes) {
+    if (node.type !== 'group') continue;
+    const color = resolveColorToken(node.data?.color, 'neutral');
+    lines.push(line('Group', [
+      ['id', node.id], ['label', node.data?.label],
+      ['color', color === 'neutral' ? null : color],
+      ['x', Math.round(node.position?.x ?? 0)], ['y', Math.round(node.position?.y ?? 0)],
+      ['width', flowNumber(node.width ?? node.style?.width) ?? 300], ['height', flowNumber(node.height ?? node.style?.height) ?? 200]
+    ]));
+  }
+  for (const node of nodes) {
+    if (node.type === 'group') continue;
+    const data = node.data || {};
+    const color = resolveColorToken(data.color);
+    const details = Object.entries(data.details || {}).filter(([key]) => !FLOW_NODE_KEYS.includes(key) && FLOW_DETAIL_KEY.test(key));
+    lines.push(line('Node', [
+      ['id', node.id], ['label', data.label],
+      ['color', color === DEFAULT_NODE_COLOR_TOKEN ? null : color],
+      ['shape', data.shape && data.shape !== DEFAULT_NODE_SHAPE ? data.shape : null],
+      ['x', Math.round(node.position?.x ?? 0)], ['y', Math.round(node.position?.y ?? 0)],
+      ['group', groupIds.has(node.parentId) ? node.parentId : null],
+      ['size', data.fontSize && data.fontSize !== 'md' ? data.fontSize : null],
+      ['weight', data.fontWeight && data.fontWeight !== 'semibold' ? data.fontWeight : null],
+      ['align', data.textAlign && data.textAlign !== 'center' ? data.textAlign : null],
+      ...details
+    ]));
+  }
+  for (const edge of edges) {
+    if (!stepIds.has(edge.source) || !stepIds.has(edge.target)) continue;
+    const color = resolveColorToken(edge.data?.color, DEFAULT_EDGE_COLOR_TOKEN);
+    const from = sideOf(edge.sourceHandle);
+    const to = sideOf(edge.targetHandle);
+    const marker = typeof edge.markerEnd === 'string' ? edge.markerEnd : edge.markerEnd?.type;
+    const width = flowNumber(edge.style?.strokeWidth) ?? 2;
+    lines.push(line('Edge', [
+      ['source', edge.source], ['target', edge.target],
+      ['label', typeof edge.label === 'string' ? edge.label : null],
+      ['color', color === DEFAULT_EDGE_COLOR_TOKEN ? null : color],
+      ['type', edge.type && edge.type !== 'smoothstep' ? edge.type : null],
+      ['animated', edge.animated ? 'true' : null],
+      ['arrow', !marker ? 'none' : marker === 'arrow' ? 'open' : null],
+      ['width', width !== 2 ? width : null],
+      ['from', from && from !== 'right' ? from : null],
+      ['to', to && to !== 'left' ? to : null]
+    ]));
+  }
+  return `<Flow>\n${lines.join('\n')}${lines.length ? '\n' : ''}</Flow>\n`;
+};
+
+const FlowLock = createContext(false);
+
 // Custom Node for inline editing with bidirectional handles on all four sides
 // Each position has BOTH source and target handles to allow any-to-any connections
 const EditableNode = ({ data, id }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data.label);
   const reactFlow = useReactFlow();
+  const locked = useContext(FlowLock);
   const nodeInstance = reactFlow.getNode ? reactFlow.getNode(id) : null;
   const colorToken = useMemo(() => inferNodeColorToken({ data, style: nodeInstance?.style }), [data, nodeInstance?.style]);
   const shape = data.shape || DEFAULT_NODE_SHAPE;
@@ -214,7 +404,7 @@ const EditableNode = ({ data, id }) => {
     setLabel(data.label);
   }, [data.label]);
 
-  const handleDoubleClick = () => setIsEditing(true);
+  const handleDoubleClick = () => { if (!locked) setIsEditing(true); };
 
   const handleSave = () => {
     reactFlow.setNodes((nds) =>
@@ -324,6 +514,10 @@ export const Flow = ({
   onChange,
   onInit,
   onPaneClick,
+  content,
+  onContentChange,
+  readOnly = false,
+  toolbar = false,
   proOptions = { hideAttribution: true },
   connectEdgeOptions = {
     type: 'smoothstep',
@@ -340,9 +534,13 @@ export const Flow = ({
   // Store ReactFlow instance for coordinate transformation in onPaneClick (before hook context available)
   const reactFlowInstanceRef = useRef(null);
   
-  // Initialize with sanitized data once on mount
-  const sanitizedInitialNodes = useMemo(() => initialNodes.map(sanitizeNode), []);
-  const sanitizedInitialEdges = useMemo(() => initialEdges.map(sanitizeEdge), []);
+  // Initialize with sanitized data once on mount. When flow text is given, the diagram is drawn from it.
+  const fromText = content !== undefined && content !== null;
+  const firstFlow = useMemo(() => (fromText ? parseFlow(content) : null), []);
+  const sanitizedInitialNodes = useMemo(() => (firstFlow ? firstFlow.nodes : initialNodes).map(sanitizeNode), []);
+  const sanitizedInitialEdges = useMemo(() => (firstFlow ? firstFlow.edges : initialEdges).map(sanitizeEdge), []);
+  const shownTextRef = useRef(fromText ? content : null);
+  const writtenTextRef = useRef(fromText ? writeFlow(sanitizedInitialNodes, sanitizedInitialEdges) : null);
   
   const [nodes, setNodes, onNodesChange] = useNodesState(sanitizedInitialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(sanitizedInitialEdges);
@@ -369,6 +567,52 @@ export const Flow = ({
   useEffect(() => {
     onChangeRef.current?.({ nodes, edges });
   }, [nodes, edges]);
+
+  // A change made here is reported as flow text, once any drag has finished.
+  const onContentChangeRef = useRef(onContentChange);
+  useEffect(() => {
+    onContentChangeRef.current = onContentChange;
+  }, [onContentChange]);
+
+  useEffect(() => {
+    if (!fromText || readOnly || nodes.some((node) => node.dragging)) return;
+    const text = writeFlow(nodes, edges);
+    if (text === writtenTextRef.current) return;
+    writtenTextRef.current = text;
+    shownTextRef.current = text;
+    onContentChangeRef.current?.(text);
+  }, [nodes, edges, fromText, readOnly]);
+
+  // Flow text that changed somewhere else replaces what is drawn.
+  useEffect(() => {
+    if (!fromText || content === shownTextRef.current) return;
+    shownTextRef.current = content;
+    const next = parseFlow(content);
+    if (next.error) return;
+    const nextNodes = next.nodes.map(sanitizeNode);
+    const nextEdges = next.edges.map(sanitizeEdge);
+    writtenTextRef.current = writeFlow(nextNodes, nextEdges);
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+  }, [content, fromText, setNodes, setEdges]);
+
+  const addBox = useCallback((kind) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const instance = reactFlowInstanceRef.current;
+    const centre = rect && instance?.screenToFlowPosition
+      ? instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+      : { x: 0, y: 0 };
+    setNodes((current) => {
+      const prefix = kind === 'group' ? 'group' : 'step';
+      let number = current.length + 1;
+      while (current.some((node) => node.id === `${prefix}-${number}`)) number++;
+      const nudge = (current.length % 6) * 24;
+      const box = kind === 'group'
+        ? { id: `${prefix}-${number}`, type: 'group', position: { x: Math.round(centre.x - 150 + nudge), y: Math.round(centre.y - 100 + nudge) }, data: { label: 'Group', color: 'neutral' }, style: { width: 300, height: 200 } }
+        : { id: `${prefix}-${number}`, type: 'editable', position: { x: Math.round(centre.x - 60 + nudge), y: Math.round(centre.y - 20 + nudge) }, data: { label: 'New step' } };
+      return kind === 'group' ? [sanitizeNode(box), ...current] : [...current, sanitizeNode(box)];
+    });
+  }, [setNodes]);
 
 
   const onConnect = useCallback(
@@ -405,6 +649,7 @@ export const Flow = ({
 
   const onContextMenu = useCallback((e, node) => {
     e.preventDefault();
+    if (readOnly) return;
     const rect = containerRef.current?.getBoundingClientRect();
     const { color, shape } = getNodeVisualState(node);
     setNodeEditor({
@@ -423,10 +668,11 @@ export const Flow = ({
     });
     setEdgeEditor(null);
     onNodeContextMenu?.(e, node);
-  }, [getNodeVisualState, onNodeContextMenu]);
+  }, [getNodeVisualState, onNodeContextMenu, readOnly]);
   
   const onEdgeContextMenuHandler = useCallback((e, edge) => {
     e.preventDefault();
+    if (readOnly) return;
     const rect = containerRef.current?.getBoundingClientRect();
     const color = inferEdgeColorToken(edge);
     setEdgeEditor({
@@ -441,7 +687,7 @@ export const Flow = ({
       markerEnd: edge.markerEnd?.type || 'arrowclosed'
     });
     setNodeEditor(null);
-  }, []);
+  }, [readOnly]);
   
   const saveNode = useCallback(() => {
     if (!nodeEditor) return;
@@ -520,7 +766,7 @@ export const Flow = ({
   const onPaneClickHandler = useCallback((e) => {
     setNodeEditor(null);
     setEdgeEditor(null);
-    if (enableNodeCreation) {
+    if (enableNodeCreation && !readOnly) {
       const keyMatch = !nodeCreationKey || nodeCreationKey === 'none' ||
         (nodeCreationKey === 'ctrl' && (e.ctrlKey || e.metaKey)) ||
         (nodeCreationKey === 'alt' && e.altKey);
@@ -562,7 +808,7 @@ export const Flow = ({
       }
     }
     onPaneClick?.(e);
-  }, [enableNodeCreation, nodeCreationKey, defaultNodeData, defaultNodeStyle, setNodes, onPaneClick]);
+  }, [enableNodeCreation, readOnly, nodeCreationKey, defaultNodeData, defaultNodeStyle, setNodes, onPaneClick]);
 
   const handleInit = useCallback((instance) => {
     reactFlowInstanceRef.current = instance;
@@ -938,23 +1184,24 @@ export const Flow = ({
         </Container>
       </Genie>
 
+      <FlowLock.Provider value={readOnly}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={connectable ? onConnect : undefined}
+        onConnect={connectable && !readOnly ? onConnect : undefined}
         onNodeClick={(e, node) => { setNodeEditor(null); setEdgeEditor(null); onNodeClick?.(e, node); }}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onContextMenu}
         onEdgeClick={(e, edge) => { setNodeEditor(null); setEdgeEditor(null); onEdgeClick?.(e, edge); }}
         onEdgeContextMenu={onEdgeContextMenuHandler}
         onPaneClick={onPaneClickHandler}
-        nodesDraggable={draggable}
-        nodesConnectable={connectable}
+        nodesDraggable={draggable && !readOnly}
+        nodesConnectable={connectable && !readOnly}
         elementsSelectable={selectable}
-        deleteKeyCode={deletable ? ['Backspace', 'Delete'] : null}
+        deleteKeyCode={deletable && !readOnly ? ['Backspace', 'Delete'] : null}
         zoomOnScroll={zoomable}
         panOnScroll={pannable}
         fitView={fitView}
@@ -964,7 +1211,21 @@ export const Flow = ({
         {...reactFlowProps}
       >
         {background && <Background variant={backgroundVariant} gap={backgroundGap} size={backgroundSize} {...backgroundProps} />}
-        {controls && <Controls {...controlsProps} />}
+        {controls && <Controls showInteractive={!readOnly} {...controlsProps} />}
+        {toolbar && !readOnly && (
+          <Panel position="top-left">
+            <ButtonGroup selectable={false} size="sm">
+              <Button size="sm" variant="ghost" onClick={() => addBox('node')} title="Add a step">
+                <Icon name="FiPlusSquare" size="xs" />
+                Step
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => addBox('group')} title="Add a group to hold steps">
+                <Icon name="FiGrid" size="xs" />
+                Group
+              </Button>
+            </ButtonGroup>
+          </Panel>
+        )}
         {minimap && (
           <MiniMap
             zoomable
@@ -975,6 +1236,7 @@ export const Flow = ({
           />
         )}
       </ReactFlow>
+      </FlowLock.Provider>
       </>
       )}
     </div>

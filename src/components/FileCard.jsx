@@ -39,6 +39,7 @@ const FILE_ICONS = {
     md: 'FiFileText', markdown: 'FiFileText', mdx: 'FiFileText',
     txt: 'FiFileText', rtf: 'FiFileText', log: 'FiFileText',
     tex: 'FiFileText',
+    flow: 'FiGitMerge',
 
     pdf: 'FiBook', epub: 'FiBook', mobi: 'FiBook',
 

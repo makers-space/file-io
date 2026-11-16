@@ -265,14 +265,31 @@
 }
 
 /* Edge labels */
-.themed-flow .react-flow__edge-textbg {
-  fill: var(--surface-color);
-}
-
-.themed-flow .react-flow__edge-text {
-  fill: var(--text-color);
+/* A connector's label: may run over several lines, and its background always fits the text */
+.themed-flow .flow-edge-label {
+  position: absolute;
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--surface-color);
+  color: var(--text-color);
   font-size: 0.75rem;
   font-weight: 500;
+  line-height: 1.3;
+  text-align: center;
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.themed-flow .flow-edge-label-md {
+  font-size: 14px;
+}
+
+.themed-flow .flow-edge-label-lg {
+  font-size: 18px;
+}
+
+.themed-flow .flow-edge-label-bare {
+  background-color: transparent;
 }
 
 /* Edge markers (arrowheads) */
@@ -488,7 +505,7 @@
   word-break: normal;
   overflow-wrap: normal;
   hyphens: none;
-  white-space: normal;
+  white-space: pre-line;
   max-width: 100%;
 }
 
@@ -589,6 +606,8 @@
   text-align: center;
   padding: 2px 4px;
   outline: none;
+  resize: none;
+  display: block;
 }
 
 .flow-node-input:focus {

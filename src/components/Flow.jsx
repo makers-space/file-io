@@ -42,6 +42,7 @@ import {
   Position,
   NodeResizer,
   EdgeToolbar,
+  EdgeLabelRenderer,
   ReactFlowProvider,
   ConnectionMode,
   SelectionMode,
@@ -830,6 +831,7 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
               onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSave(); } }}
               size="xs"
               width="100%"
+              {...(field.lines ? { multiline: true, rows: field.lines, placeholder: 'Shift+Enter for a new line' } : {})}
               {...(field.type === 'number' ? { min: field.least, max: field.most } : {})}
             />
           )}
@@ -934,9 +936,10 @@ const EditableNode = ({ data, id, selected, width }) => {
       >
         <div className="flow-node-geometry" aria-hidden="true" />
         {isEditing ? (
-          <input
-            className="flow-node-input"
+          <textarea
+            className="flow-node-input nodrag"
             autoFocus
+            rows={String(label ?? '').split('\n').length}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -1009,22 +1012,23 @@ const linePath = (line, ends, tune = {}) => (
 const drawEdge = (props, [path, labelX, labelY], items) => (
   <>
     <BaseEdge
-      key={props.labelStyle?.fontSize || 0}
       id={props.id}
       path={path}
       style={props.style}
       markerEnd={props.markerEnd}
       markerStart={props.markerStart}
-      label={props.label}
-      labelX={labelX}
-      labelY={labelY}
-      labelStyle={props.labelStyle}
-      labelShowBg={props.labelShowBg}
-      labelBgStyle={props.labelBgStyle}
-      labelBgPadding={props.labelBgPadding}
-      labelBgBorderRadius={props.labelBgBorderRadius}
       interactionWidth={props.interactionWidth}
     />
+    {props.label && (
+      <EdgeLabelRenderer>
+        <div
+          className={`flow-edge-label flow-edge-label-${FLOW_LABEL_PX[props.data?.labelSize] ? props.data.labelSize : 'sm'}${props.labelShowBg === false ? ' flow-edge-label-bare' : ''}`}
+          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+        >
+          {props.label}
+        </div>
+      </EdgeLabelRenderer>
+    )}
     <EdgeBar id={props.id} x={labelX} y={labelY} selected={props.selected} items={items} />
   </>
 );
@@ -2144,7 +2148,7 @@ const FlowCanvas = forwardRef(({
               { key: 'locked', label: 'Locked', type: 'switch' },
               { key: 'collapsible', label: 'Collapsible', type: 'switch' }
             ] : [
-              { key: 'label', label: 'Label', type: 'text', wide: true },
+              { key: 'label', label: 'Label', type: 'text', wide: true, lines: 2 },
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
               { key: 'shape', label: 'Shape', type: 'select', options: NODE_SHAPE_OPTIONS },
               { key: 'fontSize', label: 'Text size', type: 'select', options: flowChoices('size') },
@@ -2202,7 +2206,7 @@ const FlowCanvas = forwardRef(({
             onSave={saveEdge}
             onCancel={() => setEdgeEditor(null)}
             fields={[
-              { key: 'label', label: 'Label', type: 'text', wide: true },
+              { key: 'label', label: 'Label', type: 'text', wide: true, lines: 2 },
               { key: 'color', label: 'Colour', type: 'select', options: edgeEditor.member ? [{ value: 'group', label: 'Same as the group' }, ...COLOR_OPTIONS] : COLOR_OPTIONS },
               { key: 'strokeWidth', label: 'Width', type: 'number', least: 1, most: 10 },
               { key: 'type', label: 'Curve shape', type: 'select', options: flowChoices('line') },

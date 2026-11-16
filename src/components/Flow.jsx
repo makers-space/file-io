@@ -1009,6 +1009,7 @@ const linePath = (line, ends, tune = {}) => (
 const drawEdge = (props, [path, labelX, labelY], items) => (
   <>
     <BaseEdge
+      key={props.labelStyle?.fontSize || 0}
       id={props.id}
       path={path}
       style={props.style}

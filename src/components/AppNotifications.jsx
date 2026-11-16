@@ -178,9 +178,9 @@ export const NotificationsMenu = () => {
         if (userId) load();
     }, [userId, load]);
 
-    if (!userId) return null;
-    const act = (work) => work.then(load).catch(load);
     const notices = list || [];
+    if (!userId || (notices.length === 0 && showing.length === 0)) return null;
+    const act = (work) => work.then(load).catch(load);
 
     return (
         <Container layout="flex-column" gap="xs" width="100%">
@@ -198,7 +198,6 @@ export const NotificationsMenu = () => {
                     </Button>
                 </Container>
             </Container>
-            {list !== null && notices.length === 0 && <Typography size="xs" color="muted">Nothing to clear.</Typography>}
             {notices.slice(0, 3).map((notice) => {
                 const [icon, color] = LEVEL_ICONS[notice.level] || LEVEL_ICONS.info;
                 return (

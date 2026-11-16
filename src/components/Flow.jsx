@@ -412,16 +412,16 @@ const FLOW_ACTIONS = [
 ];
 const FLOW_HISTORY = 100;
 const FLOW_LAYOUTS = [
-  { id: 'lr', label: 'Left to right', keys: 'L' },
-  { id: 'tb', label: 'Top to bottom', keys: 'Shift+L' },
-  { id: 'grid', label: 'Grid' },
-  { id: 'circle', label: 'Circle' }
+  { id: 'lr', icon: 'FiArrowRight', label: 'Arrange everything left to right (L)' },
+  { id: 'tb', icon: 'FiArrowDown', label: 'Arrange everything top to bottom (Shift+L)' },
+  { id: 'grid', icon: 'FiGrid', label: 'Arrange everything in a grid' },
+  { id: 'circle', icon: 'FiCircle', label: 'Arrange everything in a circle' }
 ];
 const FLOW_ALIGNMENTS = [
-  { id: 'left', label: 'Line up the left edges', least: 2 },
-  { id: 'top', label: 'Line up the top edges', least: 2 },
-  { id: 'across', label: 'Space evenly across', least: 3 },
-  { id: 'down', label: 'Space evenly down', least: 3 }
+  { id: 'left', icon: 'MdAlignHorizontalLeft', label: 'Line up the left edges of what is selected', least: 2 },
+  { id: 'top', icon: 'MdAlignVerticalTop', label: 'Line up the top edges of what is selected', least: 2 },
+  { id: 'across', icon: 'MdHorizontalDistribute', label: 'Space what is selected evenly across', least: 3 },
+  { id: 'down', icon: 'MdVerticalDistribute', label: 'Space what is selected evenly down', least: 3 }
 ];
 
 // Custom Node for inline editing with bidirectional handles on all four sides
@@ -1483,19 +1483,21 @@ export const Flow = ({
                   variant="ghost"
                   selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap)}
                   genie={action.id !== 'tidy' ? null : { trigger: 'click', padding: 'xs', content: (
-                    <Container layout="flex-column" gap="none" padding="none" width="220px">
-                      <Typography size="xs" weight="semibold">Arrange everything</Typography>
-                      {FLOW_LAYOUTS.map((layout) => (
-                        <Button key={layout.id} size="xs" variant="ghost" align="start" width="100%" onClick={() => arrange(layout.id)}>
-                          {layout.label}{layout.keys ? ` (${layout.keys})` : ''}
-                        </Button>
-                      ))}
-                      <Typography size="xs" weight="semibold">Arrange what is selected</Typography>
-                      {FLOW_ALIGNMENTS.map((alignment) => (
-                        <Button key={alignment.id} size="xs" variant="ghost" align="start" width="100%" disabled={chosenSteps.length < alignment.least} onClick={() => alignChosen(alignment.id)}>
-                          {alignment.label}
-                        </Button>
-                      ))}
+                    <Container layout="flex-column" gap="xs" padding="none">
+                      <ButtonGroup selectable={false} size="xs">
+                        {FLOW_LAYOUTS.map((layout) => (
+                          <Button key={layout.id} size="xs" variant="ghost" title={layout.label} onClick={() => arrange(layout.id)}>
+                            <Icon name={layout.icon} size="xs" />
+                          </Button>
+                        ))}
+                      </ButtonGroup>
+                      <ButtonGroup selectable={false} size="xs">
+                        {FLOW_ALIGNMENTS.map((alignment) => (
+                          <Button key={alignment.id} size="xs" variant="ghost" title={alignment.label} disabled={chosenSteps.length < alignment.least} onClick={() => alignChosen(alignment.id)}>
+                            <Icon name={alignment.icon} size="xs" />
+                          </Button>
+                        ))}
+                      </ButtonGroup>
                     </Container>
                   ) }}
                   disabled={Boolean(action.needs) && !actionReady[action.needs]}

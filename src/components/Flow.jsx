@@ -43,6 +43,9 @@ import {
   NodeResizer,
   BaseEdge,
   getStraightPath,
+  getBezierPath,
+  getSimpleBezierPath,
+  getSmoothStepPath,
   useInternalNode,
   addEdge,
   reconnectEdge,
@@ -66,6 +69,7 @@ import { Card } from './Card';
 const DEFAULT_NODE_SHAPE = 'rectangle';
 const DEFAULT_NODE_COLOR_TOKEN = 'primary';
 const DEFAULT_EDGE_COLOR_TOKEN = 'primary';
+const NEW_EDGE_COLOR_TOKEN = 'secondary';
 
 const NODE_SHAPE_OPTIONS = [
   { value: 'rectangle', label: 'Rectangle' },
@@ -197,7 +201,8 @@ const sanitizeEdge = (edge) => {
     data: { ...edge.data, color: colorToken },
     className: withEdgeColorClass(edge.className, colorToken),
     style: buildEdgeStyle(edge.style, colorToken, strokeWidth),
-    markerEnd: buildMarkerEnd(edge.markerEnd, colorToken)
+    markerEnd: buildMarkerEnd(edge.markerEnd, colorToken),
+    markerStart: buildMarkerEnd(edge.markerStart, colorToken)
   };
 };
 
@@ -356,6 +361,7 @@ export const parseFlow = (text) => {
 
   const edges = wires.map(({ props }, index) => {
     const arrow = String(props.arrow ?? '').toLowerCase();
+    const start = String(props.start ?? '').toLowerCase();
     const toGroup = groupIds.has(props.target);
     const side = oneOf(props.to, FLOW_SIDES) || 'left';
     return {
@@ -369,11 +375,12 @@ export const parseFlow = (text) => {
       animated: props.animated === 'true',
       data: {
         color: resolveColorToken(props.color, DEFAULT_EDGE_COLOR_TOKEN),
-        ...(toGroup ? { side, along: Math.min(Math.max(flowNumber(props.at) ?? 50, 0), 100) / 100 } : {})
+        ...(toGroup ? { side, along: Math.min(Math.max(flowNumber(props.at) ?? 50, 0), 100) / 100, line: oneOf(props.type, FLOW_EDGE_TYPES) || 'straight' } : {})
       },
       style: { strokeWidth: Math.min(Math.max(flowNumber(props.width) ?? 2, 1), 10), ...(props.dashed === 'true' && props.animated !== 'true' ? { strokeDasharray: FLOW_DASHES } : {}) },
       ...(toGroup ? { zIndex: 10 } : {}),
-      ...(arrow === 'none' ? {} : { markerEnd: { type: arrow === 'open' ? 'arrow' : 'arrowclosed' } })
+      ...(arrow === 'none' ? {} : { markerEnd: { type: arrow === 'open' ? 'arrow' : 'arrowclosed' } }),
+      ...(start === 'open' || start === 'filled' ? { markerStart: { type: start === 'open' ? 'arrow' : 'arrowclosed' } } : {})
     };
   });
 
@@ -421,15 +428,18 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
     const to = member ? oneOf(edge.data?.side, FLOW_SIDES) || 'left' : sideOf(edge.targetHandle);
     const along = member ? Math.round(Math.min(Math.max(edge.data?.along ?? 0.5, 0), 1) * 100) : null;
     const marker = typeof edge.markerEnd === 'string' ? edge.markerEnd : edge.markerEnd?.type;
+    const startMarker = typeof edge.markerStart === 'string' ? edge.markerStart : edge.markerStart?.type;
+    const curve = member ? edge.data?.line || 'straight' : edge.type;
     const width = flowNumber(edge.style?.strokeWidth) ?? 2;
     lines.push(line('Edge', [
       ['source', edge.source], ['target', edge.target],
       ['label', typeof edge.label === 'string' ? edge.label : null],
       ['color', color === DEFAULT_EDGE_COLOR_TOKEN ? null : color],
-      ['type', !member && edge.type && edge.type !== 'smoothstep' ? edge.type : null],
+      ['type', curve && curve !== (member ? 'straight' : 'smoothstep') ? curve : null],
       ['animated', edge.animated ? 'true' : null],
       ['dashed', !edge.animated && edge.style?.strokeDasharray ? 'true' : null],
       ['arrow', !marker ? 'none' : marker === 'arrow' ? 'open' : null],
+      ['start', !startMarker ? null : startMarker === 'arrow' ? 'open' : 'filled'],
       ['width', width !== 2 ? width : null],
       ['from', from && from !== (member ? to : 'right') ? from : null],
       ['to', to && to !== 'left' ? to : null],
@@ -448,8 +458,9 @@ const FLOW_OPTIONS = {
   weight: [['light', 'Light'], ['normal', 'Normal'], ['medium', 'Medium'], ['semibold', 'Semibold'], ['bold', 'Bold'], ['extrabold', 'Extra bold']],
   align: [['left', 'Left'], ['center', 'Centre'], ['right', 'Right']],
   kind: [['editable', 'Step'], ['group', 'Group']],
-  line: [['smoothstep', 'Smooth step'], ['straight', 'Straight'], ['default', 'Curve'], ['step', 'Step'], ['simplebezier', 'Simple curve']],
+  line: [['default', 'Curve'], ['simplebezier', 'Simple curve'], ['smoothstep', 'Rounded steps'], ['step', 'Square steps'], ['straight', 'Straight']],
   arrow: [['arrowclosed', 'Filled'], ['arrow', 'Open'], ['none', 'None']],
+  side: [['top', 'Top'], ['right', 'Right'], ['bottom', 'Bottom'], ['left', 'Left']],
   dash: [['solid', 'Solid'], ['dashed', 'Dashed'], ['moving', 'Moving dashes']],
   hold: [['parent', 'Held inside the group'], ['free', 'Free to leave']]
 };
@@ -631,12 +642,21 @@ const borderPoint = (group, side, along) => {
   return { x, y: y + tall * along };
 };
 
-const MemberEdge = ({ id, target, sourceX, sourceY, data, style, markerEnd, label }) => {
+const FACING = { left: Position.Right, right: Position.Left, top: Position.Bottom, bottom: Position.Top };
+
+const MemberEdge = ({ id, target, sourceX, sourceY, sourcePosition, data, style, markerEnd, markerStart, label }) => {
   const group = useInternalNode(target);
   if (!group) return null;
-  const end = borderPoint(group, data?.side || 'left', data?.along ?? 0.5);
-  const [path, labelX, labelY] = getStraightPath({ sourceX, sourceY, targetX: end.x, targetY: end.y });
-  return <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} label={label} labelX={labelX} labelY={labelY} />;
+  const side = data?.side || 'left';
+  const end = borderPoint(group, side, data?.along ?? 0.5);
+  const ends = { sourceX, sourceY, sourcePosition, targetX: end.x, targetY: end.y, targetPosition: FACING[side] };
+  const line = data?.line || 'straight';
+  const [path, labelX, labelY] = line === 'default' ? getBezierPath(ends)
+    : line === 'simplebezier' ? getSimpleBezierPath(ends)
+    : line === 'smoothstep' ? getSmoothStepPath(ends)
+    : line === 'step' ? getSmoothStepPath({ ...ends, borderRadius: 0 })
+    : getStraightPath(ends);
+  return <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} markerStart={markerStart} label={label} labelX={labelX} labelY={labelY} />;
 };
 
 const edgeTypes = { member: MemberEdge };
@@ -686,11 +706,11 @@ export const Flow = ({
   toolbar = true,
   proOptions = { hideAttribution: true },
   connectEdgeOptions = {
-    type: 'smoothstep',
+    type: 'default',
     animated: true,
-    data: { color: DEFAULT_EDGE_COLOR_TOKEN },
-    style: buildEdgeStyle(undefined, DEFAULT_EDGE_COLOR_TOKEN, 2),
-    markerEnd: buildMarkerEnd('arrowclosed', DEFAULT_EDGE_COLOR_TOKEN)
+    data: { color: NEW_EDGE_COLOR_TOKEN },
+    style: buildEdgeStyle(undefined, NEW_EDGE_COLOR_TOKEN, 2),
+    markerEnd: buildMarkerEnd('arrowclosed', NEW_EDGE_COLOR_TOKEN)
   },
   ...reactFlowProps
 }) => {
@@ -928,7 +948,7 @@ export const Flow = ({
       targetHandle: 'border',
       type: 'member',
       zIndex: 10,
-      data: { color: DEFAULT_EDGE_COLOR_TOKEN, side, along: Math.min(Math.max(along, 0), 1) },
+      data: { color: NEW_EDGE_COLOR_TOKEN, side, along: Math.min(Math.max(along, 0), 1), line: 'default' },
       style: { strokeWidth: 2 },
       markerEnd: { type: 'arrowclosed' }
     });
@@ -957,6 +977,8 @@ export const Flow = ({
       fontWeight: node.data?.fontWeight ?? 'semibold',
       textAlign: node.data?.textAlign ?? 'center',
       nodeType: node.type ?? 'editable',
+      width: Math.round(node.measured?.width ?? node.width ?? node.style?.width ?? 300),
+      height: Math.round(node.measured?.height ?? node.height ?? node.style?.height ?? 200),
       parentId: node.parentId ?? '',
       extent: node.extent ?? ''
     });
@@ -974,7 +996,10 @@ export const Flow = ({
       x: rect ? e.clientX - rect.left : e.clientX,
       y: rect ? e.clientY - rect.top : e.clientY,
       label: String(edge.label ?? ''),
-      type: edge.type || 'smoothstep',
+      type: edge.type === 'member' ? edge.data?.line || 'straight' : edge.type || 'smoothstep',
+      from: sideOf(edge.sourceHandle) || 'right',
+      to: edge.type === 'member' ? edge.data?.side || 'left' : sideOf(edge.targetHandle) || 'left',
+      markerStart: (typeof edge.markerStart === 'string' ? edge.markerStart : edge.markerStart?.type) || '',
       dash: edge.animated ? 'moving' : edge.style?.strokeDasharray ? 'dashed' : 'solid',
       color,
       strokeWidth: edge.style?.strokeWidth || 2,
@@ -1004,8 +1029,8 @@ export const Flow = ({
         // Set default style for group nodes
         const groupStyle = nodeType === 'group' ? {
           ...sanitizedStyle,
-          width: sanitizedStyle?.width || 300,
-          height: sanitizedStyle?.height || 200
+          width: Math.min(Math.max(nodeEditor.width || sanitizedStyle?.width || 300, 160), 4000),
+          height: Math.min(Math.max(nodeEditor.height || sanitizedStyle?.height || 200, 100), 4000)
         } : sanitizedStyle;
         
         const isGroup = nodeType === 'group';
@@ -1027,6 +1052,7 @@ export const Flow = ({
             textAlign
           },
           ...(groupStyle ? { style: groupStyle } : {}),
+          ...(isGroup ? { width: groupStyle.width, height: groupStyle.height } : {}),
           ...(parentId ? { parentId } : {}),
           ...(extent ? { extent } : {}),
           ...(parentId ? { expandParent: true } : {})
@@ -1046,9 +1072,12 @@ export const Flow = ({
               ...e,
               label: edgeEditor.label || undefined,
               type: e.type === 'member' ? 'member' : edgeEditor.type,
+              sourceHandle: `${edgeEditor.from}-source`,
+              targetHandle: e.type === 'member' ? 'border' : `${edgeEditor.to}-target`,
               animated: edgeEditor.dash === 'moving',
-              data: { ...e.data, color: colorToken },
+              data: { ...e.data, color: colorToken, ...(e.type === 'member' ? { side: edgeEditor.to, line: edgeEditor.type } : {}) },
               className: withEdgeColorClass(e.className, colorToken),
+              markerStart: buildMarkerEnd(edgeEditor.markerStart, colorToken),
               style: buildEdgeStyle({ ...e.style, strokeDasharray: edgeEditor.dash === 'dashed' ? FLOW_DASHES : undefined }, colorToken, edgeEditor.strokeWidth ?? e.style?.strokeWidth ?? 2),
               markerEnd: buildMarkerEnd(edgeEditor.markerEnd, colorToken)
             }
@@ -1454,7 +1483,9 @@ export const Flow = ({
             fields={nodeEditor.nodeType === 'group' ? [
               { key: 'label', label: 'Label', type: 'text', wide: true },
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
-              { key: 'nodeType', label: 'Kind', type: 'select', options: flowChoices('kind') }
+              { key: 'nodeType', label: 'Kind', type: 'select', options: flowChoices('kind') },
+              { key: 'width', label: 'Width', type: 'number', least: 160, most: 4000 },
+              { key: 'height', label: 'Height', type: 'number', least: 100, most: 4000 }
             ] : [
               { key: 'label', label: 'Label', type: 'text', wide: true },
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
@@ -1510,9 +1541,12 @@ export const Flow = ({
               { key: 'label', label: 'Label', type: 'text', wide: true },
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
               { key: 'strokeWidth', label: 'Width', type: 'number', least: 1, most: 10 },
-              ...(edgeEditor.member ? [] : [{ key: 'type', label: 'Line', type: 'select', options: flowChoices('line') }]),
-              { key: 'markerEnd', label: 'Arrow', type: 'select', empty: 'none', options: flowChoices('arrow') },
-              { key: 'dash', label: 'Dashes', type: 'select', wide: Boolean(edgeEditor.member), options: flowChoices('dash') }
+              { key: 'type', label: 'Curve shape', type: 'select', options: flowChoices('line') },
+              { key: 'markerStart', label: 'Arrow at start', type: 'select', empty: 'none', options: flowChoices('arrow') },
+              { key: 'markerEnd', label: 'Arrow at end', type: 'select', empty: 'none', options: flowChoices('arrow') },
+              { key: 'dash', label: 'Dashes', type: 'select', options: flowChoices('dash') },
+              { key: 'from', label: 'Leaves from', type: 'select', options: flowChoices('side') },
+              { key: 'to', label: edgeEditor.member ? 'Side of the group' : 'Arrives at', type: 'select', options: flowChoices('side') }
             ]}
           />
         )}

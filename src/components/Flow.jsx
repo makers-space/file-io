@@ -241,6 +241,39 @@ const flowLevels = (ids, wires) => {
   return level;
 };
 
+const layoutItems = (items, wires, kind) => {
+  const place = new Map();
+  if (items.length === 0) return place;
+  const widest = Math.max(...items.map((item) => item.wide));
+  const tallest = Math.max(...items.map((item) => item.tall));
+  if (kind === 'lr' || kind === 'tb') {
+    const level = flowLevels(items.map((item) => item.id), wires);
+    const lines = [];
+    for (const item of items) (lines[level.get(item.id)] ||= []).push(item);
+    let along = 0;
+    for (const line of lines.filter(Boolean)) {
+      let beside = 0;
+      for (const item of line) {
+        place.set(item.id, kind === 'lr' ? { x: along, y: beside } : { x: beside, y: along });
+        beside += (kind === 'lr' ? item.tall : item.wide) + (kind === 'lr' ? 48 : 64);
+      }
+      along += Math.max(...line.map((item) => (kind === 'lr' ? item.wide : item.tall))) + (kind === 'lr' ? 96 : 72);
+    }
+  }
+  if (kind === 'grid') {
+    const columns = Math.ceil(Math.sqrt(items.length));
+    items.forEach((item, index) => place.set(item.id, { x: (index % columns) * (widest + 64), y: Math.floor(index / columns) * (tallest + 56) }));
+  }
+  if (kind === 'circle') {
+    const radius = Math.max(140, (items.length * (Math.max(widest, tallest) + 48)) / (2 * Math.PI));
+    items.forEach((item, index) => {
+      const angle = (index / items.length) * 2 * Math.PI - Math.PI / 2;
+      place.set(item.id, { x: Math.round(radius + radius * Math.cos(angle) - item.wide / 2 + widest / 2), y: Math.round(radius + radius * Math.sin(angle) - item.tall / 2 + tallest / 2) });
+    });
+  }
+  return place;
+};
+
 export const parseFlow = (text) => {
   const empty = { nodes: [], edges: [], error: null };
   const source = String(text ?? '');
@@ -627,6 +660,8 @@ export const Flow = ({
   const [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
   const [locked, setLocked] = useState(false);
   const [snap, setSnap] = useState(false);
+  const [arrangeOpen, setArrangeOpen] = useState(false);
+  const arrangeAnchorRef = useRef(null);
   const [connecting, setConnecting] = useState(false);
   const [mapShown, setMapShown] = useState(Boolean(minimap));
   const hoverRef = useRef(false);
@@ -985,13 +1020,13 @@ export const Flow = ({
 
   // After boxes are moved, every connector is put on the sides that face each other, so none doubles back.
   // place holds the new positions of the boxes that moved.
-  const reroute = (place) => {
+  const reroute = (place, sizes = new Map()) => {
     const byId = new Map(nodes.map((node) => [node.id, node]));
     const spot = (node) => {
       const own = place.get(node.id) || node.position;
       const parent = node.parentId ? byId.get(node.parentId) : null;
       const base = parent ? place.get(parent.id) || parent.position : { x: 0, y: 0 };
-      return { x: base.x + own.x, y: base.y + own.y, ...sizeOf(node, node.type === 'group' ? 300 : 120, node.type === 'group' ? 200 : 48) };
+      return { x: base.x + own.x, y: base.y + own.y, ...(sizes.get(node.id) || sizeOf(node, node.type === 'group' ? 300 : 120, node.type === 'group' ? 200 : 48)) };
     };
     setEdges((current) => current.map((edge) => {
       const from = byId.get(edge.source);
@@ -1001,7 +1036,7 @@ export const Flow = ({
       const b = spot(to);
       const middle = { x: a.x + a.wide / 2, y: a.y + a.tall / 2 };
       if (edge.type === 'member') {
-        const { side, along } = onBorder({ ...to, position: { x: b.x, y: b.y } }, middle);
+        const { side, along } = onBorder({ ...to, position: { x: b.x, y: b.y }, measured: { width: b.wide, height: b.tall } }, middle);
         return { ...edge, sourceHandle: `${side}-source`, data: { ...edge.data, side, along } };
       }
       const across = b.x + b.wide / 2 - middle.x;
@@ -1013,36 +1048,55 @@ export const Flow = ({
     }));
   };
 
+  // Arranges the steps inside each group first, sizing the group to fit them, then arranges the groups
+  // and the steps outside them together, and last puts every connector on facing sides.
   const arrange = (kind) => {
-    const steps = nodes.filter((node) => node.type !== 'group' && !node.parentId);
-    if (steps.length === 0) return;
-    const ids = new Set(steps.map((node) => node.id));
-    const wires = edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
     const place = new Map();
-    if (kind === 'lr' || kind === 'tb') {
-      const level = flowLevels(steps.map((node) => node.id), wires);
-      const rows = new Map();
-      for (const node of steps) {
-        const along = level.get(node.id);
-        const beside = rows.get(along) || 0;
-        rows.set(along, beside + 1);
-        place.set(node.id, kind === 'lr' ? { x: along * 240, y: beside * 110 } : { x: beside * 240, y: along * 130 });
+    const sizes = new Map();
+    const measure = (node) => sizes.get(node.id) || sizeOf(node, node.type === 'group' ? 300 : 120, node.type === 'group' ? 200 : 48);
+    const groupOf = new Map(nodes.filter((node) => node.parentId).map((node) => [node.id, node.parentId]));
+
+    for (const group of nodes.filter((node) => node.type === 'group')) {
+      const members = nodes.filter((node) => node.parentId === group.id && node.type !== 'group');
+      if (members.length === 0) continue;
+      const ids = new Set(members.map((node) => node.id));
+      const inner = layoutItems(
+        members.map((node) => ({ id: node.id, ...measure(node) })),
+        edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
+        kind
+      );
+      let wide = 160;
+      let tall = 100;
+      for (const node of members) {
+        const at = { x: inner.get(node.id).x + 32, y: inner.get(node.id).y + 56 };
+        place.set(node.id, at);
+        wide = Math.max(wide, at.x + measure(node).wide + 32);
+        tall = Math.max(tall, at.y + measure(node).tall + 32);
       }
+      sizes.set(group.id, { wide: Math.round(wide), tall: Math.round(tall) });
     }
-    if (kind === 'grid') {
-      const columns = Math.ceil(Math.sqrt(steps.length));
-      steps.forEach((node, index) => place.set(node.id, { x: (index % columns) * 240, y: Math.floor(index / columns) * 110 }));
-    }
-    if (kind === 'circle') {
-      const radius = Math.max(160, steps.length * 45);
-      steps.forEach((node, index) => {
-        const angle = (index / steps.length) * 2 * Math.PI - Math.PI / 2;
-        place.set(node.id, { x: Math.round(radius + radius * Math.cos(angle)), y: Math.round(radius + radius * Math.sin(angle)) });
-      });
-    }
-    setNodes((current) => current.map((node) => (place.has(node.id) ? { ...node, position: place.get(node.id) } : node)));
-    reroute(place);
-    setTimeout(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }), 50);
+
+    const outer = nodes.filter((node) => !node.parentId);
+    const outerIds = new Set(outer.map((node) => node.id));
+    const between = edges
+      .filter((edge) => edge.type !== 'member')
+      .map((edge) => ({ source: groupOf.get(edge.source) || edge.source, target: groupOf.get(edge.target) || edge.target }))
+      .filter((wire) => wire.source !== wire.target && outerIds.has(wire.source) && outerIds.has(wire.target));
+    for (const [id, at] of layoutItems(outer.map((node) => ({ id: node.id, ...measure(node) })), between, kind)) place.set(id, at);
+    if (place.size === 0) return;
+
+    setNodes((current) => current.map((node) => {
+      const at = place.get(node.id);
+      const size = sizes.get(node.id);
+      if (!at && !size) return node;
+      return {
+        ...node,
+        ...(at ? { position: { x: Math.round(at.x), y: Math.round(at.y) } } : {}),
+        ...(size ? { width: size.wide, height: size.tall, style: { ...node.style, width: size.wide, height: size.tall } } : {})
+      };
+    }));
+    reroute(place, sizes);
+    setTimeout(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }), 80);
   };
 
   const alignChosen = (how) => {
@@ -1200,6 +1254,7 @@ export const Flow = ({
   const onPaneClickHandler = useCallback((e) => {
     setNodeEditor(null);
     setEdgeEditor(null);
+    setArrangeOpen(false);
     if (enableNodeCreation && !readOnly) {
       const keyMatch = !nodeCreationKey || nodeCreationKey === 'none' ||
         (nodeCreationKey === 'ctrl' && (e.ctrlKey || e.metaKey)) ||
@@ -1491,6 +1546,26 @@ export const Flow = ({
         )}
       </Genie>
 
+      {/* Arrange menu */}
+      <Genie visible={arrangeOpen} triggerRef={arrangeAnchorRef} onClose={() => setArrangeOpen(false)} variant="menu" animation="scale" layout="flex-column" padding="xs">
+        <Container layout="flex-column" gap="xs" padding="none">
+          <ButtonGroup selectable={false} size="xs">
+            {FLOW_LAYOUTS.map((layout) => (
+              <Button key={layout.id} size="xs" variant="ghost" title={layout.label} onClick={() => { arrange(layout.id); setArrangeOpen(false); }}>
+                <Icon name={layout.icon} size="xs" />
+              </Button>
+            ))}
+          </ButtonGroup>
+          <ButtonGroup selectable={false} size="xs">
+            {FLOW_ALIGNMENTS.map((alignment) => (
+              <Button key={alignment.id} size="xs" variant="ghost" title={alignment.label} disabled={chosenSteps.length < alignment.least} onClick={() => { alignChosen(alignment.id); setArrangeOpen(false); }}>
+                <Icon name={alignment.icon} size="xs" />
+              </Button>
+            ))}
+          </ButtonGroup>
+        </Container>
+      </Genie>
+
       {/* Edge Editor Genie */}
       <Genie visible={Boolean(edgeEditor)} triggerRef={edgeAnchorRef} onClose={() => setEdgeEditor(null)} variant="menu" animation="scale" layout="flex-column" padding="md" width="300px">
         <Container layout="flex-column" gap="sm" padding="none" width="100%">
@@ -1665,29 +1740,15 @@ export const Flow = ({
                   key={action.id}
                   size="sm"
                   variant="ghost"
-                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap)}
-                  genie={action.id !== 'tidy' ? null : { trigger: 'click', padding: 'xs', content: (
-                    <Container layout="flex-column" gap="xs" padding="none">
-                      <ButtonGroup selectable={false} size="xs">
-                        {FLOW_LAYOUTS.map((layout) => (
-                          <Button key={layout.id} size="xs" variant="ghost" title={layout.label} onClick={() => arrange(layout.id)}>
-                            <Icon name={layout.icon} size="xs" />
-                          </Button>
-                        ))}
-                      </ButtonGroup>
-                      <ButtonGroup selectable={false} size="xs">
-                        {FLOW_ALIGNMENTS.map((alignment) => (
-                          <Button key={alignment.id} size="xs" variant="ghost" title={alignment.label} disabled={chosenSteps.length < alignment.least} onClick={() => alignChosen(alignment.id)}>
-                            <Icon name={alignment.icon} size="xs" />
-                          </Button>
-                        ))}
-                      </ButtonGroup>
-                    </Container>
-                  ) }}
+                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap) || (action.id === 'tidy' && arrangeOpen)}
                   disabled={Boolean(action.needs) && !actionReady[action.needs]}
                   title={`${action.label} (${action.keys})`}
                   aria-label={`${action.label} (${action.keys})`}
-                  onClick={() => { if (action.id !== 'tidy') runAction(action.id); }}
+                  onClick={(event) => {
+                    if (action.id !== 'tidy') return runAction(action.id);
+                    arrangeAnchorRef.current = event.currentTarget;
+                    return setArrangeOpen((open) => !open);
+                  }}
                 >
                   <Icon name={action.icon} size="xs" />
                 </Button>

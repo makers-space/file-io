@@ -347,53 +347,80 @@ const layoutItems = (items, wires, kind) => {
     items.forEach((item) => visit(item.id));
     return order;
   };
-  // Round a circle, following the connectors is only a first guess: a box with several connectors leaves some of
-  // its neighbours far away. Pairs of boxes are then swapped for as long as a swap brings connected boxes closer
-  // together round the ring, which also takes most connectors off the middle of the circle.
-  const ringed = () => {
-    const order = chained();
-    const count = order.length;
-    if (count < 4 || count > 80) return order;
-    const seat = new Map(order.map((item, index) => [item.id, index]));
-    const pairs = wires.filter((wire) => wire.source !== wire.target && seat.has(wire.source) && seat.has(wire.target));
-    const apart = () => pairs.reduce((sum, wire) => {
-      const steps = Math.abs(seat.get(wire.source) - seat.get(wire.target));
-      return sum + Math.min(steps, count - steps);
-    }, 0);
-    const swap = (one, other) => {
-      [order[one], order[other]] = [order[other], order[one]];
-      seat.set(order[one].id, one);
-      seat.set(order[other].id, other);
-    };
-    let best = apart();
-    for (let pass = 0; pass < 8; pass++) {
-      let better = false;
-      for (let one = 0; one < count; one++) {
-        for (let other = one + 1; other < count; other++) {
-          swap(one, other);
-          const now = apart();
-          if (now < best) {
-            best = now;
-            better = true;
-          } else {
-            swap(one, other);
-          }
-        }
-      }
-      if (!better) break;
-    }
-    return order;
-  };
   if (kind === 'grid') {
     const columns = Math.ceil(Math.sqrt(items.length));
     chained().forEach((item, index) => place.set(item.id, { x: (index % columns) * (widest + 64), y: Math.floor(index / columns) * (tallest + 56) }));
   }
+  // A circular arrangement that wastes no space: the most connected box goes in the middle and the rest wind
+  // outward round it, each box placed after the boxes it connects to, so connectors run round and outward.
+  // The winding is measured in box-sized steps, wider than tall, so the rings sit as close as a grid would.
   if (kind === 'circle') {
-    const radius = Math.max(140, (items.length * (Math.max(widest, tallest) + 48)) / (2 * Math.PI));
-    ringed().forEach((item, index) => {
-      const angle = (index / items.length) * 2 * Math.PI - Math.PI / 2;
-      place.set(item.id, { x: Math.round(radius + radius * Math.cos(angle) - item.wide / 2 + widest / 2), y: Math.round(radius + radius * Math.sin(angle) - item.tall / 2 + tallest / 2) });
+    const linked = new Map(items.map((item) => [item.id, []]));
+    for (const { source, target } of wires) {
+      if (source === target) continue;
+      linked.get(source)?.push(target);
+      linked.get(target)?.push(source);
+    }
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const seen = new Set();
+    const order = [];
+    for (const first of [...items].sort((one, other) => linked.get(other.id).length - linked.get(one.id).length)) {
+      if (seen.has(first.id)) continue;
+      const waiting = [first.id];
+      seen.add(first.id);
+      while (waiting.length) {
+        const id = waiting.shift();
+        order.push(byId.get(id));
+        for (const next of linked.get(id)) {
+          if (seen.has(next) || !byId.has(next)) continue;
+          seen.add(next);
+          waiting.push(next);
+        }
+      }
+    }
+    const across = widest + 48;
+    const down = tallest + 56;
+    let angle = -Math.PI / 2;
+    const spots = order.map((_item, index) => {
+      if (index === 0) return { x: 0, y: 0 };
+      const reach = 1 + (angle + Math.PI / 2) / (2 * Math.PI);
+      const spot = { x: reach * Math.cos(angle) * across, y: reach * Math.sin(angle) * down };
+      angle += 1.1 / reach;
+      return spot;
     });
+    // The spots are fixed; which box sits on which is then improved. Two boxes swap places whenever that makes the
+    // connectors shorter in total, until no swap helps. Short connectors are what keeps them from tangling.
+    const seat = new Map(order.map((item, index) => [item.id, index]));
+    const pairs = wires.filter((wire) => wire.source !== wire.target && seat.has(wire.source) && seat.has(wire.target));
+    const span = (wire) => Math.hypot(spots[seat.get(wire.source)].x - spots[seat.get(wire.target)].x, spots[seat.get(wire.source)].y - spots[seat.get(wire.target)].y);
+    const touching = new Map(order.map((item) => [item.id, pairs.filter((wire) => wire.source === item.id || wire.target === item.id)]));
+    const strain = (one, other) => [...new Set([...touching.get(one), ...touching.get(other)])].reduce((sum, wire) => sum + span(wire), 0);
+    if (order.length <= 120) {
+      for (let pass = 0; pass < 12; pass++) {
+        let better = false;
+        for (let one = 0; one < order.length; one++) {
+          for (let other = one + 1; other < order.length; other++) {
+            const first = order[one].id;
+            const second = order[other].id;
+            const before = strain(first, second);
+            const [here, there] = [seat.get(first), seat.get(second)];
+            seat.set(first, there);
+            seat.set(second, here);
+            if (strain(first, second) < before - 0.5) {
+              better = true;
+            } else {
+              seat.set(first, here);
+              seat.set(second, there);
+            }
+          }
+        }
+        if (!better) break;
+      }
+    }
+    for (const item of order) {
+      const spot = spots[seat.get(item.id)];
+      place.set(item.id, { x: Math.round(spot.x - item.wide / 2), y: Math.round(spot.y - item.tall / 2) });
+    }
   }
   return place;
 };
@@ -1479,7 +1506,7 @@ const FlowCanvas = forwardRef(({
 
   // After boxes are moved, every connector is put on the sides that face each other, so none doubles back.
   // place holds the new positions of the boxes that moved.
-  const reroute = (place, sizes = new Map(), ring = false) => {
+  const reroute = (place, sizes = new Map()) => {
     const byId = new Map(nodes.map((node) => [node.id, node]));
     const spot = (node) => {
       const own = place.get(node.id) || node.position;
@@ -1500,16 +1527,6 @@ const FlowCanvas = forwardRef(({
       }
       const across = b.x + b.wide / 2 - middle.x;
       const down = b.y + b.tall / 2 - middle.y;
-      // Round a circle, a connector between boxes that are not neighbours leaves and arrives on the sides that face
-      // the middle, so it bends through the inside of the ring and not over the boxes in between.
-      if (ring && !from.parentId && !to.parentId && Math.hypot(across, down) > ring.neighbour) {
-        const facing = (box) => {
-          const x = ring.x - (box.x + box.wide / 2);
-          const y = ring.y - (box.y + box.tall / 2);
-          return Math.abs(x) >= Math.abs(y) ? (x >= 0 ? 'right' : 'left') : (y >= 0 ? 'bottom' : 'top');
-        };
-        return { ...edge, sourceHandle: `${facing(a)}`, targetHandle: `${facing(b)}` };
-      }
       const [out, into] = Math.abs(across) >= Math.abs(down)
         ? (across >= 0 ? ['right', 'left'] : ['left', 'right'])
         : (down >= 0 ? ['bottom', 'top'] : ['top', 'bottom']);
@@ -1564,25 +1581,17 @@ const FlowCanvas = forwardRef(({
         ...(size ? { width: size.wide, height: size.tall, style: { ...node.style, width: size.wide, height: size.tall } } : {})
       };
     }));
-    // For a circle: where its middle is, and how far apart two neighbouring boxes sit.
-    let ring = false;
-    if (kind === 'circle' && outer.length > 3) {
-      const centres = outer.map((node) => ({ x: place.get(node.id).x + measure(node).wide / 2, y: place.get(node.id).y + measure(node).tall / 2 }));
-      const x = centres.reduce((sum, at) => sum + at.x, 0) / centres.length;
-      const y = centres.reduce((sum, at) => sum + at.y, 0) / centres.length;
-      const radius = centres.reduce((sum, at) => sum + Math.hypot(at.x - x, at.y - y), 0) / centres.length;
-      ring = { x, y, neighbour: 2 * radius * Math.sin(Math.PI / centres.length) * 1.25 };
-    }
-    reroute(place, sizes, ring);
+    reroute(place, sizes);
     setFitSoon(true);
   };
 
+  // The fit is left to run once the moved boxes have been drawn; it is not tied to this effect's own clean-up,
+  // which would cancel it as soon as the flag below is cleared.
   useEffect(() => {
-    if (!fitSoon || !initialized) return undefined;
-    const frame = requestAnimationFrame(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }));
+    if (!fitSoon || !initialized) return;
     setFitSoon(false);
-    return () => cancelAnimationFrame(frame);
-  }, [fitSoon, initialized, nodes]);
+    requestAnimationFrame(() => requestAnimationFrame(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 })));
+  }, [fitSoon, initialized]);
 
   const arrangeRef = useRef(arrange);
   arrangeRef.current = arrange;

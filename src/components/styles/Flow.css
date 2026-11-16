@@ -32,7 +32,7 @@
 /* Icon-only buttons: just wide enough for the icon */
 .themed-flow .flow-toolbar .button.themed-button {
   min-width: 0;
-  padding: 0 4px;
+  padding: 0 10px;
 }
 
 .themed-flow .flow-toolbar .button.themed-button .themed-icon {

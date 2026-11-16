@@ -59,6 +59,7 @@ import { ButtonGroup } from './ButtonGroup';
 import { Container } from './Container';
 import { Typography } from './Typography';
 import { Select } from './Select';
+import { Switch } from './Switch';
 import { Icon } from './Icon';
 import { Card } from './Card';
 
@@ -437,6 +438,52 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
 };
 
 const FlowLock = createContext(false);
+
+// One compact form for a step, a group or a connector. Fields sit in two columns; a "wide" field spans both.
+// Each field is { key, label, type: 'text' | 'number' | 'switch' | 'select', options?, wide? }.
+const FLOW_OPTIONS = {
+  size: [['xs', 'Extra small'], ['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large'], ['xl', 'Extra large'], ['2xl', 'Largest']],
+  weight: [['light', 'Light'], ['normal', 'Normal'], ['medium', 'Medium'], ['semibold', 'Semibold'], ['bold', 'Bold'], ['extrabold', 'Extra bold']],
+  align: [['left', 'Left'], ['center', 'Centre'], ['right', 'Right']],
+  kind: [['editable', 'Step'], ['group', 'Group']],
+  line: [['smoothstep', 'Smooth step'], ['straight', 'Straight'], ['default', 'Curve'], ['step', 'Step'], ['simplebezier', 'Simple curve']],
+  arrow: [['arrowclosed', 'Filled'], ['arrow', 'Open'], ['', 'None']]
+};
+const flowChoices = (name) => FLOW_OPTIONS[name].map(([value, label]) => ({ value, label }));
+
+const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
+  <Container layout="flex-column" gap="xs" padding="none" width="100%">
+    <Typography size="xs" weight="semibold">{title}</Typography>
+    <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
+      {fields.map((field) => (
+        <Container key={field.key} padding="none" width="100%" minWidth="0" span={field.wide ? 'full' : null}>
+          {field.type === 'select' && (
+            <Select label={field.label} value={values[field.key] ?? ''} onChange={(value) => onChange(field.key, value)} size="xs" width="100%" options={field.options} />
+          )}
+          {field.type === 'switch' && (
+            <Switch label={field.label} size="sm" checked={Boolean(values[field.key])} onChange={(event) => onChange(field.key, event.target.checked)} />
+          )}
+          {(field.type === 'text' || field.type === 'number') && (
+            <Input
+              label={field.label}
+              type={field.type}
+              value={values[field.key] ?? ''}
+              onChange={(event) => onChange(field.key, field.type === 'number' ? parseInt(event.target.value, 10) || field.least || 0 : event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSave(); } }}
+              size="xs"
+              width="100%"
+              {...(field.type === 'number' ? { min: field.least, max: field.most } : {})}
+            />
+          )}
+        </Container>
+      ))}
+    </Container>
+    <ButtonGroup spaced selectable={false} justify="end" size="xs">
+      <Button size="xs" color="secondary" onClick={onCancel}>Cancel</Button>
+      <Button size="xs" color="primary" onClick={onSave}>Save</Button>
+    </ButtonGroup>
+  </Container>
+);
 
 // The toolbar's actions, in order. "edit" actions change the flow and are left out when it is read-only.
 const FLOW_ACTIONS = [
@@ -927,7 +974,8 @@ export const Flow = ({
       animated: edge.animated ?? true,
       color,
       strokeWidth: edge.style?.strokeWidth || 2,
-      markerEnd: edge.markerEnd?.type || 'arrowclosed'
+      markerEnd: edge.markerEnd?.type || 'arrowclosed',
+      member: edge.type === 'member'
     });
     setNodeEditor(null);
   }, [readOnly]);
@@ -947,7 +995,7 @@ export const Flow = ({
       nds.map((n) => {
         if (n.id !== nodeEditor.nodeId) return n;
         const sanitizedStyle = stripNodeColorStyle(n.style);
-        const { style: _omit, ...rest } = n;
+        const { style: _omit, parentId: _parent, extent: _extent, expandParent: _expand, ...rest } = n;
         
         // Set default style for group nodes
         const groupStyle = nodeType === 'group' ? {
@@ -1390,159 +1438,36 @@ export const Flow = ({
         }}
       />
 
-      {/* Node Editor Genie */}
-      <Genie visible={Boolean(nodeEditor)} triggerRef={anchorRef} onClose={() => setNodeEditor(null)} variant="menu" animation="scale" layout="flex-column" padding="md" width="280px">
-        {nodeEditor?.nodeType === 'group' ? (
-          <Container layout="flex-column" gap="sm" padding="none" width="100%">
-            <Typography size="sm" weight="semibold">Edit Group</Typography>
-            <Typography size="xs">Update group label and background.</Typography>
-            <Input 
-              label="Label" 
-              value={nodeEditor?.label ?? ''} 
-              onChange={(e) => setNodeEditor((s) => s ? { ...s, label: e.target.value } : s)} 
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), saveNode())} 
-              size="sm" 
-              width="100%" 
-            />
-            <Select
-              label="Background Color"
-              value={nodeEditor?.color ?? DEFAULT_NODE_COLOR_TOKEN}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, color: value } : s))}
-              size="sm"
-              width="100%"
-              options={COLOR_OPTIONS}
-            />
-            <ButtonGroup spaced selectable={false} justify="end">
-              <Button size="sm" color="secondary" onClick={() => setNodeEditor(null)}>Cancel</Button>
-              <Button size="sm" color="primary" onClick={saveNode}>Save</Button>
-            </ButtonGroup>
-          </Container>
-        ) : (
-          <Container layout="flex-column" gap="sm" padding="none" width="100%">
-            <Typography size="sm" weight="semibold">Edit Node</Typography>
-            <Typography size="xs">Update label, color, and shape. Press Enter to save.</Typography>
-            <Input 
-              label="Label" 
-              value={nodeEditor?.label ?? ''} 
-              onChange={(e) => setNodeEditor((s) => s ? { ...s, label: e.target.value } : s)} 
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), saveNode())} 
-              size="sm" 
-              width="100%" 
-            />
-            <Select
-              label="Color"
-              value={nodeEditor?.color ?? DEFAULT_NODE_COLOR_TOKEN}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, color: value } : s))}
-              size="sm"
-              width="100%"
-              options={COLOR_OPTIONS}
-            />
-            <Select
-              label="Shape"
-              value={nodeEditor?.shape ?? DEFAULT_NODE_SHAPE}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, shape: value } : s))}
-              size="sm"
-              width="100%"
-              options={NODE_SHAPE_OPTIONS}
-            />
-            <Select
-              label="Font Size"
-              value={nodeEditor?.fontSize ?? 'md'}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, fontSize: value } : s))}
-              size="sm"
-              width="100%"
-              options={[
-                { value: 'xs', label: 'Extra Small' },
-                { value: 'sm', label: 'Small' },
-                { value: 'md', label: 'Medium' },
-                { value: 'lg', label: 'Large' },
-                { value: 'xl', label: 'Extra Large' },
-                { value: '2xl', label: '2X Large' }
-              ]}
-            />
-            <Select
-              label="Node Type"
-              value={nodeEditor?.nodeType ?? 'editable'}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, nodeType: value } : s))}
-              size="sm"
-              width="100%"
-              options={[
-                { value: 'editable', label: 'Editable Node' },
-                { value: 'group', label: 'Group (Subflow)' }
-              ]}
-            />
-            <Select
-              label="Parent Node (Optional)"
-              value={nodeEditor?.parentId ?? ''}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, parentId: value, extent: value ? 'parent' : undefined } : s))}
-              size="sm"
-              width="100%"
-              options={[
-                { value: '', label: 'None (Top Level)' },
-                ...(nodes
-                  .filter(n => n.id !== nodeEditor?.nodeId && (n.type === 'group' || n.data?.shape === 'group'))
-                  .map(n => ({ value: n.id, label: n.data?.label || n.id }))
-                )
-              ]}
-            />
-            {nodeEditor?.parentId && (
-              <Select
-                label="Movement Constraint"
-                value={nodeEditor?.extent ?? 'parent'}
-                onChange={(value) => setNodeEditor((s) => (s ? { ...s, extent: value } : s))}
-                size="sm"
-                width="100%"
-                options={[
-                  { value: 'parent', label: 'Constrained to Parent' },
-                  { value: '', label: 'Free Movement' }
-                ]}
-              />
-            )}
-            <Select
-              label="Font Weight"
-              value={nodeEditor?.fontWeight ?? 'semibold'}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, fontWeight: value } : s))}
-              size="sm"
-              width="100%"
-              options={[
-                { value: 'light', label: 'Light' },
-                { value: 'normal', label: 'Normal' },
-                { value: 'medium', label: 'Medium' },
-                { value: 'semibold', label: 'Semibold' },
-                { value: 'bold', label: 'Bold' },
-                { value: 'extrabold', label: 'Extra Bold' }
-              ]}
-            />
-            <Select
-              label="Text Align"
-              value={nodeEditor?.textAlign ?? 'center'}
-              onChange={(value) => setNodeEditor((s) => (s ? { ...s, textAlign: value } : s))}
-              size="sm"
-              width="100%"
-              options={[
-                { value: 'left', label: 'Left' },
-                { value: 'center', label: 'Center' },
-                { value: 'right', label: 'Right' }
-              ]}
-            />
-            <div className="flow-node-preview">
-              <div
-                className={`flow-node-surface ${getNodeColorClass(nodeEditor?.color ?? DEFAULT_NODE_COLOR_TOKEN)}`}
-                data-shape={nodeEditor?.shape ?? DEFAULT_NODE_SHAPE}
-                data-color={nodeEditor?.color ?? DEFAULT_NODE_COLOR_TOKEN}
-                data-font-size={nodeEditor?.fontSize ?? 'md'}
-                data-font-weight={nodeEditor?.fontWeight ?? 'semibold'}
-                data-text-align={nodeEditor?.textAlign ?? 'center'}
-              >
-                <div className="flow-node-geometry" aria-hidden="true" />
-                <span className="flow-node-label">{nodeEditor?.label || 'Preview'}</span>
-              </div>
-            </div>
-            <ButtonGroup spaced selectable={false} justify="end">
-              <Button size="sm" color="secondary" onClick={() => setNodeEditor(null)}>Cancel</Button>
-              <Button size="sm" color="primary" onClick={saveNode}>Save</Button>
-            </ButtonGroup>
-          </Container>
+      {/* Step and group editor */}
+      <Genie visible={Boolean(nodeEditor)} triggerRef={anchorRef} onClose={() => setNodeEditor(null)} variant="menu" animation="scale" layout="flex-column" padding="sm" width="300px">
+        {nodeEditor && (
+          <FlowForm
+            title={nodeEditor.nodeType === 'group' ? 'Group' : 'Step'}
+            values={nodeEditor}
+            onChange={(key, value) => setNodeEditor((now) => (now ? { ...now, [key]: value, ...(key === 'parentId' ? { extent: value ? 'parent' : '' } : {}) } : now))}
+            onSave={saveNode}
+            onCancel={() => setNodeEditor(null)}
+            fields={nodeEditor.nodeType === 'group' ? [
+              { key: 'label', label: 'Label', type: 'text', wide: true },
+              { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
+              { key: 'nodeType', label: 'Kind', type: 'select', options: flowChoices('kind') }
+            ] : [
+              { key: 'label', label: 'Label', type: 'text', wide: true },
+              { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
+              { key: 'shape', label: 'Shape', type: 'select', options: NODE_SHAPE_OPTIONS },
+              { key: 'fontSize', label: 'Text size', type: 'select', options: flowChoices('size') },
+              { key: 'fontWeight', label: 'Text weight', type: 'select', options: flowChoices('weight') },
+              { key: 'textAlign', label: 'Text side', type: 'select', options: flowChoices('align') },
+              { key: 'nodeType', label: 'Kind', type: 'select', options: flowChoices('kind') },
+              {
+                key: 'parentId',
+                label: 'In group',
+                type: 'select',
+                wide: true,
+                options: [{ value: '', label: 'None' }, ...nodes.filter((node) => node.id !== nodeEditor.nodeId && node.type === 'group').map((node) => ({ value: node.id, label: node.data?.label || node.id }))]
+              }
+            ]}
+          />
         )}
       </Genie>
 
@@ -1566,133 +1491,25 @@ export const Flow = ({
         </Container>
       </Genie>
 
-      {/* Edge Editor Genie */}
-      <Genie visible={Boolean(edgeEditor)} triggerRef={edgeAnchorRef} onClose={() => setEdgeEditor(null)} variant="menu" animation="scale" layout="flex-column" padding="md" width="300px">
-        <Container layout="flex-column" gap="sm" padding="none" width="100%">
-          <Typography size="sm" weight="semibold">Edit Connector</Typography>
-          <Typography size="xs">Customize connector appearance and style.</Typography>
-          
-          <Input 
-            label="Label (optional)" 
-            value={edgeEditor?.label ?? ''} 
-            onChange={(e) => setEdgeEditor((s) => s ? { ...s, label: e.target.value } : s)} 
-            size="sm" 
-            width="100%" 
-            placeholder="Add text label"
-          />
-          
-          <Select 
-            label="Connector Type" 
-            value={edgeEditor?.type ?? 'smoothstep'}
-            onChange={(value) => setEdgeEditor((s) => s ? { ...s, type: value } : s)}
-            size="sm"
-            width="100%"
-            options={[
-              { value: 'smoothstep', label: 'Smooth Step' },
-              { value: 'straight', label: 'Straight' },
-              { value: 'default', label: 'Bezier Curve' },
-              { value: 'step', label: 'Step' },
-              { value: 'simplebezier', label: 'Simple Bezier' }
+      {/* Connector editor */}
+      <Genie visible={Boolean(edgeEditor)} triggerRef={edgeAnchorRef} onClose={() => setEdgeEditor(null)} variant="menu" animation="scale" layout="flex-column" padding="sm" width="300px">
+        {edgeEditor && (
+          <FlowForm
+            title="Connector"
+            values={edgeEditor}
+            onChange={(key, value) => setEdgeEditor((now) => (now ? { ...now, [key]: value } : now))}
+            onSave={saveEdge}
+            onCancel={() => setEdgeEditor(null)}
+            fields={[
+              { key: 'label', label: 'Label', type: 'text', wide: true },
+              { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
+              { key: 'strokeWidth', label: 'Width', type: 'number', least: 1, most: 10 },
+              ...(edgeEditor.member ? [] : [{ key: 'type', label: 'Line', type: 'select', options: flowChoices('line') }]),
+              { key: 'markerEnd', label: 'Arrow', type: 'select', options: flowChoices('arrow') },
+              { key: 'animated', label: 'Moving dashes', type: 'switch', wide: true }
             ]}
           />
-          
-          <Select 
-            label="Arrow Style" 
-            value={edgeEditor?.markerEnd ?? 'arrowclosed'}
-            onChange={(value) => setEdgeEditor((s) => s ? { ...s, markerEnd: value } : s)}
-            size="sm"
-            width="100%"
-            options={[
-              { value: 'arrowclosed', label: 'Filled Arrow' },
-              { value: 'arrow', label: 'Open Arrow' },
-              { value: '', label: 'No Arrow' }
-            ]}
-          />
-          
-          <Container layout="flex" gap="sm" padding="none" width="100%">
-            <Select
-              label="Color"
-              value={edgeEditor?.color ?? DEFAULT_EDGE_COLOR_TOKEN}
-              onChange={(value) => setEdgeEditor((s) => (s ? { ...s, color: value } : s))}
-              size="sm"
-              width="50%"
-              options={COLOR_OPTIONS}
-            />
-            <Input 
-              type="number" 
-              label="Width" 
-              value={edgeEditor?.strokeWidth ?? 2} 
-              onChange={(e) => setEdgeEditor((s) => s ? { ...s, strokeWidth: parseInt(e.target.value) || 2 } : s)} 
-              size="sm" 
-              width="50%"
-              min="1"
-              max="10"
-            />
-          </Container>
-          
-          <Container layout="flex" align="center" gap="sm" padding="none" width="100%">
-            <input
-              type="checkbox"
-              id="edge-animated"
-              checked={edgeEditor?.animated ?? true}
-              onChange={(e) => setEdgeEditor((s) => s ? { ...s, animated: e.target.checked } : s)}
-              style={{ width: '16px', height: '16px' }}
-            />
-            <label htmlFor="edge-animated" style={{ cursor: 'pointer', fontSize: '0.875rem' }}>
-              Animated (moving dashes)
-            </label>
-          </Container>
-          
-          <div 
-            className="flow-edge-preview" 
-            style={{ 
-              marginTop: '8px',
-              padding: '12px',
-              borderRadius: '4px',
-              background: 'var(--surface-color)',
-              border: '1px solid var(--border-color)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              height: '40px'
-            }}
-          >
-            <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
-              <line
-                x1="10%"
-                y1="50%"
-                x2="90%"
-                y2="50%"
-                stroke={getColorVariable(edgeEditor?.color ?? DEFAULT_EDGE_COLOR_TOKEN, DEFAULT_EDGE_COLOR_TOKEN)}
-                strokeWidth={edgeEditor?.strokeWidth || 2}
-                strokeDasharray={edgeEditor?.animated ? '5,5' : '0'}
-                markerEnd={edgeEditor?.markerEnd ? 'url(#preview-arrow)' : ''}
-              />
-              <defs>
-                <marker
-                  id="preview-arrow"
-                  viewBox="0 0 10 10"
-                  refX="9"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto"
-                >
-                  <path
-                    d="M 0 0 L 10 5 L 0 10 z"
-                    fill={getColorVariable(edgeEditor?.color ?? DEFAULT_EDGE_COLOR_TOKEN, DEFAULT_EDGE_COLOR_TOKEN)}
-                  />
-                </marker>
-              </defs>
-            </svg>
-          </div>
-          
-          <ButtonGroup spaced selectable={false} justify="end">
-            <Button size="sm" color="secondary" onClick={() => setEdgeEditor(null)}>Cancel</Button>
-            <Button size="sm" color="primary" onClick={saveEdge}>Save</Button>
-          </ButtonGroup>
-        </Container>
+        )}
       </Genie>
 
       <FlowLock.Provider value={readOnly}>

@@ -515,19 +515,49 @@ const layoutItems = (items, wires, kind) => {
   if (main !== items) {
     const set = main.map((item) => ({ ...place.get(item.id), wide: item.wide, tall: item.tall }));
     const left = Math.min(...set.map((box) => box.x));
-    const right = Math.max(left + 600, ...set.map((box) => box.x + box.wide));
-    let x = left;
-    let y = Math.max(...set.map((box) => box.y + box.tall)) + 120;
-    let tall = 0;
-    for (const item of loose) {
-      if (x > left && x + item.wide > right) {
-        x = left;
-        y += tall + 56;
-        tall = 0;
+    const top = Math.min(...set.map((box) => box.y));
+    const right = Math.max(...set.map((box) => box.x + box.wide));
+    const bottom = Math.max(...set.map((box) => box.y + box.tall));
+    const wide = Math.max(...loose.map((item) => item.wide));
+    const tall = Math.max(...loose.map((item) => item.tall));
+    if (kind === 'circle') {
+      let across = (right - left) / Math.SQRT2 + wide / 2 + 48;
+      let down = (bottom - top) / Math.SQRT2 + tall / 2 + 48;
+      const grow = Math.max(1, (loose.length * (Math.max(wide, tall) + 48)) / (Math.PI * (across + down)));
+      across *= grow;
+      down *= grow;
+      loose.forEach((item, index) => {
+        const angle = (index / loose.length) * Math.PI * 2 + Math.PI / 2;
+        place.set(item.id, {
+          x: (left + right) / 2 + Math.cos(angle) * across - item.wide / 2,
+          y: (top + bottom) / 2 + Math.sin(angle) * down - item.tall / 2
+        });
+      });
+    } else if (kind === 'grid') {
+      const columns = Math.ceil(Math.sqrt(loose.length));
+      loose.forEach((item, index) => place.set(item.id, {
+        x: right + 120 + (index % columns) * (wide + 64),
+        y: top + Math.floor(index / columns) * (tall + 56)
+      }));
+    } else {
+      const sideways = kind === 'lr';
+      const end = sideways ? Math.max(left + 600, right) : Math.max(top + 400, bottom);
+      let along = sideways ? left : top;
+      let off = sideways ? bottom + 120 : right + 120;
+      for (const item of loose) {
+        const length = sideways ? item.wide : item.tall;
+        if (along > (sideways ? left : top) && along + length > end) {
+          along = sideways ? left : top;
+          off += sideways ? tall + 56 : wide + 64;
+        }
+        place.set(item.id, sideways ? { x: along, y: off } : { x: off, y: along });
+        along += length + (sideways ? 64 : 56);
       }
-      place.set(item.id, { x, y });
-      x += item.wide + 64;
-      tall = Math.max(tall, item.tall);
+    }
+    const first = { x: Math.min(...[...place.values()].map((spot) => spot.x)), y: Math.min(...[...place.values()].map((spot) => spot.y)) };
+    for (const spot of place.values()) {
+      spot.x -= first.x;
+      spot.y -= first.y;
     }
   }
   return place;

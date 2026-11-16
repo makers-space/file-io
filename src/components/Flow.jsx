@@ -272,12 +272,9 @@ const flowLevels = (ids, wires) => {
   return level;
 };
 
-const layoutItems = (items, wires, kind) => {
+const layoutLinked = (items, wires, kind) => {
   const place = new Map();
   if (items.length === 0) return place;
-  const tied = new Set(wires.flatMap((wire) => [wire.source, wire.target]));
-  const loose = items.filter((item) => !tied.has(item.id));
-  const main = loose.length === items.length ? items : items.filter((item) => tied.has(item.id));
   const typical = (measure) => {
     const sorted = items.map(measure).sort((one, other) => one - other);
     return sorted[Math.floor(sorted.length / 2)];
@@ -314,10 +311,10 @@ const layoutItems = (items, wires, kind) => {
     // Boxes are put in lines by how far along the connectors they sit. Within a line they are ordered, then
     // slid, to sit as near as they can to the boxes they connect to, which keeps connectors short and stops
     // most of them crossing. "across" is the direction along a line; "depth" is the direction from line to line.
-    const level = flowLevels(main.map((item) => item.id), wires);
+    const level = flowLevels(items.map((item) => item.id), wires);
     // A connector that skips one or more lines gets a small placeholder in each line it passes. The placeholders
     // are ordered and spaced like boxes, so the boxes in those lines leave the connector a gap to run through.
-    const all = [...main];
+    const all = [...items];
     const links = [];
     wires.forEach((wire, count) => {
       const from = level.get(wire.source);
@@ -403,12 +400,12 @@ const layoutItems = (items, wires, kind) => {
   // For a grid or a circle, boxes are taken in the order the connectors lead from one to the next,
   // so connected boxes end up beside each other.
   const chained = () => {
-    const linked = new Map(main.map((item) => [item.id, []]));
+    const linked = new Map(items.map((item) => [item.id, []]));
     for (const { source, target } of wires) {
       linked.get(source)?.push(target);
       linked.get(target)?.push(source);
     }
-    const byId = new Map(main.map((item) => [item.id, item]));
+    const byId = new Map(items.map((item) => [item.id, item]));
     const seen = new Set();
     const order = [];
     const visit = (id) => {
@@ -417,7 +414,7 @@ const layoutItems = (items, wires, kind) => {
       order.push(byId.get(id));
       linked.get(id).forEach(visit);
     };
-    main.forEach((item) => visit(item.id));
+    items.forEach((item) => visit(item.id));
     return order;
   };
   // Given boxes and the spots they may sit on, decides which box takes which spot.
@@ -459,7 +456,7 @@ const layoutItems = (items, wires, kind) => {
   };
   // A grid's rows and columns are only where boxes may sit; which box goes where follows the connectors.
   if (kind === 'grid') {
-    const columns = Math.ceil(Math.sqrt(main.length));
+    const columns = Math.ceil(Math.sqrt(items.length));
     const order = chained();
     settle(order, order.map((_item, index) => ({ x: (index % columns) * (usualWide + 100), y: Math.floor(index / columns) * (usualTall + 88) })));
   }
@@ -467,16 +464,16 @@ const layoutItems = (items, wires, kind) => {
   // outward round it, each box placed after the boxes it connects to, so connectors run round and outward.
   // The winding is measured in box-sized steps, wider than tall, so the rings sit as close as a grid would.
   if (kind === 'circle') {
-    const linked = new Map(main.map((item) => [item.id, []]));
+    const linked = new Map(items.map((item) => [item.id, []]));
     for (const { source, target } of wires) {
       if (source === target) continue;
       linked.get(source)?.push(target);
       linked.get(target)?.push(source);
     }
-    const byId = new Map(main.map((item) => [item.id, item]));
+    const byId = new Map(items.map((item) => [item.id, item]));
     const seen = new Set();
     const order = [];
-    for (const first of [...main].sort((one, other) => linked.get(other.id).length - linked.get(one.id).length)) {
+    for (const first of [...items].sort((one, other) => linked.get(other.id).length - linked.get(one.id).length)) {
       if (seen.has(first.id)) continue;
       const waiting = [first.id];
       seen.add(first.id);
@@ -512,53 +509,71 @@ const layoutItems = (items, wires, kind) => {
       spot.y -= top;
     }
   }
-  if (main !== items) {
-    const set = main.map((item) => ({ ...place.get(item.id), wide: item.wide, tall: item.tall }));
-    const left = Math.min(...set.map((box) => box.x));
-    const top = Math.min(...set.map((box) => box.y));
-    const right = Math.max(...set.map((box) => box.x + box.wide));
-    const bottom = Math.max(...set.map((box) => box.y + box.tall));
-    const wide = Math.max(...loose.map((item) => item.wide));
-    const tall = Math.max(...loose.map((item) => item.tall));
-    if (kind === 'circle') {
-      let across = (right - left) / Math.SQRT2 + wide / 2 + 48;
-      let down = (bottom - top) / Math.SQRT2 + tall / 2 + 48;
-      const grow = Math.max(1, (loose.length * (Math.max(wide, tall) + 48)) / (Math.PI * (across + down)));
-      across *= grow;
-      down *= grow;
-      loose.forEach((item, index) => {
-        const angle = (index / loose.length) * Math.PI * 2 + Math.PI / 2;
-        place.set(item.id, {
-          x: (left + right) / 2 + Math.cos(angle) * across - item.wide / 2,
-          y: (top + bottom) / 2 + Math.sin(angle) * down - item.tall / 2
-        });
-      });
-    } else if (kind === 'grid') {
-      const columns = Math.ceil(Math.sqrt(loose.length));
-      loose.forEach((item, index) => place.set(item.id, {
-        x: right + 120 + (index % columns) * (wide + 64),
-        y: top + Math.floor(index / columns) * (tall + 56)
-      }));
-    } else {
-      const sideways = kind === 'lr';
-      const end = sideways ? Math.max(left + 600, right) : Math.max(top + 400, bottom);
-      let along = sideways ? left : top;
-      let off = sideways ? bottom + 120 : right + 120;
-      for (const item of loose) {
-        const length = sideways ? item.wide : item.tall;
-        if (along > (sideways ? left : top) && along + length > end) {
-          along = sideways ? left : top;
-          off += sideways ? tall + 56 : wide + 64;
-        }
-        place.set(item.id, sideways ? { x: along, y: off } : { x: off, y: along });
-        along += length + (sideways ? 64 : 56);
+  return place;
+};
+
+// Boxes that connectors join, directly or through others, are arranged as a set. Each set is then treated as one
+// box, and the sets, along with any boxes that connect to nothing, are arranged around each other the same way.
+const layoutItems = (items, wires, kind) => {
+  const lead = new Map(items.map((item) => [item.id, item.id]));
+  const find = (id) => {
+    let at = id;
+    while (lead.has(at) && lead.get(at) !== at) at = lead.get(at);
+    return at;
+  };
+  for (const { source, target } of wires) {
+    if (lead.has(source) && lead.has(target)) lead.set(find(source), find(target));
+  }
+  const sets = new Map();
+  for (const item of items) sets.set(find(item.id), [...(sets.get(find(item.id)) || []), item]);
+  if (sets.size <= 1 || sets.size === items.length) return layoutLinked(items, wires, kind);
+  const room = 28;
+  const parts = [...sets.entries()].map(([id, members]) => {
+    const inner = layoutLinked(members, wires.filter((wire) => lead.has(wire.source) && lead.has(wire.target) && find(wire.source) === id), kind);
+    return {
+      id,
+      members,
+      inner,
+      wide: Math.max(...members.map((member) => inner.get(member.id).x + member.wide)) + room * 2,
+      tall: Math.max(...members.map((member) => inner.get(member.id).y + member.tall)) + room * 2
+    };
+  }).sort((one, other) => other.wide * other.tall - one.wide * one.tall);
+  let outer = new Map();
+  if (kind === 'lr' || kind === 'tb') {
+    const sideways = kind === 'lr';
+    const length = (part) => (sideways ? part.wide : part.tall);
+    const depth = (part) => (sideways ? part.tall : part.wide);
+    const end = Math.max(600, ...parts.map(length));
+    let along = 0;
+    let off = 0;
+    let deepest = 0;
+    for (const part of parts) {
+      if (along > 0 && along + length(part) > end) {
+        along = 0;
+        off += deepest + 40;
+        deepest = 0;
       }
+      outer.set(part.id, sideways ? { x: along, y: off } : { x: off, y: along });
+      along += length(part) + 24;
+      deepest = Math.max(deepest, depth(part));
     }
-    const first = { x: Math.min(...[...place.values()].map((spot) => spot.x)), y: Math.min(...[...place.values()].map((spot) => spot.y)) };
-    for (const spot of place.values()) {
-      spot.x -= first.x;
-      spot.y -= first.y;
+  } else {
+    outer = layoutLinked(parts, [], kind);
+  }
+  const place = new Map();
+  for (const part of parts) {
+    for (const member of part.members) {
+      place.set(member.id, {
+        x: outer.get(part.id).x + room + part.inner.get(member.id).x,
+        y: outer.get(part.id).y + room + part.inner.get(member.id).y
+      });
     }
+  }
+  const left = Math.min(...[...place.values()].map((spot) => spot.x));
+  const top = Math.min(...[...place.values()].map((spot) => spot.y));
+  for (const spot of place.values()) {
+    spot.x -= left;
+    spot.y -= top;
   }
   return place;
 };

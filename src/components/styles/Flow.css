@@ -188,10 +188,10 @@
 }
 
 /* The group a dragged step would join */
-.themed-flow .react-flow__node-group.flow-drop-target {
+.themed-flow .react-flow__node.react-flow__node-group.flow-drop-target {
   border-style: solid;
-  border-color: var(--success-color);
-  background-color: color-mix(in srgb, var(--success-color), transparent 85%);
+  border-color: var(--success-accent-color, var(--success-color));
+  background-color: color-mix(in srgb, var(--success-accent-color, var(--success-color)), transparent 75%);
 }
 
 /* A group has no connection points; its hidden anchor only lets a connector to its border exist */

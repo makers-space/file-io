@@ -153,4 +153,69 @@ export const NotificationsCard = ({ subscribe = null }) => {
     );
 };
 
+/**
+ * Notices inside the navigation menu: the newest few, with Mark read and Clear all.
+ * Clear all also dismisses the notices showing on screen.
+ */
+export const NotificationsMenu = () => {
+    const { user } = useAuth();
+    const { notifications: showing = [], clearAllNotifications } = useNotification();
+    const [list, setList] = useState(null);
+    const [unread, setUnread] = useState(0);
+    const userId = user?.id || user?._id;
+
+    const load = useCallback(async () => {
+        try {
+            const result = await appService.getNotifications();
+            setList(result.notifications || []);
+            setUnread(result.unread || 0);
+        } catch {
+            setList((now) => now || []);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (userId) load();
+    }, [userId, load]);
+
+    if (!userId) return null;
+    const act = (work) => work.then(load).catch(load);
+    const notices = list || [];
+
+    return (
+        <Container layout="flex-column" gap="xs" width="100%">
+            <Container layout="flex" justify="between" align="center" gap="sm" padding="none" width="100%" wrap={false}>
+                <Container layout="flex" align="center" gap="xs" padding="none" wrap={false}>
+                    <Typography as="p" size="xs" weight="medium">NOTIFICATIONS</Typography>
+                    {unread > 0 && <Badge size="xs" color="primary">{unread} new</Badge>}
+                </Container>
+                <Container layout="flex" gap="xs" padding="none" wrap={false}>
+                    <Button size="xs" variant="ghost" disabled={unread === 0} onClick={() => act(appService.markNotificationsRead())}>
+                        <Icon name="FiCheck" size="xs" />Mark read
+                    </Button>
+                    <Button size="xs" variant="ghost" color="error" disabled={notices.length === 0 && showing.length === 0} onClick={() => { clearAllNotifications(); act(appService.clearNotifications()); }}>
+                        <Icon name="FiTrash2" size="xs" />Clear all
+                    </Button>
+                </Container>
+            </Container>
+            {list !== null && notices.length === 0 && <Typography size="xs" color="muted">Nothing to clear.</Typography>}
+            {notices.slice(0, 3).map((notice) => {
+                const [icon, color] = LEVEL_ICONS[notice.level] || LEVEL_ICONS.info;
+                return (
+                    <Container key={notice.id} layout="flex" align="center" gap="sm" padding="none" width="100%" wrap={false}>
+                        <Icon name={icon} size="xs" color={color} />
+                        <Container padding="none" flexFill minWidth="0">
+                            <Typography size="xs" weight={notice.read ? 'normal' : 'semibold'} truncate>{notice.message}</Typography>
+                        </Container>
+                        <Button size="xxs" variant="ghost" color="error" title="Clear" aria-label="Clear" onClick={() => act(appService.clearNotifications(notice.id))}>
+                            <Icon name="FiX" />
+                        </Button>
+                    </Container>
+                );
+            })}
+            {notices.length > 3 && <Typography size="xxs" color="muted">{notices.length - 3} more on the dashboard</Typography>}
+        </Container>
+    );
+};
+
 export default AppNotifications;

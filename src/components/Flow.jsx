@@ -327,7 +327,7 @@ export const parseFlow = (text) => {
   return { nodes: [...groups, ...nodes], edges, error: null };
 };
 
-export const writeFlow = (nodes = [], edges = []) => {
+export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => {
   const line = (tag, pairs) => `  <${tag} ${pairs.filter(([, value]) => value !== undefined && value !== null && value !== '').map(([key, value]) => `${key}="${escapeFlow(value)}"`).join(' ')} />`;
   const groupIds = new Set(nodes.filter((node) => node.type === 'group').map((node) => node.id));
   const stepIds = new Set(nodes.filter((node) => node.type !== 'group').map((node) => node.id));
@@ -352,7 +352,7 @@ export const writeFlow = (nodes = [], edges = []) => {
       ['id', node.id], ['label', data.label],
       ['color', color === DEFAULT_NODE_COLOR_TOKEN ? null : color],
       ['shape', data.shape && data.shape !== DEFAULT_NODE_SHAPE ? data.shape : null],
-      ['x', Math.round(node.position?.x ?? 0)], ['y', Math.round(node.position?.y ?? 0)],
+      ['x', positions ? Math.round(node.position?.x ?? 0) : null], ['y', positions ? Math.round(node.position?.y ?? 0) : null],
       ['group', groupIds.has(node.parentId) ? node.parentId : null],
       ['size', data.fontSize && data.fontSize !== 'md' ? data.fontSize : null],
       ['weight', data.fontWeight && data.fontWeight !== 'semibold' ? data.fontWeight : null],
@@ -383,6 +383,25 @@ export const writeFlow = (nodes = [], edges = []) => {
 };
 
 const FlowLock = createContext(false);
+
+// The toolbar's actions, in order. "edit" actions change the flow and are left out when it is read-only.
+const FLOW_ACTIONS = [
+  { id: 'step', kind: 'edit', icon: 'FiPlusSquare', label: 'Add a step', keys: 'N' },
+  { id: 'group', kind: 'edit', icon: 'FiGrid', label: 'Add a group', keys: 'G' },
+  { id: 'edit', kind: 'edit', icon: 'FiEdit2', label: 'Edit what is selected', keys: 'E', needs: 'one' },
+  { id: 'duplicate', kind: 'edit', icon: 'FiCopy', label: 'Duplicate', keys: 'Ctrl+D', needs: 'steps' },
+  { id: 'delete', kind: 'edit', icon: 'FiTrash2', label: 'Delete', keys: 'Delete', needs: 'any' },
+  { id: 'undo', kind: 'edit', icon: 'FiCornerUpLeft', label: 'Undo', keys: 'Ctrl+Z', needs: 'undo' },
+  { id: 'redo', kind: 'edit', icon: 'FiCornerUpRight', label: 'Redo', keys: 'Ctrl+Y', needs: 'redo' },
+  { id: 'tidy', kind: 'edit', icon: 'FiAlignLeft', label: 'Tidy the layout', keys: 'L' },
+  { id: 'zoomIn', kind: 'view', icon: 'FiZoomIn', label: 'Zoom in', keys: '+' },
+  { id: 'zoomOut', kind: 'view', icon: 'FiZoomOut', label: 'Zoom out', keys: '-' },
+  { id: 'fit', kind: 'view', icon: 'FiMaximize', label: 'Fit everything on screen', keys: 'F' },
+  { id: 'lock', kind: 'edit', icon: 'FiLock', label: 'Lock moving', keys: 'K' },
+  { id: 'map', kind: 'view', icon: 'FiMap', label: 'Show or hide the map', keys: 'M' }
+];
+const FLOW_HINT_MS = 1200;
+const FLOW_HISTORY = 100;
 
 // Custom Node for inline editing with bidirectional handles on all four sides
 // Each position has BOTH source and target handles to allow any-to-any connections
@@ -517,7 +536,7 @@ export const Flow = ({
   content,
   onContentChange,
   readOnly = false,
-  toolbar = false,
+  toolbar = true,
   proOptions = { hideAttribution: true },
   connectEdgeOptions = {
     type: 'smoothstep',
@@ -540,7 +559,14 @@ export const Flow = ({
   const sanitizedInitialNodes = useMemo(() => (firstFlow ? firstFlow.nodes : initialNodes).map(sanitizeNode), []);
   const sanitizedInitialEdges = useMemo(() => (firstFlow ? firstFlow.edges : initialEdges).map(sanitizeEdge), []);
   const shownTextRef = useRef(fromText ? content : null);
-  const writtenTextRef = useRef(fromText ? writeFlow(sanitizedInitialNodes, sanitizedInitialEdges) : null);
+  const writtenTextRef = useRef(writeFlow(sanitizedInitialNodes, sanitizedInitialEdges));
+  const historyRef = useRef({ past: [], future: [], jump: null });
+  const [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
+  const [locked, setLocked] = useState(false);
+  const [mapShown, setMapShown] = useState(Boolean(minimap));
+  const [hint, setHint] = useState(null);
+  const hintTimer = useRef(null);
+  const hoverRef = useRef(false);
   
   const [nodes, setNodes, onNodesChange] = useNodesState(sanitizedInitialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(sanitizedInitialEdges);
@@ -575,10 +601,20 @@ export const Flow = ({
   }, [onContentChange]);
 
   useEffect(() => {
-    if (!fromText || readOnly || nodes.some((node) => node.dragging)) return;
+    if (nodes.some((node) => node.dragging)) return;
     const text = writeFlow(nodes, edges);
     if (text === writtenTextRef.current) return;
+    const history = historyRef.current;
+    if (history.jump === text) {
+      history.jump = null;
+    } else {
+      history.past.push(writtenTextRef.current);
+      if (history.past.length > FLOW_HISTORY) history.past.shift();
+      history.future.length = 0;
+    }
+    setHistorySize({ undo: history.past.length, redo: history.future.length });
     writtenTextRef.current = text;
+    if (!fromText || readOnly) return;
     shownTextRef.current = text;
     onContentChangeRef.current?.(text);
   }, [nodes, edges, fromText, readOnly]);
@@ -592,9 +628,28 @@ export const Flow = ({
     const nextNodes = next.nodes.map(sanitizeNode);
     const nextEdges = next.edges.map(sanitizeEdge);
     writtenTextRef.current = writeFlow(nextNodes, nextEdges);
+    historyRef.current = { past: [], future: [], jump: null };
+    setHistorySize({ undo: 0, redo: 0 });
     setNodes(nextNodes);
     setEdges(nextEdges);
   }, [content, fromText, setNodes, setEdges]);
+
+  const drawText = useCallback((text) => {
+    const next = parseFlow(text);
+    if (next.error) return;
+    historyRef.current.jump = writeFlow(next.nodes.map(sanitizeNode), next.edges.map(sanitizeEdge));
+    setNodes(next.nodes.map(sanitizeNode));
+    setEdges(next.edges.map(sanitizeEdge));
+  }, [setNodes, setEdges]);
+
+  const stepBack = useCallback((from, to) => {
+    const history = historyRef.current;
+    if (history[from].length === 0) return;
+    const text = history[from].pop();
+    history[to].push(writtenTextRef.current);
+    setHistorySize({ undo: history.past.length, redo: history.future.length });
+    drawText(text);
+  }, [drawText]);
 
   const addBox = useCallback((kind) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -763,6 +818,91 @@ export const Flow = ({
     setEdgeEditor(null);
   }, [edgeEditor, setEdges]);
   
+  const canEdit = !readOnly && toolbar !== 'view';
+  const chosenNodes = nodes.filter((node) => node.selected);
+  const chosenEdges = edges.filter((edge) => edge.selected);
+  const chosenSteps = chosenNodes.filter((node) => node.type !== 'group');
+  const actionReady = {
+    one: chosenNodes.length + chosenEdges.length === 1,
+    steps: chosenSteps.length > 0,
+    any: chosenNodes.length + chosenEdges.length > 0,
+    undo: historySize.undo > 0,
+    redo: historySize.redo > 0
+  };
+
+  const runAction = (id) => {
+    const instance = reactFlowInstanceRef.current;
+    const action = FLOW_ACTIONS.find((entry) => entry.id === id);
+    if (!action || (action.kind === 'edit' && !canEdit) || (action.needs && !actionReady[action.needs])) return;
+    if (id === 'step') addBox('node');
+    if (id === 'group') addBox('group');
+    if (id === 'zoomIn') instance?.zoomIn({ duration: 150 });
+    if (id === 'zoomOut') instance?.zoomOut({ duration: 150 });
+    if (id === 'fit') instance?.fitView({ padding: 0.2, duration: 200 });
+    if (id === 'lock') setLocked((now) => !now);
+    if (id === 'map') setMapShown((now) => !now);
+    if (id === 'undo') stepBack('past', 'future');
+    if (id === 'redo') stepBack('future', 'past');
+    if (id === 'delete') instance?.deleteElements({ nodes: chosenNodes, edges: chosenEdges });
+    if (id === 'tidy') {
+      drawText(writeFlow(nodes, edges, { positions: false }));
+      historyRef.current.jump = null;
+      setTimeout(() => instance?.fitView({ padding: 0.2, duration: 200 }), 50);
+    }
+    if (id === 'duplicate') {
+      setNodes((current) => {
+        const taken = new Set(current.map((node) => node.id));
+        const copies = chosenSteps.map((node) => {
+          let number = 2;
+          while (taken.has(`${node.id}-${number}`)) number++;
+          taken.add(`${node.id}-${number}`);
+          return { ...node, id: `${node.id}-${number}`, position: { x: node.position.x + 24, y: node.position.y + 24 }, data: { ...node.data }, selected: true };
+        });
+        return [...current.map((node) => (node.selected ? { ...node, selected: false } : node)), ...copies];
+      });
+    }
+    if (id === 'edit') {
+      const box = containerRef.current?.getBoundingClientRect();
+      const target = chosenNodes[0] || chosenEdges[0];
+      const drawn = containerRef.current?.querySelector(`[data-id="${CSS.escape(target.id)}"]`)?.getBoundingClientRect();
+      const at = { clientX: drawn ? drawn.left + drawn.width / 2 : (box?.left ?? 0) + (box?.width ?? 0) / 2, clientY: drawn ? drawn.bottom : (box?.top ?? 0) + (box?.height ?? 0) / 2, preventDefault: () => {} };
+      if (chosenNodes[0]) onContextMenu(at, target);
+      else onEdgeContextMenuHandler(at, target);
+    }
+  };
+  const runActionRef = useRef(runAction);
+  runActionRef.current = runAction;
+
+  // Keyboard shortcuts work while the pointer is over the flow or something inside it has focus.
+  useEffect(() => {
+    if (toolbar === false) return undefined;
+    const onKey = (event) => {
+      const inside = hoverRef.current || containerRef.current?.contains(document.activeElement);
+      const typing = event.target?.closest?.('input, textarea, select, [contenteditable="true"]');
+      if (!inside || typing || event.altKey) return;
+      const key = event.key.toLowerCase();
+      const command = event.ctrlKey || event.metaKey;
+      const id = command
+        ? ({ d: 'duplicate', z: event.shiftKey ? 'redo' : 'undo', y: 'redo' })[key]
+        : ({ n: 'step', g: 'group', e: 'edit', l: 'tidy', f: 'fit', k: 'lock', m: 'map', '+': 'zoomIn', '=': 'zoomIn', '-': 'zoomOut' })[key];
+      if (!id) return;
+      event.preventDefault();
+      runActionRef.current(id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toolbar]);
+
+  const showHint = (id) => {
+    clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setHint(id), FLOW_HINT_MS);
+  };
+  const hideHint = () => {
+    clearTimeout(hintTimer.current);
+    setHint(null);
+  };
+  useEffect(() => () => clearTimeout(hintTimer.current), []);
+
   const onPaneClickHandler = useCallback((e) => {
     setNodeEditor(null);
     setEdgeEditor(null);
@@ -832,6 +972,8 @@ export const Flow = ({
   return (
     <div 
       ref={containerRef}
+      onMouseEnter={() => { hoverRef.current = true; }}
+      onMouseLeave={() => { hoverRef.current = false; }}
       className={`flow-container themed-flow flow-${size} ${theme ? `theme-${theme}` : ''} ${className}`.trim()}
       style={containerStyle}
       data-theme={theme || currentTheme}
@@ -1198,7 +1340,7 @@ export const Flow = ({
         onEdgeClick={(e, edge) => { setNodeEditor(null); setEdgeEditor(null); onEdgeClick?.(e, edge); }}
         onEdgeContextMenu={onEdgeContextMenuHandler}
         onPaneClick={onPaneClickHandler}
-        nodesDraggable={draggable && !readOnly}
+        nodesDraggable={draggable && !readOnly && !locked}
         nodesConnectable={connectable && !readOnly}
         elementsSelectable={selectable}
         deleteKeyCode={deletable && !readOnly ? ['Backspace', 'Delete'] : null}
@@ -1211,22 +1353,35 @@ export const Flow = ({
         {...reactFlowProps}
       >
         {background && <Background variant={backgroundVariant} gap={backgroundGap} size={backgroundSize} {...backgroundProps} />}
-        {controls && <Controls showInteractive={!readOnly} {...controlsProps} />}
-        {toolbar && !readOnly && (
-          <Panel position="top-left">
-            <ButtonGroup selectable={false} size="sm">
-              <Button size="sm" variant="ghost" onClick={() => addBox('node')} title="Add a step">
-                <Icon name="FiPlusSquare" size="xs" />
-                Step
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => addBox('group')} title="Add a group to hold steps">
-                <Icon name="FiGrid" size="xs" />
-                Group
-              </Button>
+        {controls && toolbar === false && <Controls showInteractive={!readOnly} {...controlsProps} />}
+        {toolbar !== false && (
+          <Panel position="top-left" className="flow-toolbar">
+            <ButtonGroup vertical selectable={false} size="sm">
+              {FLOW_ACTIONS.filter((action) => action.kind === 'view' || canEdit).map((action) => (
+                <Button
+                  key={action.id}
+                  size="sm"
+                  variant="ghost"
+                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown)}
+                  disabled={Boolean(action.needs) && !actionReady[action.needs]}
+                  aria-label={`${action.label} (${action.keys})`}
+                  onClick={() => runAction(action.id)}
+                  onMouseEnter={() => showHint(action.id)}
+                  onMouseLeave={hideHint}
+                >
+                  <Icon name={action.icon} size="xs" />
+                  {hint === action.id && (
+                    <span className="flow-toolbar-hint" role="tooltip">
+                      <Typography as="span" size="xs">{action.label}</Typography>
+                      <Typography as="span" size="xs" weight="semibold" className="flow-toolbar-key">{action.keys}</Typography>
+                    </span>
+                  )}
+                </Button>
+              ))}
             </ButtonGroup>
           </Panel>
         )}
-        {minimap && (
+        {mapShown && (
           <MiniMap
             zoomable
             pannable

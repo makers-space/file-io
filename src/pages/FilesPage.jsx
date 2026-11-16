@@ -2734,6 +2734,7 @@ const LOADING_BACKGROUND = { background: 'rings', backgroundMotion: 'drift', bac
 const getFilePattern = (viewerType, filePath) => {
   switch (viewerType) {
     case 'text':
+      if (/\.flow$/i.test(filePath)) return { background: 'dots' };
       if (/\.(md|mdx|txt)$/i.test(filePath)) return { background: 'lines', backgroundSize: 'lg' };
       return { background: 'lines' };
     case 'image': return { background: 'checker' };
@@ -3169,6 +3170,8 @@ export const FilesPage = () => {
     const flowError = isFlowFile ? parseFlow(content).error : null;
     const showFlowText = isFlowFile && (flowAsText || Boolean(flowError));
 
+    const flowPage = isFlowFile && !showFlowText;
+
     return (
       <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
         <Card
@@ -3239,13 +3242,12 @@ export const FilesPage = () => {
         </Card>
 
         <Container layout="flex" align="center" justify="center" flexFill width="100%" height="100%" padding="sm" overflow="auto">
-          {isFlowFile && !showFlowText ? (
+          {flowPage ? (
             <Flow
               key={`flow-${metadata.filePath}`}
               content={content}
               onContentChange={updateContent}
               readOnly={isReadOnly}
-              toolbar
               minimap
               width="100%"
               height="100%"

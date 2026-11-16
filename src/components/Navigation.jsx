@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useTheme } from '@contexts/ThemeContext';
+import { NotificationsMenu } from './AppNotifications';
 import { Badge, Button, CircularProgress, Container, FloatingActionButton, Icon, Page, Typography } from './Components';
 
 const LOADING_MESSAGES = [
@@ -249,6 +250,8 @@ export const Navigation = ({
                     ))}
                 </Container>
             </Container>
+
+            <NotificationsMenu />
 
             {/* Theme Switcher */}
             <Container layout="flex-column" gap="xs" width="100%">

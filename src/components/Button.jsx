@@ -1,4 +1,5 @@
-import React, { createContext, forwardRef, useContext, useMemo, useRef } from 'react';
+import React, { createContext, forwardRef, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '@contexts/ThemeContext';
 import { useGeniePortal } from './Genie';
 
@@ -57,6 +58,7 @@ export const Button = forwardRef(({
     genieTrigger = 'click', // 'click', 'hover', 'contextmenu'
     onGenieShow = null, // Callback when genie shows
     onGenieHide = null, // Callback when genie hides
+    title = null, // Helper text, shown in the app's own style after a short hover
     ...props
 }, ref) => {
     const {currentTheme: globalTheme} = useTheme();
@@ -136,8 +138,34 @@ export const Button = forwardRef(({
             ? buttonGroupContext.selectedButton === buttonGroupContext.buttonId
             : false);
 
+    // Helper text: the title is drawn by the button itself, so it looks the same in every browser and theme.
+    const [tip, setTip] = useState(null);
+    const tipTimer = useRef(null);
+    const showTip = (e) => {
+        const button = e?.currentTarget;
+        if (!title || !button) return;
+        clearTimeout(tipTimer.current);
+        tipTimer.current = setTimeout(() => {
+            if (!button.isConnected) return;
+            const box = button.getBoundingClientRect();
+            const below = box.bottom + 40 < window.innerHeight;
+            setTip({ x: box.left + box.width / 2, y: below ? box.bottom + 6 : box.top - 6, below });
+        }, 500);
+    };
+    const hideTip = () => {
+        clearTimeout(tipTimer.current);
+        setTip(null);
+    };
+    useEffect(() => () => clearTimeout(tipTimer.current), []);
+    const placeTip = (element) => {
+        if (!element || !tip) return;
+        const half = element.offsetWidth / 2;
+        element.style.left = `${Math.min(Math.max(tip.x, half + 8), window.innerWidth - half - 8)}px`;
+    };
+
     const handleClick = (e) => {
         if (disabled) return;
+        hideTip();
 
         // Handle Genie click trigger first
         if (genieConfig && genieConfig.trigger === 'click') {
@@ -163,8 +191,15 @@ export const Button = forwardRef(({
     };
 
     // Merge button onClick with genie trigger props (for non-click triggers)
+    const withTip = (name, own) => (e) => {
+        own(e);
+        genieTriggerProps[name]?.(e);
+        props[name]?.(e);
+    };
     const combinedProps = {
         ...genieTriggerProps,
+        onMouseEnter: withTip('onMouseEnter', showTip),
+        onMouseLeave: withTip('onMouseLeave', hideTip),
         onClick: handleClick // Always use our handleClick which handles both Genie and Button logic
     };
     const getVariantClass = () => {
@@ -209,6 +244,7 @@ export const Button = forwardRef(({
                 data-theme={buttonTheme}
                 data-theme-source={theme ? 'local' : 'inherited'}
                 data-genie-position={genieConfig?.position || 'auto'}
+                aria-label={title || undefined}
                 {...props}
                 {...combinedProps}
                 style={{ ...getMarginStyle(), ...(variantColorValue ? { '--button-variant-color': variantColorValue } : {}) }}
@@ -217,6 +253,18 @@ export const Button = forwardRef(({
                     {children}
                 </span>
             </button>
+            {tip && createPortal(
+                <span
+                    ref={placeTip}
+                    role="tooltip"
+                    className={`button-tip theme-${buttonTheme} ${tip.below ? '' : 'button-tip-above'}`}
+                    data-theme={buttonTheme}
+                    style={{ left: tip.x, top: tip.y }}
+                >
+                    {title}
+                </span>,
+                document.body
+            )}
             {/* Genie Integration using Portal */}
             {GeniePortal}
         </ButtonContext.Provider>

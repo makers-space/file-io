@@ -275,6 +275,9 @@ const flowLevels = (ids, wires) => {
 const layoutItems = (items, wires, kind) => {
   const place = new Map();
   if (items.length === 0) return place;
+  const tied = new Set(wires.flatMap((wire) => [wire.source, wire.target]));
+  const loose = items.filter((item) => !tied.has(item.id));
+  const main = loose.length === items.length ? items : items.filter((item) => tied.has(item.id));
   const typical = (measure) => {
     const sorted = items.map(measure).sort((one, other) => one - other);
     return sorted[Math.floor(sorted.length / 2)];
@@ -311,9 +314,6 @@ const layoutItems = (items, wires, kind) => {
     // Boxes are put in lines by how far along the connectors they sit. Within a line they are ordered, then
     // slid, to sit as near as they can to the boxes they connect to, which keeps connectors short and stops
     // most of them crossing. "across" is the direction along a line; "depth" is the direction from line to line.
-    const tied = new Set(wires.flatMap((wire) => [wire.source, wire.target]));
-    const loose = items.filter((item) => !tied.has(item.id));
-    const main = loose.length === items.length ? items : items.filter((item) => tied.has(item.id));
     const level = flowLevels(main.map((item) => item.id), wires);
     // A connector that skips one or more lines gets a small placeholder in each line it passes. The placeholders
     // are ordered and spaced like boxes, so the boxes in those lines leave the connector a gap to run through.
@@ -341,7 +341,7 @@ const layoutItems = (items, wires, kind) => {
     const rows = lines.filter(Boolean);
     const across = (item) => (kind === 'lr' ? item.tall : item.wide);
     const depth = (item) => (kind === 'lr' ? item.wide : item.tall);
-    const gap = kind === 'lr' ? 48 : 64;
+    const gap = kind === 'lr' ? 68 : 88;
 
     const linked = new Map(all.map((item) => [item.id, new Set()]));
     for (const { source, target } of links) {
@@ -397,35 +397,18 @@ const layoutItems = (items, wires, kind) => {
         const inset = Math.round(along + (deepest - depth(item)) / 2);
         if (!item.placeholder) place.set(item.id, kind === 'lr' ? { x: inset, y: beside } : { x: beside, y: inset });
       }
-      along += deepest + (kind === 'lr' ? 96 : 72);
-    }
-    if (main !== items) {
-      const right = Math.max(600, ...main.map((item) => place.get(item.id).x + item.wide));
-      const bottom = Math.max(...main.map((item) => place.get(item.id).y + item.tall));
-      let x = 0;
-      let y = bottom + 72;
-      let tall = 0;
-      for (const item of loose) {
-        if (x > 0 && x + item.wide > right) {
-          x = 0;
-          y += tall + 40;
-          tall = 0;
-        }
-        place.set(item.id, { x, y });
-        x += item.wide + 48;
-        tall = Math.max(tall, item.tall);
-      }
+      along += deepest + (kind === 'lr' ? 132 : 104);
     }
   }
   // For a grid or a circle, boxes are taken in the order the connectors lead from one to the next,
   // so connected boxes end up beside each other.
   const chained = () => {
-    const linked = new Map(items.map((item) => [item.id, []]));
+    const linked = new Map(main.map((item) => [item.id, []]));
     for (const { source, target } of wires) {
       linked.get(source)?.push(target);
       linked.get(target)?.push(source);
     }
-    const byId = new Map(items.map((item) => [item.id, item]));
+    const byId = new Map(main.map((item) => [item.id, item]));
     const seen = new Set();
     const order = [];
     const visit = (id) => {
@@ -434,7 +417,7 @@ const layoutItems = (items, wires, kind) => {
       order.push(byId.get(id));
       linked.get(id).forEach(visit);
     };
-    items.forEach((item) => visit(item.id));
+    main.forEach((item) => visit(item.id));
     return order;
   };
   // Given boxes and the spots they may sit on, decides which box takes which spot.
@@ -469,31 +452,31 @@ const layoutItems = (items, wires, kind) => {
       }
     }
     const boxes = order.map((item) => ({ item, x: spots[seat.get(item.id)].x, y: spots[seat.get(item.id)].y, wide: item.wide, tall: item.tall }));
-    spread(boxes, 36);
+    spread(boxes, 56);
     for (const box of boxes) {
       place.set(box.item.id, { x: Math.round(box.x - box.wide / 2), y: Math.round(box.y - box.tall / 2) });
     }
   };
   // A grid's rows and columns are only where boxes may sit; which box goes where follows the connectors.
   if (kind === 'grid') {
-    const columns = Math.ceil(Math.sqrt(items.length));
+    const columns = Math.ceil(Math.sqrt(main.length));
     const order = chained();
-    settle(order, order.map((_item, index) => ({ x: (index % columns) * (usualWide + 64), y: Math.floor(index / columns) * (usualTall + 56) })));
+    settle(order, order.map((_item, index) => ({ x: (index % columns) * (usualWide + 100), y: Math.floor(index / columns) * (usualTall + 88) })));
   }
   // A circular arrangement that wastes no space: the most connected box goes in the middle and the rest wind
   // outward round it, each box placed after the boxes it connects to, so connectors run round and outward.
   // The winding is measured in box-sized steps, wider than tall, so the rings sit as close as a grid would.
   if (kind === 'circle') {
-    const linked = new Map(items.map((item) => [item.id, []]));
+    const linked = new Map(main.map((item) => [item.id, []]));
     for (const { source, target } of wires) {
       if (source === target) continue;
       linked.get(source)?.push(target);
       linked.get(target)?.push(source);
     }
-    const byId = new Map(items.map((item) => [item.id, item]));
+    const byId = new Map(main.map((item) => [item.id, item]));
     const seen = new Set();
     const order = [];
-    for (const first of [...items].sort((one, other) => linked.get(other.id).length - linked.get(one.id).length)) {
+    for (const first of [...main].sort((one, other) => linked.get(other.id).length - linked.get(one.id).length)) {
       if (seen.has(first.id)) continue;
       const waiting = [first.id];
       seen.add(first.id);
@@ -507,8 +490,8 @@ const layoutItems = (items, wires, kind) => {
         }
       }
     }
-    const across = usualWide + 48;
-    const down = usualTall + 56;
+    const across = usualWide + 84;
+    const down = usualTall + 88;
     let angle = -Math.PI / 2;
     const spots = order.map((_item, index) => {
       if (index === 0) return { x: 0, y: 0 };
@@ -527,6 +510,24 @@ const layoutItems = (items, wires, kind) => {
     for (const spot of place.values()) {
       spot.x -= left;
       spot.y -= top;
+    }
+  }
+  if (main !== items) {
+    const set = main.map((item) => ({ ...place.get(item.id), wide: item.wide, tall: item.tall }));
+    const left = Math.min(...set.map((box) => box.x));
+    const right = Math.max(left + 600, ...set.map((box) => box.x + box.wide));
+    let x = left;
+    let y = Math.max(...set.map((box) => box.y + box.tall)) + 120;
+    let tall = 0;
+    for (const item of loose) {
+      if (x > left && x + item.wide > right) {
+        x = left;
+        y += tall + 56;
+        tall = 0;
+      }
+      place.set(item.id, { x, y });
+      x += item.wide + 64;
+      tall = Math.max(tall, item.tall);
     }
   }
   return place;

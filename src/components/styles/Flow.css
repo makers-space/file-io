@@ -731,8 +731,4 @@
 }
 
 
-/* The line from a step to its group's border is drawn by the component and cannot be picked up or edited */
-.themed-flow .react-flow__edge.flow-member-edge,
-.themed-flow .react-flow__edge.flow-member-edge * {
-  pointer-events: none;
-}
+

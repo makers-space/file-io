@@ -811,7 +811,7 @@ const linePath = (line, ends, tune = {}) => (
     : getStraightPath(ends)
 );
 
-const drawEdge = (props, [path, labelX, labelY]) => (
+const drawEdge = (props, [path, labelX, labelY], items) => (
   <>
     <BaseEdge
       id={props.id}
@@ -829,17 +829,17 @@ const drawEdge = (props, [path, labelX, labelY]) => (
       labelBgBorderRadius={props.labelBgBorderRadius}
       interactionWidth={props.interactionWidth}
     />
-    <EdgeBar id={props.id} x={labelX} y={labelY} selected={props.selected} />
+    <EdgeBar id={props.id} x={labelX} y={labelY} selected={props.selected} items={items} />
   </>
 );
 
-const EdgeBar = ({ id, x, y, selected }) => {
+const EdgeBar = ({ id, x, y, selected, items = ['edit', 'delete'] }) => {
   const locked = useContext(FlowLock);
   const actions = useContext(FlowActions);
   if (locked || !actions) return null;
   return (
     <EdgeToolbar edgeId={id} x={x} y={y} isVisible={Boolean(selected) && actions.single} alignY="bottom">
-      <QuickBar id={id} items={['edit', 'delete']} />
+      <QuickBar id={id} items={items} />
     </EdgeToolbar>
   );
 };
@@ -856,7 +856,7 @@ const MemberEdge = (props) => {
   if (!group) return null;
   const side = data?.side || 'left';
   const end = borderPoint(group, side, data?.along ?? 0.5);
-  return drawEdge(props, linePath(data?.line || 'step', { sourceX, sourceY, sourcePosition, targetX: end.x, targetY: end.y, targetPosition: FACING[side] }, data));
+  return drawEdge(props, linePath(data?.line || 'step', { sourceX, sourceY, sourcePosition, targetX: end.x, targetY: end.y, targetPosition: FACING[side] }, data), ['delete']);
 };
 
 const edgeTypes = {
@@ -946,6 +946,9 @@ const FlowCanvas = forwardRef(({
   const [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
   const [locked, setLocked] = useState(false);
   const [snap, setSnap] = useState(false);
+  // A line from a step to its group can be selected and deleted, which takes the step out of the group.
+  // It is not one of the flow's connectors, so its selection is kept here.
+  const [memberPicked, setMemberPicked] = useState(() => new Set());
   const [boxSelect, setBoxSelect] = useState(false);
   const [paneMenu, setPaneMenu] = useState(null);
   const paneAnchorRef = useRef(null);
@@ -1213,7 +1216,7 @@ const FlowCanvas = forwardRef(({
   
   const onEdgeContextMenuHandler = useCallback((e, edge) => {
     e.preventDefault();
-    if (readOnly) return;
+    if (readOnly || edge.type === 'member') return;
     const rect = containerRef.current?.getBoundingClientRect();
     const color = inferEdgeColorToken(edge);
     setEdgeEditor({
@@ -1382,9 +1385,8 @@ const FlowCanvas = forwardRef(({
         targetHandle: 'border',
         type: 'member',
         zIndex: 10,
-        selectable: false,
         focusable: false,
-        deletable: false,
+        selected: memberPicked.has(`member-${step.id}`),
         reconnectable: false,
         className: 'flow-member-edge',
         ariaLabel: `${names.get(step.id)} is in ${names.get(group.id)}`,
@@ -1394,7 +1396,7 @@ const FlowCanvas = forwardRef(({
       }));
     }
     return drawn;
-  }, [edges, shownNodes]);
+  }, [edges, shownNodes, memberPicked]);
 
   // A connector cannot join a box to itself, repeat one that is already there, or break a rule the page gives.
   const validConnection = useCallback((link) => (
@@ -1403,14 +1405,43 @@ const FlowCanvas = forwardRef(({
     && (canConnect ? canConnect(link) !== false : true)
   ), [edges, canConnect]);
 
+  const onEdgesChangeHandler = useCallback((changes) => {
+    const own = [];
+    for (const change of changes) {
+      if (!String(change.id).startsWith('member-')) {
+        own.push(change);
+        continue;
+      }
+      if (change.type === 'select') {
+        setMemberPicked((now) => {
+          const next = new Set(now);
+          if (change.selected) next.add(change.id);
+          else next.delete(change.id);
+          return next;
+        });
+      }
+      if (change.type === 'remove' && !readOnly) {
+        const stepId = String(change.id).slice('member-'.length);
+        const groupId = reactFlowInstanceRef.current?.getNode(stepId)?.parentId;
+        if (groupId) leaveGroup(stepId, groupId);
+        setMemberPicked((now) => {
+          const next = new Set(now);
+          next.delete(change.id);
+          return next;
+        });
+      }
+    }
+    if (own.length) onEdgesChange(own);
+  }, [onEdgesChange, leaveGroup, readOnly]);
+
   const canEdit = !readOnly && toolbar !== 'view';
   const chosenNodes = nodes.filter((node) => node.selected);
   const chosenEdges = edges.filter((edge) => edge.selected);
   const chosenSteps = chosenNodes.filter((node) => node.type !== 'group');
   const actionReady = {
-    one: chosenNodes.length + chosenEdges.length === 1,
+    one: chosenNodes.length + chosenEdges.length === 1 && memberPicked.size === 0,
     steps: chosenSteps.length > 0,
-    any: chosenNodes.length + chosenEdges.length > 0,
+    any: chosenNodes.length + chosenEdges.length + memberPicked.size > 0,
     undo: historySize.undo > 0,
     redo: historySize.redo > 0
   };
@@ -1565,7 +1596,7 @@ const FlowCanvas = forwardRef(({
     if (id === 'map') setMapShown((now) => !now);
     if (id === 'undo') stepBack('past', 'future');
     if (id === 'redo') stepBack('future', 'past');
-    if (id === 'delete') instance?.deleteElements({ nodes: chosenNodes, edges: chosenEdges });
+    if (id === 'delete') instance?.deleteElements({ nodes: chosenNodes, edges: [...chosenEdges, ...[...memberPicked].map((edgeId) => ({ id: edgeId }))] });
     if (id === 'tidy') arrange('lr');
     if (id === 'snap') setSnap((now) => !now);
     if (id === 'selectAll') {
@@ -1609,7 +1640,7 @@ const FlowCanvas = forwardRef(({
   };
   const quickRef = useRef(quick);
   quickRef.current = quick;
-  const single = chosenNodes.length + chosenEdges.length === 1;
+  const single = chosenNodes.length + chosenEdges.length + memberPicked.size === 1;
   const actionsValue = useMemo(() => ({ run: (action, id) => quickRef.current(action, id), single }), [single]);
 
   const onSelectRef = useRef(onSelect);
@@ -2005,7 +2036,7 @@ const FlowCanvas = forwardRef(({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        onEdgesChange={onEdgesChangeHandler}
         onConnect={connectable && !readOnly ? onConnect : undefined}
         onConnectStart={() => setConnecting(true)}
         onConnectEnd={onConnectEndHandler}

@@ -42,6 +42,10 @@
     color: var(--tertiary-color);
 }
 
+.themed-icon.icon-contrast {
+    color: var(--text-contrast-color);
+}
+
 .themed-icon.icon-text {
     color: var(--text-color);
 }

@@ -239,7 +239,8 @@ export const Container = forwardRef(({
 
     // Grid item spanning and hover affordance
     const spanClass = span ? `grid-span-${span}` : '';
-    const hoverableClass = hoverable ? 'container-hoverable' : '';
+    const filled = Boolean(backgroundColor) && backgroundColor !== 'transparent' && !STATUS_COLORS.includes(backgroundColor);
+    const hoverableClass = hoverable ? `container-hoverable ${filled ? 'container-filled' : ''}` : '';
 
     const backgroundClass = getBackgroundClass({
         background, backgroundTone, backgroundIntensity, backgroundSize, backgroundMotion, backgroundFade, backgroundColor

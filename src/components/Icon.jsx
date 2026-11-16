@@ -32,7 +32,7 @@ const getIcon = (iconName) => {
  */
 export const Icon = ({
     name = 'FiHelpCircle',
-    color = 'primary', // 'primary', 'secondary', 'tertiary', 'success', 'warning', 'error', 'text'
+    color = 'primary', // 'primary', 'secondary', 'tertiary', 'success', 'warning', 'error', 'text', 'contrast' (for use on a filled background)
     size, // 'xs', 'sm', 'md', 'lg', 'xl', '2xl' - defaults to 'md' or inherits from ButtonContext
     className = '',
     hover = false,

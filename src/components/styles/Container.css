@@ -182,6 +182,15 @@
     background-color: var(--surface-accent-color, var(--surface-color));
 }
 
+/* A row that already has a fill, such as the selected one, keeps its colour and lightens on hover. */
+.container.container-hoverable.container-filled, .themed-container.container-hoverable.container-filled {
+    transition: background-color 0.15s ease, filter 0.15s ease;
+}
+
+.container.container-hoverable.container-filled:hover, .themed-container.container-hoverable.container-filled:hover {
+    filter: brightness(1.18) saturate(1.1);
+}
+
 /* ===== Multi-column System ===== */
 .container.columns-2, .themed-container.columns-2 {
     column-count: 2;

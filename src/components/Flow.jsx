@@ -342,13 +342,50 @@ const layoutItems = (items, wires, kind) => {
     items.forEach((item) => visit(item.id));
     return order;
   };
+  // Round a circle, following the connectors is only a first guess: a box with several connectors leaves some of
+  // its neighbours far away. Pairs of boxes are then swapped for as long as a swap brings connected boxes closer
+  // together round the ring, which also takes most connectors off the middle of the circle.
+  const ringed = () => {
+    const order = chained();
+    const count = order.length;
+    if (count < 4 || count > 80) return order;
+    const seat = new Map(order.map((item, index) => [item.id, index]));
+    const pairs = wires.filter((wire) => wire.source !== wire.target && seat.has(wire.source) && seat.has(wire.target));
+    const apart = () => pairs.reduce((sum, wire) => {
+      const steps = Math.abs(seat.get(wire.source) - seat.get(wire.target));
+      return sum + Math.min(steps, count - steps);
+    }, 0);
+    const swap = (one, other) => {
+      [order[one], order[other]] = [order[other], order[one]];
+      seat.set(order[one].id, one);
+      seat.set(order[other].id, other);
+    };
+    let best = apart();
+    for (let pass = 0; pass < 8; pass++) {
+      let better = false;
+      for (let one = 0; one < count; one++) {
+        for (let other = one + 1; other < count; other++) {
+          swap(one, other);
+          const now = apart();
+          if (now < best) {
+            best = now;
+            better = true;
+          } else {
+            swap(one, other);
+          }
+        }
+      }
+      if (!better) break;
+    }
+    return order;
+  };
   if (kind === 'grid') {
     const columns = Math.ceil(Math.sqrt(items.length));
     chained().forEach((item, index) => place.set(item.id, { x: (index % columns) * (widest + 64), y: Math.floor(index / columns) * (tallest + 56) }));
   }
   if (kind === 'circle') {
     const radius = Math.max(140, (items.length * (Math.max(widest, tallest) + 48)) / (2 * Math.PI));
-    chained().forEach((item, index) => {
+    ringed().forEach((item, index) => {
       const angle = (index / items.length) * 2 * Math.PI - Math.PI / 2;
       place.set(item.id, { x: Math.round(radius + radius * Math.cos(angle) - item.wide / 2 + widest / 2), y: Math.round(radius + radius * Math.sin(angle) - item.tall / 2 + tallest / 2) });
     });
@@ -1176,7 +1213,7 @@ export const Flow = ({
 
   // After boxes are moved, every connector is put on the sides that face each other, so none doubles back.
   // place holds the new positions of the boxes that moved.
-  const reroute = (place, sizes = new Map()) => {
+  const reroute = (place, sizes = new Map(), ring = false) => {
     const byId = new Map(nodes.map((node) => [node.id, node]));
     const spot = (node) => {
       const own = place.get(node.id) || node.position;
@@ -1197,6 +1234,16 @@ export const Flow = ({
       }
       const across = b.x + b.wide / 2 - middle.x;
       const down = b.y + b.tall / 2 - middle.y;
+      // Round a circle, a connector between boxes that are not neighbours leaves and arrives on the sides that face
+      // the middle, so it bends through the inside of the ring and not over the boxes in between.
+      if (ring && !from.parentId && !to.parentId && Math.hypot(across, down) > ring.neighbour) {
+        const facing = (box) => {
+          const x = ring.x - (box.x + box.wide / 2);
+          const y = ring.y - (box.y + box.tall / 2);
+          return Math.abs(x) >= Math.abs(y) ? (x >= 0 ? 'right' : 'left') : (y >= 0 ? 'bottom' : 'top');
+        };
+        return { ...edge, sourceHandle: `${facing(a)}-source`, targetHandle: `${facing(b)}-target` };
+      }
       const [out, into] = Math.abs(across) >= Math.abs(down)
         ? (across >= 0 ? ['right', 'left'] : ['left', 'right'])
         : (down >= 0 ? ['bottom', 'top'] : ['top', 'bottom']);
@@ -1251,7 +1298,16 @@ export const Flow = ({
         ...(size ? { width: size.wide, height: size.tall, style: { ...node.style, width: size.wide, height: size.tall } } : {})
       };
     }));
-    reroute(place, sizes);
+    // For a circle: where its middle is, and how far apart two neighbouring boxes sit.
+    let ring = false;
+    if (kind === 'circle' && outer.length > 3) {
+      const centres = outer.map((node) => ({ x: place.get(node.id).x + measure(node).wide / 2, y: place.get(node.id).y + measure(node).tall / 2 }));
+      const x = centres.reduce((sum, at) => sum + at.x, 0) / centres.length;
+      const y = centres.reduce((sum, at) => sum + at.y, 0) / centres.length;
+      const radius = centres.reduce((sum, at) => sum + Math.hypot(at.x - x, at.y - y), 0) / centres.length;
+      ring = { x, y, neighbour: 2 * radius * Math.sin(Math.PI / centres.length) * 1.25 };
+    }
+    reroute(place, sizes, ring);
     setTimeout(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }), 80);
   };
 

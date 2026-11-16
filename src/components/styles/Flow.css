@@ -29,37 +29,6 @@
   padding: 2px;
 }
 
-.themed-flow .flow-toolbar button {
-  position: relative;
-  overflow: visible;
-}
-
-.flow-toolbar-hint {
-  position: absolute;
-  left: calc(100% + var(--spacing-sm));
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  white-space: nowrap;
-  padding: 4px 8px;
-  background: var(--card-background);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
-  pointer-events: none;
-  z-index: 10;
-}
-
-.flow-toolbar-hint .flow-toolbar-key {
-  padding: 0 6px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--surface-color);
-}
-
 .flow-node-preview {
   display: flex;
   align-items: center;

@@ -400,7 +400,6 @@ const FLOW_ACTIONS = [
   { id: 'lock', kind: 'edit', icon: 'FiLock', label: 'Lock moving', keys: 'K' },
   { id: 'map', kind: 'view', icon: 'FiMap', label: 'Show or hide the map', keys: 'M' }
 ];
-const FLOW_HINT_MS = 1200;
 const FLOW_HISTORY = 100;
 
 // Custom Node for inline editing with bidirectional handles on all four sides
@@ -564,8 +563,6 @@ export const Flow = ({
   const [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
   const [locked, setLocked] = useState(false);
   const [mapShown, setMapShown] = useState(Boolean(minimap));
-  const [hint, setHint] = useState(null);
-  const hintTimer = useRef(null);
   const hoverRef = useRef(false);
   
   const [nodes, setNodes, onNodesChange] = useNodesState(sanitizedInitialNodes);
@@ -892,16 +889,6 @@ export const Flow = ({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [toolbar]);
-
-  const showHint = (id) => {
-    clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setHint(id), FLOW_HINT_MS);
-  };
-  const hideHint = () => {
-    clearTimeout(hintTimer.current);
-    setHint(null);
-  };
-  useEffect(() => () => clearTimeout(hintTimer.current), []);
 
   const onPaneClickHandler = useCallback((e) => {
     setNodeEditor(null);
@@ -1364,18 +1351,11 @@ export const Flow = ({
                   variant="ghost"
                   selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown)}
                   disabled={Boolean(action.needs) && !actionReady[action.needs]}
+                  title={`${action.label} (${action.keys})`}
                   aria-label={`${action.label} (${action.keys})`}
                   onClick={() => runAction(action.id)}
-                  onMouseEnter={() => showHint(action.id)}
-                  onMouseLeave={hideHint}
                 >
                   <Icon name={action.icon} size="xs" />
-                  {hint === action.id && (
-                    <span className="flow-toolbar-hint" role="tooltip">
-                      <Typography as="span" size="xs">{action.label}</Typography>
-                      <Typography as="span" size="xs" weight="semibold" className="flow-toolbar-key">{action.keys}</Typography>
-                    </span>
-                  )}
                 </Button>
               ))}
             </ButtonGroup>

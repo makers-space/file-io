@@ -219,7 +219,7 @@ const FLOW_DASHES = '6 5';
 
 const FLOW_TAG = /<\s*(Node|Group|Edge)\b((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/\s*>|>([^<]*)<\/\s*\1\s*>|>)/gi;
 const FLOW_ATTRIBUTE = /([A-Za-z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\}|([^\s"'>/]+))/g;
-const FLOW_NODE_KEYS = ['id', 'label', 'color', 'shape', 'x', 'y', 'width', 'height', 'group', 'size', 'weight', 'align', 'locked', 'collapsed'];
+const FLOW_NODE_KEYS = ['id', 'label', 'color', 'shape', 'x', 'y', 'width', 'height', 'group', 'size', 'weight', 'align', 'locked', 'collapsible', 'collapsed'];
 const FLOW_SHAPES = NODE_SHAPE_OPTIONS.map((option) => option.value);
 const FLOW_SIZES = ['xs', 'sm', 'md', 'lg', 'xl', '2xl'];
 const FLOW_WEIGHTS = ['light', 'normal', 'medium', 'semibold', 'bold', 'extrabold'];
@@ -434,6 +434,7 @@ export const parseFlow = (text) => {
       label: props.label ?? '',
       color: resolveColorToken(props.color, 'neutral'),
       ...(props.locked === 'true' ? { locked: true } : {}),
+      ...(props.collapsible === 'true' || props.collapsed === 'true' ? { collapsible: true } : {}),
       ...(props.collapsed === 'true' ? { collapsed: true } : {})
     },
     style: { width: flowNumber(props.width) ?? 300, height: flowNumber(props.height) ?? 200 }
@@ -531,7 +532,7 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
       ['color', color === 'neutral' ? null : color],
       ['x', Math.round(node.position?.x ?? 0)], ['y', Math.round(node.position?.y ?? 0)],
       ['width', flowNumber(node.width ?? node.style?.width) ?? 300], ['height', flowNumber(node.height ?? node.style?.height) ?? 200],
-      ['locked', node.data?.locked ? 'true' : null], ['collapsed', node.data?.collapsed ? 'true' : null]
+      ['locked', node.data?.locked ? 'true' : null], ['collapsible', node.data?.collapsible ? 'true' : null], ['collapsed', node.data?.collapsed ? 'true' : null]
     ]));
   }
   for (const node of nodes) {
@@ -782,7 +783,7 @@ const GroupNode = ({ data, id, selected }) => {
     <>
       {!locked && <NodeResizer isVisible={Boolean(selected) && !data.collapsed && !data.locked} minWidth={160} minHeight={100} />}
       <Handle type="target" position={Position.Left} id="border" className="flow-group-anchor" isConnectable={false} />
-      {!locked && (
+      {!locked && data.collapsible && (
         <div className="flow-group-toggle nodrag nopan">
           <Button
             size="xs"
@@ -1224,7 +1225,7 @@ const FlowCanvas = forwardRef(({
       width: node.type === 'group' ? Math.round(node.width ?? node.style?.width ?? node.measured?.width ?? 300) : Math.round(node.width || 0),
       height: node.type === 'group' ? Math.round(node.height ?? node.style?.height ?? node.measured?.height ?? 200) : Math.round(node.height || 0),
       locked: Boolean(node.data?.locked),
-      collapsed: Boolean(node.data?.collapsed),
+      collapsible: Boolean(node.data?.collapsible),
       parentId: node.parentId ?? '',
       extent: node.extent ?? ''
     });
@@ -1308,7 +1309,8 @@ const FlowCanvas = forwardRef(({
             fontWeight,
             textAlign,
             locked: nodeEditor.locked ? true : undefined,
-            collapsed: nodeType === 'group' && nodeEditor.collapsed ? true : undefined
+            collapsible: nodeType === 'group' && nodeEditor.collapsible ? true : undefined,
+            collapsed: nodeType === 'group' && nodeEditor.collapsible && n.data?.collapsed ? true : undefined
           },
           ...(groupStyle ? { style: groupStyle } : {}),
           ...(isGroup ? { width: groupStyle.width, height: groupStyle.height } : {}),
@@ -1983,7 +1985,7 @@ const FlowCanvas = forwardRef(({
               { key: 'width', label: 'Width', type: 'number', least: 160, most: 4000 },
               { key: 'height', label: 'Height', type: 'number', least: 100, most: 4000 },
               { key: 'locked', label: 'Locked', type: 'switch' },
-              { key: 'collapsed', label: 'Collapsed', type: 'switch' }
+              { key: 'collapsible', label: 'Collapsible', type: 'switch' }
             ] : [
               { key: 'label', label: 'Label', type: 'text', wide: true },
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },

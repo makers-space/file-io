@@ -40,7 +40,9 @@ import {
   Panel,
   Handle,
   Position,
+  NodeResizer,
   addEdge,
+  reconnectEdge,
   useNodesState,
   useEdgesState,
   useReactFlow
@@ -220,6 +222,22 @@ const flowNumber = (value) => (value !== undefined && value !== '' && Number.isF
 const oneOf = (value, list) => (list.includes(String(value ?? '').toLowerCase()) ? String(value).toLowerCase() : null);
 const sideOf = (handle) => oneOf(String(handle ?? '').split('-')[0], FLOW_SIDES);
 
+// How far along the connectors each box sits: a box is one step further than the furthest box leading into it.
+const flowLevels = (ids, wires) => {
+  const level = new Map(ids.map((id) => [id, 0]));
+  for (let pass = 0; pass < ids.length; pass++) {
+    let moved = false;
+    for (const { source, target } of wires) {
+      if (level.get(target) <= level.get(source) && level.get(source) < ids.length) {
+        level.set(target, level.get(source) + 1);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return level;
+};
+
 export const parseFlow = (text) => {
   const empty = { nodes: [], edges: [], error: null };
   const source = String(text ?? '');
@@ -261,17 +279,7 @@ export const parseFlow = (text) => {
   const wires = links.filter(({ props }) => stepIds.has(props.source) && stepIds.has(props.target));
 
   // Boxes with no position are laid out left to right, following the connectors.
-  const level = new Map(steps.map((box) => [box.props.id, 0]));
-  for (let pass = 0; pass < steps.length; pass++) {
-    let moved = false;
-    for (const { props } of wires) {
-      if (level.get(props.target) <= level.get(props.source) && level.get(props.source) < steps.length) {
-        level.set(props.target, level.get(props.source) + 1);
-        moved = true;
-      }
-    }
-    if (!moved) break;
-  }
+  const level = flowLevels(steps.map((box) => box.props.id), wires.map(({ props }) => props));
   const rows = new Map();
   const inGroup = new Map();
 
@@ -303,7 +311,7 @@ export const parseFlow = (text) => {
       type: 'editable',
       position,
       data,
-      ...(parent ? { parentId: parent, extent: 'parent', expandParent: true } : {})
+      ...(parent ? { parentId: parent } : {})
     };
   });
 
@@ -391,16 +399,30 @@ const FLOW_ACTIONS = [
   { id: 'edit', kind: 'edit', icon: 'FiEdit2', label: 'Edit what is selected', keys: 'E', needs: 'one' },
   { id: 'duplicate', kind: 'edit', icon: 'FiCopy', label: 'Duplicate', keys: 'Ctrl+D', needs: 'steps' },
   { id: 'delete', kind: 'edit', icon: 'FiTrash2', label: 'Delete', keys: 'Delete', needs: 'any' },
+  { id: 'selectAll', kind: 'edit', icon: 'FiCheckSquare', label: 'Select everything', keys: 'Ctrl+A' },
   { id: 'undo', kind: 'edit', icon: 'FiCornerUpLeft', label: 'Undo', keys: 'Ctrl+Z', needs: 'undo' },
   { id: 'redo', kind: 'edit', icon: 'FiCornerUpRight', label: 'Redo', keys: 'Ctrl+Y', needs: 'redo' },
-  { id: 'tidy', kind: 'edit', icon: 'FiAlignLeft', label: 'Tidy the layout', keys: 'L' },
+  { id: 'tidy', kind: 'edit', icon: 'FiLayout', label: 'Arrange', keys: 'L' },
   { id: 'zoomIn', kind: 'view', icon: 'FiZoomIn', label: 'Zoom in', keys: '+' },
   { id: 'zoomOut', kind: 'view', icon: 'FiZoomOut', label: 'Zoom out', keys: '-' },
   { id: 'fit', kind: 'view', icon: 'FiMaximize', label: 'Fit everything on screen', keys: 'F' },
+  { id: 'snap', kind: 'edit', icon: 'FiCrosshair', label: 'Snap to the dots', keys: 'S' },
   { id: 'lock', kind: 'edit', icon: 'FiLock', label: 'Lock moving', keys: 'K' },
   { id: 'map', kind: 'view', icon: 'FiMap', label: 'Show or hide the map', keys: 'M' }
 ];
 const FLOW_HISTORY = 100;
+const FLOW_LAYOUTS = [
+  { id: 'lr', label: 'Left to right', keys: 'L' },
+  { id: 'tb', label: 'Top to bottom', keys: 'Shift+L' },
+  { id: 'grid', label: 'Grid' },
+  { id: 'circle', label: 'Circle' }
+];
+const FLOW_ALIGNMENTS = [
+  { id: 'left', label: 'Line up the left edges', least: 2 },
+  { id: 'top', label: 'Line up the top edges', least: 2 },
+  { id: 'across', label: 'Space evenly across', least: 3 },
+  { id: 'down', label: 'Space evenly down', least: 3 }
+];
 
 // Custom Node for inline editing with bidirectional handles on all four sides
 // Each position has BOTH source and target handles to allow any-to-any connections
@@ -484,9 +506,16 @@ const EditableNode = ({ data, id }) => {
 };
 
 // Simple GroupNode to render label since native group doesn't render it by default
-const GroupNode = ({ data }) => (
-  <>{data.label}</>
-);
+// A group shows its label, and resize handles while it is selected
+const GroupNode = ({ data, selected }) => {
+  const locked = useContext(FlowLock);
+  return (
+    <>
+      {!locked && <NodeResizer isVisible={Boolean(selected)} minWidth={160} minHeight={100} />}
+      {data.label}
+    </>
+  );
+};
 
 const nodeTypes = {
   editable: EditableNode,
@@ -562,6 +591,8 @@ export const Flow = ({
   const historyRef = useRef({ past: [], future: [], jump: null });
   const [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
   const [locked, setLocked] = useState(false);
+  const [snap, setSnap] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [mapShown, setMapShown] = useState(Boolean(minimap));
   const hoverRef = useRef(false);
   
@@ -659,6 +690,13 @@ export const Flow = ({
       let number = current.length + 1;
       while (current.some((node) => node.id === `${prefix}-${number}`)) number++;
       const nudge = (current.length % 6) * 24;
+      // With one group selected, a new step is made inside it.
+      const chosen = current.filter((node) => node.selected);
+      const home = kind !== 'group' && chosen.length === 1 && chosen[0].type === 'group' ? chosen[0] : null;
+      if (home) {
+        const inside = current.filter((node) => node.parentId === home.id).length;
+        return [...current, sanitizeNode({ id: `${prefix}-${number}`, type: 'editable', parentId: home.id, position: { x: 24 + (inside % 3) * 150, y: 44 + Math.floor(inside / 3) * 70 }, data: { label: 'New step' } })];
+      }
       const box = kind === 'group'
         ? { id: `${prefix}-${number}`, type: 'group', position: { x: Math.round(centre.x - 150 + nudge), y: Math.round(centre.y - 100 + nudge) }, data: { label: 'Group', color: 'neutral' }, style: { width: 300, height: 200 } }
         : { id: `${prefix}-${number}`, type: 'editable', position: { x: Math.round(centre.x - 60 + nudge), y: Math.round(centre.y - 20 + nudge) }, data: { label: 'New step' } };
@@ -827,8 +865,63 @@ export const Flow = ({
     redo: historySize.redo > 0
   };
 
+  const arrange = (kind) => {
+    const steps = nodes.filter((node) => node.type !== 'group' && !node.parentId);
+    if (steps.length === 0) return;
+    const ids = new Set(steps.map((node) => node.id));
+    const wires = edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+    const place = new Map();
+    if (kind === 'lr' || kind === 'tb') {
+      const level = flowLevels(steps.map((node) => node.id), wires);
+      const rows = new Map();
+      for (const node of steps) {
+        const along = level.get(node.id);
+        const beside = rows.get(along) || 0;
+        rows.set(along, beside + 1);
+        place.set(node.id, kind === 'lr' ? { x: along * 240, y: beside * 110 } : { x: beside * 240, y: along * 130 });
+      }
+    }
+    if (kind === 'grid') {
+      const columns = Math.ceil(Math.sqrt(steps.length));
+      steps.forEach((node, index) => place.set(node.id, { x: (index % columns) * 240, y: Math.floor(index / columns) * 110 }));
+    }
+    if (kind === 'circle') {
+      const radius = Math.max(160, steps.length * 45);
+      steps.forEach((node, index) => {
+        const angle = (index / steps.length) * 2 * Math.PI - Math.PI / 2;
+        place.set(node.id, { x: Math.round(radius + radius * Math.cos(angle)), y: Math.round(radius + radius * Math.sin(angle)) });
+      });
+    }
+    setNodes((current) => current.map((node) => (place.has(node.id) ? { ...node, position: place.get(node.id) } : node)));
+    if (kind === 'lr' || kind === 'tb') {
+      const [from, to] = kind === 'lr' ? ['right-source', 'left-target'] : ['bottom-source', 'top-target'];
+      setEdges((current) => current.map((edge) => (ids.has(edge.source) && ids.has(edge.target) ? { ...edge, sourceHandle: from, targetHandle: to } : edge)));
+    }
+    setTimeout(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }), 50);
+  };
+
+  const alignChosen = (how) => {
+    const picked = nodes.filter((node) => node.selected && node.type !== 'group');
+    if (picked.length < 2) return;
+    const place = new Map();
+    if (how === 'left') picked.forEach((node) => place.set(node.id, { ...node.position, x: Math.min(...picked.map((each) => each.position.x)) }));
+    if (how === 'top') picked.forEach((node) => place.set(node.id, { ...node.position, y: Math.min(...picked.map((each) => each.position.y)) }));
+    if (how === 'across' || how === 'down') {
+      const axis = how === 'across' ? 'x' : 'y';
+      const sorted = [...picked].sort((a, b) => a.position[axis] - b.position[axis]);
+      const first = sorted[0].position[axis];
+      const gap = (sorted[sorted.length - 1].position[axis] - first) / (sorted.length - 1);
+      sorted.forEach((node, index) => place.set(node.id, { ...node.position, [axis]: Math.round(first + gap * index) }));
+    }
+    setNodes((current) => current.map((node) => (place.has(node.id) ? { ...node, position: place.get(node.id) } : node)));
+  };
+
   const runAction = (id) => {
     const instance = reactFlowInstanceRef.current;
+    if (id === 'tidyDown') {
+      if (canEdit) arrange('tb');
+      return;
+    }
     const action = FLOW_ACTIONS.find((entry) => entry.id === id);
     if (!action || (action.kind === 'edit' && !canEdit) || (action.needs && !actionReady[action.needs])) return;
     if (id === 'step') addBox('node');
@@ -841,10 +934,11 @@ export const Flow = ({
     if (id === 'undo') stepBack('past', 'future');
     if (id === 'redo') stepBack('future', 'past');
     if (id === 'delete') instance?.deleteElements({ nodes: chosenNodes, edges: chosenEdges });
-    if (id === 'tidy') {
-      drawText(writeFlow(nodes, edges, { positions: false }));
-      historyRef.current.jump = null;
-      setTimeout(() => instance?.fitView({ padding: 0.2, duration: 200 }), 50);
+    if (id === 'tidy') arrange('lr');
+    if (id === 'snap') setSnap((now) => !now);
+    if (id === 'selectAll') {
+      setNodes((current) => current.map((node) => ({ ...node, selected: true })));
+      setEdges((current) => current.map((edge) => ({ ...edge, selected: true })));
     }
     if (id === 'duplicate') {
       setNodes((current) => {
@@ -880,8 +974,8 @@ export const Flow = ({
       const key = event.key.toLowerCase();
       const command = event.ctrlKey || event.metaKey;
       const id = command
-        ? ({ d: 'duplicate', z: event.shiftKey ? 'redo' : 'undo', y: 'redo' })[key]
-        : ({ n: 'step', g: 'group', e: 'edit', l: 'tidy', f: 'fit', k: 'lock', m: 'map', '+': 'zoomIn', '=': 'zoomIn', '-': 'zoomOut' })[key];
+        ? ({ a: 'selectAll', d: 'duplicate', z: event.shiftKey ? 'redo' : 'undo', y: 'redo' })[key]
+        : ({ n: 'step', g: 'group', e: 'edit', l: event.shiftKey ? 'tidyDown' : 'tidy', s: 'snap', f: 'fit', k: 'lock', m: 'map', '+': 'zoomIn', '=': 'zoomIn', '-': 'zoomOut' })[key];
       if (!id) return;
       event.preventDefault();
       runActionRef.current(id);
@@ -889,6 +983,37 @@ export const Flow = ({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [toolbar]);
+
+  // Dropping a step on a group puts it in that group; dragging it out takes it out.
+  const onNodeDragStopHandler = useCallback((_event, _node, dragged = []) => {
+    const instance = reactFlowInstanceRef.current;
+    if (!instance?.getInternalNode) return;
+    const groups = instance.getNodes().filter((node) => node.type === 'group');
+    const moves = new Map();
+    for (const item of dragged) {
+      if (item.type === 'group') continue;
+      const inner = instance.getInternalNode(item.id);
+      const at = inner?.internals?.positionAbsolute;
+      if (!at) continue;
+      const middle = { x: at.x + (inner.measured?.width ?? 120) / 2, y: at.y + (inner.measured?.height ?? 48) / 2 };
+      const home = groups.find((group) => {
+        const wide = group.measured?.width ?? group.width ?? group.style?.width ?? 300;
+        const tall = group.measured?.height ?? group.height ?? group.style?.height ?? 200;
+        return middle.x >= group.position.x && middle.x <= group.position.x + wide && middle.y >= group.position.y && middle.y <= group.position.y + tall;
+      });
+      if ((home?.id || null) === (item.parentId || null)) continue;
+      moves.set(item.id, home
+        ? { parentId: home.id, position: { x: Math.round(at.x - home.position.x), y: Math.round(at.y - home.position.y) } }
+        : { parentId: null, position: { x: Math.round(at.x), y: Math.round(at.y) } });
+    }
+    if (moves.size === 0) return;
+    setNodes((current) => current.map((node) => {
+      const move = moves.get(node.id);
+      if (!move) return node;
+      const { parentId: _parent, extent: _extent, expandParent: _expand, ...rest } = node;
+      return { ...rest, position: move.position, ...(move.parentId ? { parentId: move.parentId } : {}) };
+    }));
+  }, [setNodes]);
 
   const onPaneClickHandler = useCallback((e) => {
     setNodeEditor(null);
@@ -961,7 +1086,7 @@ export const Flow = ({
       ref={containerRef}
       onMouseEnter={() => { hoverRef.current = true; }}
       onMouseLeave={() => { hoverRef.current = false; }}
-      className={`flow-container themed-flow flow-${size} ${theme ? `theme-${theme}` : ''} ${className}`.trim()}
+      className={`flow-container themed-flow flow-${size} ${connecting ? 'flow-connecting' : ''} ${theme ? `theme-${theme}` : ''} ${className}`.trim()}
       style={containerStyle}
       data-theme={theme || currentTheme}
     >
@@ -1321,12 +1446,19 @@ export const Flow = ({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={connectable && !readOnly ? onConnect : undefined}
+        onConnectStart={() => setConnecting(true)}
+        onConnectEnd={() => setConnecting(false)}
+        edgesReconnectable={connectable && !readOnly}
+        onReconnect={(oldEdge, connection) => setEdges((current) => reconnectEdge(oldEdge, connection, current).map(sanitizeEdge))}
+        snapToGrid={snap}
+        snapGrid={[backgroundGap, backgroundGap]}
         onNodeClick={(e, node) => { setNodeEditor(null); setEdgeEditor(null); onNodeClick?.(e, node); }}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onContextMenu}
         onEdgeClick={(e, edge) => { setNodeEditor(null); setEdgeEditor(null); onEdgeClick?.(e, edge); }}
         onEdgeContextMenu={onEdgeContextMenuHandler}
         onPaneClick={onPaneClickHandler}
+        onNodeDragStop={readOnly ? undefined : onNodeDragStopHandler}
         nodesDraggable={draggable && !readOnly && !locked}
         nodesConnectable={connectable && !readOnly}
         elementsSelectable={selectable}
@@ -1349,11 +1481,27 @@ export const Flow = ({
                   key={action.id}
                   size="sm"
                   variant="ghost"
-                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown)}
+                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap)}
+                  genie={action.id !== 'tidy' ? null : { trigger: 'click', padding: 'xs', content: (
+                    <Container layout="flex-column" gap="none" padding="none" width="220px">
+                      <Typography size="xs" weight="semibold">Arrange everything</Typography>
+                      {FLOW_LAYOUTS.map((layout) => (
+                        <Button key={layout.id} size="xs" variant="ghost" align="start" width="100%" onClick={() => arrange(layout.id)}>
+                          {layout.label}{layout.keys ? ` (${layout.keys})` : ''}
+                        </Button>
+                      ))}
+                      <Typography size="xs" weight="semibold">Arrange what is selected</Typography>
+                      {FLOW_ALIGNMENTS.map((alignment) => (
+                        <Button key={alignment.id} size="xs" variant="ghost" align="start" width="100%" disabled={chosenSteps.length < alignment.least} onClick={() => alignChosen(alignment.id)}>
+                          {alignment.label}
+                        </Button>
+                      ))}
+                    </Container>
+                  ) }}
                   disabled={Boolean(action.needs) && !actionReady[action.needs]}
                   title={`${action.label} (${action.keys})`}
                   aria-label={`${action.label} (${action.keys})`}
-                  onClick={() => runAction(action.id)}
+                  onClick={() => { if (action.id !== 'tidy') runAction(action.id); }}
                 >
                   <Icon name={action.icon} size="xs" />
                 </Button>

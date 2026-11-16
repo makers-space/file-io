@@ -80,9 +80,33 @@
 }
 
 /* Node handles */
+/* Connection points sit above the box and have a generous area to grab. Each side has a point to drag from
+   and a point to drop on in the same place; the drop point only takes the pointer while a connector is being drawn. */
 .themed-flow .react-flow__handle {
   background: var(--primary-color);
   border: 2px solid var(--surface-color);
+  z-index: 3;
+  transition: box-shadow 0.15s ease;
+}
+
+.themed-flow .react-flow__node:hover .react-flow__handle,
+.themed-flow .react-flow__node.selected .react-flow__handle {
+  box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.themed-flow .react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+}
+
+.themed-flow .react-flow__handle.target {
+  pointer-events: none;
+}
+
+.themed-flow.flow-connecting .react-flow__handle.target {
+  pointer-events: all;
 }
 
 .themed-flow .react-flow__handle:hover {

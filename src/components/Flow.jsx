@@ -276,15 +276,16 @@ export const parseFlow = (text) => {
 
   const steps = named.filter((box) => box.kind === 'node');
   const stepIds = new Set(steps.map((box) => box.props.id));
-  const wires = links.filter(({ props }) => stepIds.has(props.source) && stepIds.has(props.target));
+  const wires = links.filter(({ props }) => stepIds.has(props.source) && (stepIds.has(props.target) || groupIds.has(props.target)));
+  const joined = new Map(wires.filter(({ props }) => groupIds.has(props.target)).map(({ props }) => [props.source, props.target]));
 
   // Boxes with no position are laid out left to right, following the connectors.
-  const level = flowLevels(steps.map((box) => box.props.id), wires.map(({ props }) => props));
+  const level = flowLevels(steps.map((box) => box.props.id), wires.map(({ props }) => props).filter((wire) => stepIds.has(wire.target)));
   const rows = new Map();
   const inGroup = new Map();
 
   const nodes = steps.map(({ props }) => {
-    const parent = groupIds.has(props.group) ? props.group : null;
+    const parent = joined.get(props.id) || (groupIds.has(props.group) ? props.group : null);
     let position = flowNumber(props.x) !== null && flowNumber(props.y) !== null ? { x: flowNumber(props.x), y: flowNumber(props.y) } : null;
     if (!position && parent) {
       const place = inGroup.get(parent) || 0;
@@ -328,6 +329,7 @@ export const parseFlow = (text) => {
       animated: props.animated === 'true',
       data: { color: resolveColorToken(props.color, DEFAULT_EDGE_COLOR_TOKEN) },
       style: { strokeWidth: Math.min(Math.max(flowNumber(props.width) ?? 2, 1), 10) },
+      ...(groupIds.has(props.target) ? { zIndex: 10 } : {}),
       ...(arrow === 'none' ? {} : { markerEnd: { type: arrow === 'open' ? 'arrow' : 'arrowclosed' } })
     };
   });
@@ -369,7 +371,7 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
     ]));
   }
   for (const edge of edges) {
-    if (!stepIds.has(edge.source) || !stepIds.has(edge.target)) continue;
+    if (!stepIds.has(edge.source) || !(stepIds.has(edge.target) || groupIds.has(edge.target))) continue;
     const color = resolveColorToken(edge.data?.color, DEFAULT_EDGE_COLOR_TOKEN);
     const from = sideOf(edge.sourceHandle);
     const to = sideOf(edge.targetHandle);
@@ -512,6 +514,11 @@ const GroupNode = ({ data, selected }) => {
   return (
     <>
       {!locked && <NodeResizer isVisible={Boolean(selected)} minWidth={160} minHeight={100} />}
+      {/* A connector dropped on the border makes its step part of this group */}
+      <Handle type="target" position={Position.Top} id="top-target" isConnectableStart={false} />
+      <Handle type="target" position={Position.Right} id="right-target" isConnectableStart={false} />
+      <Handle type="target" position={Position.Bottom} id="bottom-target" isConnectableStart={false} />
+      <Handle type="target" position={Position.Left} id="left-target" isConnectableStart={false} />
       {data.label}
     </>
   );
@@ -705,8 +712,38 @@ export const Flow = ({
   }, [setNodes]);
 
 
+  // A step joins a group when a connector from it is attached to the group's border, and leaves when that connector is deleted.
+  const joinGroup = useCallback((stepId, groupId) => {
+    const at = reactFlowInstanceRef.current?.getInternalNode?.(stepId)?.internals?.positionAbsolute;
+    setNodes((current) => {
+      const group = current.find((node) => node.id === groupId && node.type === 'group');
+      const step = current.find((node) => node.id === stepId);
+      if (!group || !step || step.type === 'group' || step.parentId === groupId) return current;
+      const from = at || step.position;
+      return current.map((node) => {
+        if (node.id !== stepId) return node;
+        const { extent: _extent, expandParent: _expand, ...rest } = node;
+        return { ...rest, parentId: groupId, position: { x: Math.round(from.x - group.position.x), y: Math.round(from.y - group.position.y) } };
+      });
+    });
+  }, [setNodes]);
+
+  const leaveGroup = useCallback((stepId, groupId) => {
+    const at = reactFlowInstanceRef.current?.getInternalNode?.(stepId)?.internals?.positionAbsolute;
+    setNodes((current) => current.map((node) => {
+      if (node.id !== stepId || node.parentId !== groupId) return node;
+      const { parentId: _parent, extent: _extent, expandParent: _expand, ...rest } = node;
+      return { ...rest, position: at ? { x: Math.round(at.x), y: Math.round(at.y) } : node.position };
+    }));
+  }, [setNodes]);
+
+  const groupIdsNow = () => new Set((reactFlowInstanceRef.current?.getNodes() || []).filter((node) => node.type === 'group').map((node) => node.id));
+
   const onConnect = useCallback(
     (params) => {
+      const groups = groupIdsNow();
+      const toGroup = groups.has(params.target);
+      if (groups.has(params.source)) return;
       // Merge connectEdgeOptions with params, preferring params values
       const mergedEdge = {
         ...connectEdgeOptions,
@@ -724,12 +761,14 @@ export const Flow = ({
       };
       
       // Let sanitizeEdge handle all color resolution and theming
-      const themedEdge = sanitizeEdge(mergedEdge);
+      const themedEdge = sanitizeEdge(toGroup ? { ...mergedEdge, animated: false, zIndex: 10 } : mergedEdge);
 
-      setEdges((eds) => addEdge(themedEdge, eds));
+      // A step belongs to one group at a time, so an earlier connector to another group is replaced.
+      setEdges((eds) => addEdge(themedEdge, toGroup ? eds.filter((edge) => !(edge.source === params.source && groups.has(edge.target) && edge.target !== params.target)) : eds));
+      if (toGroup) joinGroup(params.source, params.target);
       onConnectProp?.(params);
     },
-    [setEdges, connectEdgeOptions, onConnectProp]
+    [setEdges, connectEdgeOptions, onConnectProp, joinGroup]
   );
 
   const getNodeVisualState = useCallback((node) => ({
@@ -984,14 +1023,46 @@ export const Flow = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [toolbar]);
 
+  // A connector let go anywhere on a group, not only on one of its four points, attaches to the nearest side.
+  const onConnectEndHandler = useCallback((event, state) => {
+    setConnecting(false);
+    const instance = reactFlowInstanceRef.current;
+    if (readOnly || !instance || !state || state.isValid || !state.fromNode || state.fromNode.type === 'group' || state.fromHandle?.type !== 'source') return;
+    const pointer = 'changedTouches' in event ? event.changedTouches[0] : event;
+    const at = instance.screenToFlowPosition({ x: pointer.clientX, y: pointer.clientY });
+    const reach = 24;
+    let found = null;
+    for (const group of instance.getNodes()) {
+      if (group.type !== 'group') continue;
+      const wide = group.measured?.width ?? group.width ?? group.style?.width ?? 300;
+      const tall = group.measured?.height ?? group.height ?? group.style?.height ?? 200;
+      const { x, y } = group.position;
+      if (at.x < x - reach || at.x > x + wide + reach || at.y < y - reach || at.y > y + tall + reach) continue;
+      const gaps = { left: Math.abs(at.x - x), right: Math.abs(at.x - (x + wide)), top: Math.abs(at.y - y), bottom: Math.abs(at.y - (y + tall)) };
+      found = { id: group.id, side: Object.keys(gaps).sort((a, b) => gaps[a] - gaps[b])[0] };
+    }
+    if (!found) return;
+    onConnect({ source: state.fromNode.id, sourceHandle: state.fromHandle.id, target: found.id, targetHandle: `${found.side}-target` });
+  }, [readOnly, onConnect]);
+
+  const onEdgesDeleteHandler = useCallback((deleted = []) => {
+    const groups = groupIdsNow();
+    for (const edge of deleted) {
+      if (groups.has(edge.target)) leaveGroup(edge.source, edge.target);
+    }
+  }, [leaveGroup]);
+
   // Dropping a step on a group puts it in that group; dragging it out takes it out.
   const onNodeDragStopHandler = useCallback((_event, _node, dragged = []) => {
     const instance = reactFlowInstanceRef.current;
     if (!instance?.getInternalNode) return;
     const groups = instance.getNodes().filter((node) => node.type === 'group');
+    const groupIds = new Set(groups.map((group) => group.id));
+    const attached = new Set(instance.getEdges().filter((edge) => groupIds.has(edge.target)).map((edge) => edge.source));
     const moves = new Map();
     for (const item of dragged) {
-      if (item.type === 'group') continue;
+      // A step attached to a group by a connector stays in it wherever it is dragged.
+      if (item.type === 'group' || attached.has(item.id)) continue;
       const inner = instance.getInternalNode(item.id);
       const at = inner?.internals?.positionAbsolute;
       if (!at) continue;
@@ -1447,7 +1518,8 @@ export const Flow = ({
         onEdgesChange={onEdgesChange}
         onConnect={connectable && !readOnly ? onConnect : undefined}
         onConnectStart={() => setConnecting(true)}
-        onConnectEnd={() => setConnecting(false)}
+        onConnectEnd={onConnectEndHandler}
+        onEdgesDelete={readOnly ? undefined : onEdgesDeleteHandler}
         edgesReconnectable={connectable && !readOnly}
         onReconnect={(oldEdge, connection) => setEdges((current) => reconnectEdge(oldEdge, connection, current).map(sanitizeEdge))}
         snapToGrid={snap}

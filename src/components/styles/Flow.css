@@ -109,6 +109,18 @@
   pointer-events: all;
 }
 
+/* A group's border points show while a connector is being drawn or the group is hovered or selected */
+.themed-flow .react-flow__node-group .react-flow__handle {
+  opacity: 0;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+.themed-flow.flow-connecting .react-flow__node-group .react-flow__handle,
+.themed-flow .react-flow__node-group:hover .react-flow__handle,
+.themed-flow .react-flow__node-group.selected .react-flow__handle {
+  opacity: 1;
+}
+
 .themed-flow .react-flow__handle:hover {
   background: var(--secondary-color);
 }

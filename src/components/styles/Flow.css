@@ -91,7 +91,7 @@
 
 .themed-flow .react-flow__node:hover .react-flow__handle,
 .themed-flow .react-flow__node.selected .react-flow__handle {
-  box-shadow: 0 0 0 2px var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color);
 }
 
 .themed-flow .react-flow__handle::after {
@@ -109,16 +109,19 @@
   pointer-events: all;
 }
 
-/* A group's border points show while a connector is being drawn or the group is hovered or selected */
-.themed-flow .react-flow__node-group .react-flow__handle {
+/* A group has no connection points; its hidden anchor only lets a connector to its border exist */
+.themed-flow .react-flow__handle.flow-group-anchor {
   opacity: 0;
-  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+  pointer-events: none !important;
 }
 
-.themed-flow.flow-connecting .react-flow__node-group .react-flow__handle,
-.themed-flow .react-flow__node-group:hover .react-flow__handle,
-.themed-flow .react-flow__node-group.selected .react-flow__handle {
-  opacity: 1;
+.themed-flow .react-flow__handle.flow-group-anchor::after {
+  content: none;
 }
 
 .themed-flow .react-flow__handle:hover {
@@ -167,13 +170,15 @@
   stroke: var(--background-color);
 }
 
-.themed-flow .react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--primary-color);
-  stroke-width: 3px;
+/* A connector's own colour and width are set on the line itself, so its hover and selected looks are forced over them. */
+.themed-flow .react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3px !important;
 }
 
-.themed-flow .react-flow__edge:hover .react-flow__edge-path {
-  stroke: var(--tertiary-color);
+.themed-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 4px !important;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 3px var(--text-color));
 }
 
 /* Edge labels */
@@ -501,19 +506,11 @@
 }
 
 .themed-flow .react-flow__node-editable:hover .flow-node-geometry {
-  box-shadow: var(--shadow-lg);
-}
-
-.themed-flow .react-flow__node-editable:hover .flow-node-surface {
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .themed-flow .react-flow__node-editable.selected .flow-node-geometry {
-  box-shadow: 0 0 0 3px var(--primary-color);
-}
-
-.themed-flow .react-flow__node-editable.selected .flow-node-surface {
-  transform: translateY(-2px);
+  box-shadow: 0 0 0 1.5px var(--text-color);
 }
 
 .flow-node-surface[data-shape="rectangle"] {
@@ -620,8 +617,7 @@
 
 .themed-flow .react-flow__node-group.selected {
   border-style: solid;
-  border-width: 3px;
-  box-shadow: 0 0 0 1px var(--primary-color);
+  box-shadow: 0 0 0 1px var(--text-color);
   background-color: color-mix(in srgb, var(--surface-color), transparent 60%);
 }
 

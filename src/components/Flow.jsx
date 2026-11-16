@@ -254,26 +254,101 @@ const layoutItems = (items, wires, kind) => {
   const widest = Math.max(...items.map((item) => item.wide));
   const tallest = Math.max(...items.map((item) => item.tall));
   if (kind === 'lr' || kind === 'tb') {
+    // Boxes are put in lines by how far along the connectors they sit. Within a line they are ordered, then
+    // slid, to sit as near as they can to the boxes they connect to, which keeps connectors short and stops
+    // most of them crossing. "across" is the direction along a line; "depth" is the direction from line to line.
     const level = flowLevels(items.map((item) => item.id), wires);
     const lines = [];
     for (const item of items) (lines[level.get(item.id)] ||= []).push(item);
-    let along = 0;
-    for (const line of lines.filter(Boolean)) {
-      let beside = 0;
+    const rows = lines.filter(Boolean);
+    const across = (item) => (kind === 'lr' ? item.tall : item.wide);
+    const depth = (item) => (kind === 'lr' ? item.wide : item.tall);
+    const gap = kind === 'lr' ? 48 : 64;
+
+    const linked = new Map(items.map((item) => [item.id, new Set()]));
+    for (const { source, target } of wires) {
+      linked.get(source)?.add(target);
+      linked.get(target)?.add(source);
+    }
+    const row = new Map();
+    rows.forEach((line, index) => line.forEach((item) => row.set(item.id, index)));
+    const middle = new Map();
+    const spread = (line) => {
+      let at = 0;
       for (const item of line) {
-        place.set(item.id, kind === 'lr' ? { x: along, y: beside } : { x: beside, y: along });
-        beside += (kind === 'lr' ? item.tall : item.wide) + (kind === 'lr' ? 48 : 64);
+        middle.set(item.id, at + across(item) / 2);
+        at += across(item) + gap;
       }
-      along += Math.max(...line.map((item) => (kind === 'lr' ? item.wide : item.tall))) + (kind === 'lr' ? 96 : 72);
+    };
+    const pull = (item, towards) => {
+      const near = [...linked.get(item.id)].filter((id) => row.get(id) === towards);
+      return near.length ? near.reduce((sum, id) => sum + middle.get(id), 0) / near.length : null;
+    };
+    rows.forEach(spread);
+
+    // Ordering: a few passes down and back up, each line sorted by where its neighbours in the line before sit.
+    for (let pass = 0; pass < 4; pass++) {
+      const down = pass % 2 === 0;
+      for (let index = down ? 1 : rows.length - 2; down ? index < rows.length : index >= 0; index += down ? 1 : -1) {
+        const wanted = new Map(rows[index].map((item) => [item.id, pull(item, down ? index - 1 : index + 1) ?? middle.get(item.id)]));
+        rows[index].sort((one, other) => wanted.get(one.id) - wanted.get(other.id));
+        spread(rows[index]);
+      }
+    }
+
+    // Sliding: each box moves towards the middle of its neighbours without overlapping the box before it.
+    const slide = (line, towards) => {
+      let free = -Infinity;
+      for (const item of line) {
+        const wanted = pull(item, towards) ?? middle.get(item.id);
+        const start = Math.max(wanted - across(item) / 2, free);
+        middle.set(item.id, start + across(item) / 2);
+        free = start + across(item) + gap;
+      }
+    };
+    for (let index = 1; index < rows.length; index++) slide(rows[index], index - 1);
+    for (let index = rows.length - 2; index >= 0; index--) slide(rows[index], index + 1);
+    for (let index = 1; index < rows.length; index++) slide(rows[index], index - 1);
+
+    const least = Math.min(...items.map((item) => middle.get(item.id) - across(item) / 2));
+    let along = 0;
+    for (const line of rows) {
+      const deepest = Math.max(...line.map(depth));
+      for (const item of line) {
+        const beside = Math.round(middle.get(item.id) - across(item) / 2 - least);
+        const inset = Math.round(along + (deepest - depth(item)) / 2);
+        place.set(item.id, kind === 'lr' ? { x: inset, y: beside } : { x: beside, y: inset });
+      }
+      along += deepest + (kind === 'lr' ? 96 : 72);
     }
   }
+  // For a grid or a circle, boxes are taken in the order the connectors lead from one to the next,
+  // so connected boxes end up beside each other.
+  const chained = () => {
+    const linked = new Map(items.map((item) => [item.id, []]));
+    for (const { source, target } of wires) {
+      linked.get(source)?.push(target);
+      linked.get(target)?.push(source);
+    }
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const seen = new Set();
+    const order = [];
+    const visit = (id) => {
+      if (seen.has(id) || !byId.has(id)) return;
+      seen.add(id);
+      order.push(byId.get(id));
+      linked.get(id).forEach(visit);
+    };
+    items.forEach((item) => visit(item.id));
+    return order;
+  };
   if (kind === 'grid') {
     const columns = Math.ceil(Math.sqrt(items.length));
-    items.forEach((item, index) => place.set(item.id, { x: (index % columns) * (widest + 64), y: Math.floor(index / columns) * (tallest + 56) }));
+    chained().forEach((item, index) => place.set(item.id, { x: (index % columns) * (widest + 64), y: Math.floor(index / columns) * (tallest + 56) }));
   }
   if (kind === 'circle') {
     const radius = Math.max(140, (items.length * (Math.max(widest, tallest) + 48)) / (2 * Math.PI));
-    items.forEach((item, index) => {
+    chained().forEach((item, index) => {
       const angle = (index / items.length) * 2 * Math.PI - Math.PI / 2;
       place.set(item.id, { x: Math.round(radius + radius * Math.cos(angle) - item.wide / 2 + widest / 2), y: Math.round(radius + radius * Math.sin(angle) - item.tall / 2 + tallest / 2) });
     });

@@ -187,9 +187,8 @@
   box-sizing: border-box;
 }
 
-/* The group a dragged step or a connector would join */
-.themed-flow .react-flow__node-group.flow-drop-target,
-.themed-flow.flow-connecting .react-flow__node-group:hover {
+/* The group a dragged step would join */
+.themed-flow .react-flow__node-group.flow-drop-target {
   border-style: solid;
   border-color: var(--success-color);
   background-color: color-mix(in srgb, var(--success-color), transparent 85%);

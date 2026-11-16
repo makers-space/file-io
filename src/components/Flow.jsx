@@ -263,15 +263,36 @@ const layoutItems = (items, wires, kind) => {
     // slid, to sit as near as they can to the boxes they connect to, which keeps connectors short and stops
     // most of them crossing. "across" is the direction along a line; "depth" is the direction from line to line.
     const level = flowLevels(items.map((item) => item.id), wires);
+    // A connector that skips one or more lines gets a small placeholder in each line it passes. The placeholders
+    // are ordered and spaced like boxes, so the boxes in those lines leave the connector a gap to run through.
+    const all = [...items];
+    const links = [];
+    wires.forEach((wire, count) => {
+      const from = level.get(wire.source);
+      const to = level.get(wire.target);
+      if (from === undefined || to === undefined || to - from < 2) {
+        links.push(wire);
+        return;
+      }
+      let last = wire.source;
+      for (let at = from + 1; at < to; at++) {
+        const id = `~${count}-${at}`;
+        all.push({ id, wide: 28, tall: 28, placeholder: true });
+        level.set(id, at);
+        links.push({ source: last, target: id });
+        last = id;
+      }
+      links.push({ source: last, target: wire.target });
+    });
     const lines = [];
-    for (const item of items) (lines[level.get(item.id)] ||= []).push(item);
+    for (const item of all) (lines[level.get(item.id)] ||= []).push(item);
     const rows = lines.filter(Boolean);
     const across = (item) => (kind === 'lr' ? item.tall : item.wide);
     const depth = (item) => (kind === 'lr' ? item.wide : item.tall);
     const gap = kind === 'lr' ? 48 : 64;
 
-    const linked = new Map(items.map((item) => [item.id, new Set()]));
-    for (const { source, target } of wires) {
+    const linked = new Map(all.map((item) => [item.id, new Set()]));
+    for (const { source, target } of links) {
       linked.get(source)?.add(target);
       linked.get(target)?.add(source);
     }
@@ -315,14 +336,14 @@ const layoutItems = (items, wires, kind) => {
     for (let index = rows.length - 2; index >= 0; index--) slide(rows[index], index + 1);
     for (let index = 1; index < rows.length; index++) slide(rows[index], index - 1);
 
-    const least = Math.min(...items.map((item) => middle.get(item.id) - across(item) / 2));
+    const least = Math.min(...all.map((item) => middle.get(item.id) - across(item) / 2));
     let along = 0;
     for (const line of rows) {
       const deepest = Math.max(...line.map(depth));
       for (const item of line) {
         const beside = Math.round(middle.get(item.id) - across(item) / 2 - least);
         const inset = Math.round(along + (deepest - depth(item)) / 2);
-        place.set(item.id, kind === 'lr' ? { x: inset, y: beside } : { x: beside, y: inset });
+        if (!item.placeholder) place.set(item.id, kind === 'lr' ? { x: inset, y: beside } : { x: beside, y: inset });
       }
       along += deepest + (kind === 'lr' ? 96 : 72);
     }
@@ -347,9 +368,47 @@ const layoutItems = (items, wires, kind) => {
     items.forEach((item) => visit(item.id));
     return order;
   };
+  // Given boxes and the spots they may sit on, decides which box takes which spot.
+  const settle = (order, spots) => {
+    // The spots are fixed; which box sits on which is then improved. Two boxes swap places whenever that makes the
+    // connectors shorter in total, until no swap helps. Short connectors are what keeps them from tangling.
+    const seat = new Map(order.map((item, index) => [item.id, index]));
+    const pairs = wires.filter((wire) => wire.source !== wire.target && seat.has(wire.source) && seat.has(wire.target));
+    const span = (wire) => Math.hypot(spots[seat.get(wire.source)].x - spots[seat.get(wire.target)].x, spots[seat.get(wire.source)].y - spots[seat.get(wire.target)].y);
+    const touching = new Map(order.map((item) => [item.id, pairs.filter((wire) => wire.source === item.id || wire.target === item.id)]));
+    const strain = (one, other) => [...new Set([...touching.get(one), ...touching.get(other)])].reduce((sum, wire) => sum + span(wire), 0);
+    if (order.length <= 120) {
+      for (let pass = 0; pass < 12; pass++) {
+        let better = false;
+        for (let one = 0; one < order.length; one++) {
+          for (let other = one + 1; other < order.length; other++) {
+            const first = order[one].id;
+            const second = order[other].id;
+            const before = strain(first, second);
+            const [here, there] = [seat.get(first), seat.get(second)];
+            seat.set(first, there);
+            seat.set(second, here);
+            if (strain(first, second) < before - 0.5) {
+              better = true;
+            } else {
+              seat.set(first, here);
+              seat.set(second, there);
+            }
+          }
+        }
+        if (!better) break;
+      }
+    }
+    for (const item of order) {
+      const spot = spots[seat.get(item.id)];
+      place.set(item.id, { x: Math.round(spot.x - item.wide / 2), y: Math.round(spot.y - item.tall / 2) });
+    }
+  };
+  // A grid's rows and columns are only where boxes may sit; which box goes where follows the connectors.
   if (kind === 'grid') {
     const columns = Math.ceil(Math.sqrt(items.length));
-    chained().forEach((item, index) => place.set(item.id, { x: (index % columns) * (widest + 64), y: Math.floor(index / columns) * (tallest + 56) }));
+    const order = chained();
+    settle(order, order.map((_item, index) => ({ x: (index % columns) * (widest + 64), y: Math.floor(index / columns) * (tallest + 56) })));
   }
   // A circular arrangement that wastes no space: the most connected box goes in the middle and the rest wind
   // outward round it, each box placed after the boxes it connects to, so connectors run round and outward.
@@ -388,39 +447,7 @@ const layoutItems = (items, wires, kind) => {
       angle += 1.1 / reach;
       return spot;
     });
-    // The spots are fixed; which box sits on which is then improved. Two boxes swap places whenever that makes the
-    // connectors shorter in total, until no swap helps. Short connectors are what keeps them from tangling.
-    const seat = new Map(order.map((item, index) => [item.id, index]));
-    const pairs = wires.filter((wire) => wire.source !== wire.target && seat.has(wire.source) && seat.has(wire.target));
-    const span = (wire) => Math.hypot(spots[seat.get(wire.source)].x - spots[seat.get(wire.target)].x, spots[seat.get(wire.source)].y - spots[seat.get(wire.target)].y);
-    const touching = new Map(order.map((item) => [item.id, pairs.filter((wire) => wire.source === item.id || wire.target === item.id)]));
-    const strain = (one, other) => [...new Set([...touching.get(one), ...touching.get(other)])].reduce((sum, wire) => sum + span(wire), 0);
-    if (order.length <= 120) {
-      for (let pass = 0; pass < 12; pass++) {
-        let better = false;
-        for (let one = 0; one < order.length; one++) {
-          for (let other = one + 1; other < order.length; other++) {
-            const first = order[one].id;
-            const second = order[other].id;
-            const before = strain(first, second);
-            const [here, there] = [seat.get(first), seat.get(second)];
-            seat.set(first, there);
-            seat.set(second, here);
-            if (strain(first, second) < before - 0.5) {
-              better = true;
-            } else {
-              seat.set(first, here);
-              seat.set(second, there);
-            }
-          }
-        }
-        if (!better) break;
-      }
-    }
-    for (const item of order) {
-      const spot = spots[seat.get(item.id)];
-      place.set(item.id, { x: Math.round(spot.x - item.wide / 2), y: Math.round(spot.y - item.tall / 2) });
-    }
+    settle(order, spots);
   }
   return place;
 };

@@ -1272,7 +1272,7 @@ const FlowCanvas = forwardRef(({
         const inside = current.filter((node) => node.parentId === home.id).length;
         const id = `${prefix}-${number}`;
         setTimeout(() => attachRef.current?.(id, home.id), 80);
-        return [...current, sanitizeNode({ id, type: 'editable', parentId: home.id, extent: 'parent', expandParent: true, position: { x: 24 + (inside % 3) * 150, y: 44 + Math.floor(inside / 3) * 70 }, data: { label: 'New step' } })];
+        return [...current, sanitizeNode({ id, type: 'editable', parentId: home.id, extent: 'parent', expandParent: true, position: { x: 24 + (inside % 3) * 150, y: 60 + Math.floor(inside / 3) * 70 }, data: { label: 'New step' } })];
       }
       const box = kind === 'group'
         ? { id: `${prefix}-${number}`, type: 'group', position: { x: Math.round(centre.x - 150 + nudge), y: Math.round(centre.y - 100 + nudge) }, data: { label: 'Group', color: 'neutral' }, style: { width: 300, height: 200 } }
@@ -2177,13 +2177,17 @@ const FlowCanvas = forwardRef(({
               </Button>
             ))}
           </ButtonGroup>
-          <ButtonGroup selectable={false} size="xs">
-            {FLOW_ALIGNMENTS.map((alignment) => (
-              <Button key={alignment.id} size="xs" variant="ghost" title={alignment.label} disabled={chosenSteps.length < alignment.least} onClick={() => { alignChosen(alignment.id); setArrangeOpen(false); }}>
-                <Icon name={alignment.icon} size="xs" />
-              </Button>
-            ))}
-          </ButtonGroup>
+          {chosenSteps.length < 2 ? (
+            <Typography size="xs" color="muted">Ctrl+click steps to line them up</Typography>
+          ) : (
+            <ButtonGroup selectable={false} size="xs">
+              {FLOW_ALIGNMENTS.filter((alignment) => chosenSteps.length >= alignment.least).map((alignment) => (
+                <Button key={alignment.id} size="xs" variant="ghost" title={alignment.label} onClick={() => { alignChosen(alignment.id); setArrangeOpen(false); }}>
+                  <Icon name={alignment.icon} size="xs" />
+                </Button>
+              ))}
+            </ButtonGroup>
+          )}
         </Container>
       </Genie>
 

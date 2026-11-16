@@ -449,6 +449,16 @@ const layoutItems = (items, wires, kind) => {
     });
     settle(order, spots);
   }
+  // Every arrangement is handed back starting at the top-left corner. Whoever asked places it from there, and inside
+  // a group nothing may sit left of or above the group's own corner.
+  if (place.size > 0) {
+    const left = Math.min(...[...place.values()].map((spot) => spot.x));
+    const top = Math.min(...[...place.values()].map((spot) => spot.y));
+    for (const spot of place.values()) {
+      spot.x -= left;
+      spot.y -= top;
+    }
+  }
   return place;
 };
 

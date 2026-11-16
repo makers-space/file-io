@@ -205,6 +205,7 @@ const sanitizeEdge = (edge) => {
 // A flow is kept as plain text: <Flow> holding <Group />, <Node /> and <Edge /> lines.
 // parseFlow turns that text into nodes and edges; writeFlow turns nodes and edges back into the same text.
 export const FLOW_LIMITS = { nodes: 500, edges: 1000, text: 4000 };
+const FLOW_DASHES = '6 5';
 
 const FLOW_TAG = /<\s*(Node|Group|Edge)\b((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/\s*>|>([^<]*)<\/\s*\1\s*>|>)/gi;
 const FLOW_ATTRIBUTE = /([A-Za-z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\}|([^\s"'>/]+))/g;
@@ -370,7 +371,7 @@ export const parseFlow = (text) => {
         color: resolveColorToken(props.color, DEFAULT_EDGE_COLOR_TOKEN),
         ...(toGroup ? { side, along: Math.min(Math.max(flowNumber(props.at) ?? 50, 0), 100) / 100 } : {})
       },
-      style: { strokeWidth: Math.min(Math.max(flowNumber(props.width) ?? 2, 1), 10) },
+      style: { strokeWidth: Math.min(Math.max(flowNumber(props.width) ?? 2, 1), 10), ...(props.dashed === 'true' && props.animated !== 'true' ? { strokeDasharray: FLOW_DASHES } : {}) },
       ...(toGroup ? { zIndex: 10 } : {}),
       ...(arrow === 'none' ? {} : { markerEnd: { type: arrow === 'open' ? 'arrow' : 'arrowclosed' } })
     };
@@ -427,6 +428,7 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
       ['color', color === DEFAULT_EDGE_COLOR_TOKEN ? null : color],
       ['type', !member && edge.type && edge.type !== 'smoothstep' ? edge.type : null],
       ['animated', edge.animated ? 'true' : null],
+      ['dashed', !edge.animated && edge.style?.strokeDasharray ? 'true' : null],
       ['arrow', !marker ? 'none' : marker === 'arrow' ? 'open' : null],
       ['width', width !== 2 ? width : null],
       ['from', from && from !== (member ? to : 'right') ? from : null],
@@ -447,7 +449,9 @@ const FLOW_OPTIONS = {
   align: [['left', 'Left'], ['center', 'Centre'], ['right', 'Right']],
   kind: [['editable', 'Step'], ['group', 'Group']],
   line: [['smoothstep', 'Smooth step'], ['straight', 'Straight'], ['default', 'Curve'], ['step', 'Step'], ['simplebezier', 'Simple curve']],
-  arrow: [['arrowclosed', 'Filled'], ['arrow', 'Open'], ['', 'None']]
+  arrow: [['arrowclosed', 'Filled'], ['arrow', 'Open'], ['none', 'None']],
+  dash: [['solid', 'Solid'], ['dashed', 'Dashed'], ['moving', 'Moving dashes']],
+  hold: [['parent', 'Held inside the group'], ['free', 'Free to leave']]
 };
 const flowChoices = (name) => FLOW_OPTIONS[name].map(([value, label]) => ({ value, label }));
 
@@ -458,7 +462,7 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
       {fields.map((field) => (
         <Container key={field.key} padding="none" width="100%" minWidth="0" span={field.wide ? 'full' : null}>
           {field.type === 'select' && (
-            <Select label={field.label} value={values[field.key] ?? ''} onChange={(value) => onChange(field.key, value)} size="xs" width="100%" options={field.options} />
+            <Select label={field.label} value={values[field.key] || field.empty || ''} onChange={(value) => onChange(field.key, value === field.empty ? '' : value)} size="xs" width="100%" options={field.options} />
           )}
           {field.type === 'switch' && (
             <Switch label={field.label} size="sm" checked={Boolean(values[field.key])} onChange={(event) => onChange(field.key, event.target.checked)} />
@@ -971,10 +975,10 @@ export const Flow = ({
       y: rect ? e.clientY - rect.top : e.clientY,
       label: String(edge.label ?? ''),
       type: edge.type || 'smoothstep',
-      animated: edge.animated ?? true,
+      dash: edge.animated ? 'moving' : edge.style?.strokeDasharray ? 'dashed' : 'solid',
       color,
       strokeWidth: edge.style?.strokeWidth || 2,
-      markerEnd: edge.markerEnd?.type || 'arrowclosed',
+      markerEnd: (typeof edge.markerEnd === 'string' ? edge.markerEnd : edge.markerEnd?.type) || '',
       member: edge.type === 'member'
     });
     setNodeEditor(null);
@@ -1042,10 +1046,10 @@ export const Flow = ({
               ...e,
               label: edgeEditor.label || undefined,
               type: e.type === 'member' ? 'member' : edgeEditor.type,
-              animated: edgeEditor.animated,
+              animated: edgeEditor.dash === 'moving',
               data: { ...e.data, color: colorToken },
               className: withEdgeColorClass(e.className, colorToken),
-              style: buildEdgeStyle(e.style, colorToken, edgeEditor.strokeWidth ?? e.style?.strokeWidth ?? 2),
+              style: buildEdgeStyle({ ...e.style, strokeDasharray: edgeEditor.dash === 'dashed' ? FLOW_DASHES : undefined }, colorToken, edgeEditor.strokeWidth ?? e.style?.strokeWidth ?? 2),
               markerEnd: buildMarkerEnd(edgeEditor.markerEnd, colorToken)
             }
           : e
@@ -1463,9 +1467,11 @@ export const Flow = ({
                 key: 'parentId',
                 label: 'In group',
                 type: 'select',
-                wide: true,
-                options: [{ value: '', label: 'None' }, ...nodes.filter((node) => node.id !== nodeEditor.nodeId && node.type === 'group').map((node) => ({ value: node.id, label: node.data?.label || node.id }))]
-              }
+                empty: 'none',
+                wide: !nodeEditor.parentId,
+                options: [{ value: 'none', label: 'None' }, ...nodes.filter((node) => node.id !== nodeEditor.nodeId && node.type === 'group').map((node) => ({ value: node.id, label: node.data?.label || node.id }))]
+              },
+              ...(nodeEditor.parentId ? [{ key: 'extent', label: 'Movement', type: 'select', empty: 'free', options: flowChoices('hold') }] : [])
             ]}
           />
         )}
@@ -1505,8 +1511,8 @@ export const Flow = ({
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
               { key: 'strokeWidth', label: 'Width', type: 'number', least: 1, most: 10 },
               ...(edgeEditor.member ? [] : [{ key: 'type', label: 'Line', type: 'select', options: flowChoices('line') }]),
-              { key: 'markerEnd', label: 'Arrow', type: 'select', options: flowChoices('arrow') },
-              { key: 'animated', label: 'Moving dashes', type: 'switch', wide: true }
+              { key: 'markerEnd', label: 'Arrow', type: 'select', empty: 'none', options: flowChoices('arrow') },
+              { key: 'dash', label: 'Dashes', type: 'select', wide: Boolean(edgeEditor.member), options: flowChoices('dash') }
             ]}
           />
         )}

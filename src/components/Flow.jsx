@@ -1734,11 +1734,11 @@ export const Flow = ({
         {controls && toolbar === false && <Controls showInteractive={!readOnly} {...controlsProps} />}
         {toolbar !== false && (
           <Panel position="top-left" className="flow-toolbar">
-            <ButtonGroup vertical selectable={false} size="sm">
+            <ButtonGroup vertical selectable={false} size="xs">
               {FLOW_ACTIONS.filter((action) => action.kind === 'view' || canEdit).map((action) => (
                 <Button
                   key={action.id}
-                  size="sm"
+                  size="xs"
                   variant="ghost"
                   selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap) || (action.id === 'tidy' && arrangeOpen)}
                   disabled={Boolean(action.needs) && !actionReady[action.needs]}

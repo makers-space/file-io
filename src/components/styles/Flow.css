@@ -26,7 +26,17 @@
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  padding: 2px;
+  padding: 1px;
+}
+
+/* Icon-only buttons: just wide enough for the icon */
+.themed-flow .flow-toolbar .button.themed-button {
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.themed-flow .flow-toolbar .button.themed-button .themed-icon {
+  margin: 0;
 }
 
 .flow-node-preview {

@@ -256,6 +256,8 @@ const useFileViewer = (filePath) => {
   const blobUrlsRef = useRef([]);
   const pathRef = useRef(filePath);
   pathRef.current = filePath;
+  // Raised when the server says this person's access to the open file changed, so the file is opened afresh.
+  const [accessChanges, setAccessChanges] = useState(0);
   const { error: showError } = useNotification();
 
   // Manual char-diff bridge into the shared Y.Text — used by markdown and
@@ -327,6 +329,10 @@ const useFileViewer = (filePath) => {
           : s);
       };
       const onClose = (e) => {
+        if (e.code === 4405 && !cancelled) {
+          setAccessChanges((count) => count + 1);
+          return;
+        }
         if ((e.code !== 4403 && e.code !== 4404) || cancelled) return;
         connection.provider.shouldConnect = false;
         connection.provider.disconnect();
@@ -407,7 +413,7 @@ const useFileViewer = (filePath) => {
       for (const url of blobUrlsRef.current) URL.revokeObjectURL(url);
       blobUrlsRef.current = [];
     };
-  }, [filePath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filePath, accessChanges]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Allow callers (e.g. metadata edit forms) to patch the loaded metadata
   // in-place without re-running the full viewer setup.

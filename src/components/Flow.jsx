@@ -1368,6 +1368,9 @@ const FlowCanvas = forwardRef(({
     }));
     // Every step in a group gets a line to the nearest point of the group's border. These lines are the
     // component's own: one fixed style in the group's colour, not selectable, not editable, not in the file.
+    // They are listed first and given no lift of their own, so they sit above the group's background but beneath
+    // every step and every connector.
+    const lines = [];
     const boxes = new Map(shownNodes.map((node) => [node.id, node]));
     for (const step of shownNodes) {
       const group = step.parentId ? boxes.get(step.parentId) : null;
@@ -1384,14 +1387,14 @@ const FlowCanvas = forwardRef(({
       const level = upright ? middle.y : middle.x;
       const meet = Math.min(Math.max(level + (level < span / 2 ? FLOW_MEMBER_STEP : -FLOW_MEMBER_STEP), 16), Math.max(16, span - 16));
       const along = meet / span;
-      drawn.push(sanitizeEdge({
+      lines.push(sanitizeEdge({
         id: `member-${step.id}`,
         source: step.id,
         target: group.id,
         sourceHandle: side,
         targetHandle: 'border',
         type: 'member',
-        zIndex: 10,
+        zIndex: 0,
         focusable: false,
         selected: memberPicked.has(`member-${step.id}`),
         reconnectable: false,
@@ -1402,7 +1405,7 @@ const FlowCanvas = forwardRef(({
         markerEnd: { type: 'arrowclosed' }
       }));
     }
-    return drawn;
+    return [...lines, ...drawn];
   }, [edges, shownNodes, memberPicked]);
 
   // A connector cannot join a box to itself, repeat one that is already there, or break a rule the page gives.

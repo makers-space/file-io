@@ -436,7 +436,7 @@
   position: absolute;
   inset: 0;
   background: var(--flow-node-fill, var(--card-background));
-  border: 2px solid var(--flow-node-border, var(--border-color));
+  border: 2px solid transparent;
   border-radius: var(--border-radius-sm);
   box-shadow: var(--shadow-xs);
   z-index: -1;
@@ -618,8 +618,9 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* A step has no border until it is selected, when its accent colour outlines it */
 .themed-flow .react-flow__node-editable.selected .flow-node-geometry {
-  box-shadow: 0 0 0 1.5px var(--text-color);
+  border-color: var(--flow-node-border, var(--border-color));
 }
 
 .flow-node-surface[data-shape="rectangle"] {
@@ -672,7 +673,7 @@
 .flow-node-surface[data-shape="cylinder"] .flow-node-geometry {
   --cylinder-curve: 28px;
   border-radius: 100% / calc(var(--cylinder-curve) * 2);
-  border: 2px solid var(--flow-node-border, var(--border-color));
+  border: 2px solid transparent;
   background:
     radial-gradient(
       50% var(--cylinder-curve) at 50% var(--cylinder-curve),
@@ -787,3 +788,9 @@
 
 
 
+
+/* A step in the canvas's own colours would vanish without an outline, so these two keep theirs */
+.flow-node-surface.flow-node-color-surface .flow-node-geometry,
+.flow-node-surface.flow-node-color-background .flow-node-geometry {
+  border-color: var(--border-color);
+}

@@ -850,7 +850,6 @@ const FLOW_ACTIONS = [
   { id: 'edit', kind: 'edit', icon: 'FiEdit2', label: 'Edit what is selected', keys: 'E', needs: 'one' },
   { id: 'duplicate', kind: 'edit', icon: 'FiCopy', label: 'Duplicate', keys: 'Ctrl+D', needs: 'steps' },
   { id: 'delete', kind: 'edit', icon: 'FiTrash2', label: 'Delete', keys: 'Delete', needs: 'any' },
-  { id: 'box', kind: 'view', icon: 'FiMousePointer', label: 'Select by dragging a box', keys: 'B' },
   { id: 'selectAll', kind: 'edit', icon: 'FiCheckSquare', label: 'Select everything', keys: 'Ctrl+A' },
   { id: 'undo', kind: 'edit', icon: 'FiCornerUpLeft', label: 'Undo', keys: 'Ctrl+Z', needs: 'undo' },
   { id: 'redo', kind: 'edit', icon: 'FiCornerUpRight', label: 'Redo', keys: 'Ctrl+Y', needs: 'redo' },
@@ -1145,7 +1144,6 @@ const FlowCanvas = forwardRef(({
   // A line from a step to its group can be selected and deleted, which takes the step out of the group.
   // It is not one of the flow's connectors, so its selection is kept here.
   const [memberPicked, setMemberPicked] = useState(() => new Set());
-  const [boxSelect, setBoxSelect] = useState(false);
   const [paneMenu, setPaneMenu] = useState(null);
   const paneAnchorRef = useRef(null);
   // With a viewKey, where a person left the view and the background they chose are kept in their own browser.
@@ -1777,7 +1775,6 @@ const FlowCanvas = forwardRef(({
     if (id === 'zoomOut') instance?.zoomOut({ duration: 150 });
     if (id === 'fit') instance?.fitView({ padding: 0.2, duration: 200 });
     if (id === 'actual') instance?.zoomTo(1, { duration: 150 });
-    if (id === 'box') setBoxSelect((now) => !now);
     if (id === 'focus') {
       const ids = chosenNodes.length ? chosenNodes.map((node) => node.id) : [...new Set(chosenEdges.flatMap((edge) => [edge.source, edge.target]))];
       instance?.fitView({ nodes: ids.map((nodeId) => ({ id: nodeId })), padding: 0.4, duration: 200, maxZoom: 1.5 });
@@ -1865,7 +1862,7 @@ const FlowCanvas = forwardRef(({
       const command = event.ctrlKey || event.metaKey;
       const id = command
         ? ({ a: 'selectAll', d: 'duplicate', z: event.shiftKey ? 'redo' : 'undo', y: 'redo' })[key]
-        : ({ n: 'step', g: 'group', e: 'edit', l: event.shiftKey ? 'tidyDown' : 'tidy', s: 'snap', f: 'fit', k: 'lock', m: 'map', b: 'box', z: 'focus', 0: 'actual', '+': 'zoomIn', '=': 'zoomIn', '-': 'zoomOut' })[key];
+        : ({ n: 'step', g: 'group', e: 'edit', l: event.shiftKey ? 'tidyDown' : 'tidy', s: 'snap', f: 'fit', k: 'lock', m: 'map', z: 'focus', 0: 'actual', '+': 'zoomIn', '=': 'zoomIn', '-': 'zoomOut' })[key];
       if (!id) return;
       event.preventDefault();
       runActionRef.current(id);
@@ -2245,8 +2242,6 @@ const FlowCanvas = forwardRef(({
         connectionMode={ConnectionMode.Loose}
         isValidConnection={validConnection}
         onBeforeDelete={canDelete}
-        selectionOnDrag={boxSelect}
-        panOnDrag={boxSelect ? [1, 2] : true}
         selectionMode={SelectionMode.Partial}
         minZoom={0.1}
         maxZoom={4}
@@ -2276,7 +2271,7 @@ const FlowCanvas = forwardRef(({
                   key={action.id}
                   size="xs"
                   variant="ghost"
-                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap) || (action.id === 'tidy' && arrangeOpen) || (action.id === 'box' && boxSelect)}
+                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap) || (action.id === 'tidy' && arrangeOpen)}
                   disabled={Boolean(action.needs) && !actionReady[action.needs]}
                   title={`${action.label} (${action.keys})`}
                   aria-label={`${action.label} (${action.keys})`}

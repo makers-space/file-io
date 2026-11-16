@@ -124,7 +124,13 @@ export const Button = forwardRef(({
     }, [genie, genieTrigger]);
 
     // Genie integration using simplified portal hook
-    const buttonRef = ref || useRef(null);
+    // The button keeps its own reference for its pop-ups and passes the element on to whoever asked for it.
+    const buttonRef = useRef(null);
+    const setButtonRef = (node) => {
+        buttonRef.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) ref.current = node;
+    };
     const {triggerProps: genieTriggerProps, GeniePortal} = useGeniePortal(
         genieConfig,
         buttonRef,
@@ -237,7 +243,7 @@ export const Button = forwardRef(({
     return (
         <ButtonContext.Provider value={{ size }}>
             <button
-                ref={buttonRef}
+                ref={setButtonRef}
                 type={type}
                 className={`button themed-button ${getVariantClass()} ${getColorClass()} ${getSizeClass()} ${getSelectedClass()} ${getJustifySelfClass()} ${genieConfig ? 'genie-trigger' : ''} theme-${buttonTheme} ${className}`}
                 disabled={disabled}

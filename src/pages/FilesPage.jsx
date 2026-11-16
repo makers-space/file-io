@@ -3251,6 +3251,7 @@ export const FilesPage = () => {
           {flowPage ? (
             <Flow
               key={`flow-${metadata.filePath}`}
+              viewKey={metadata.filePath}
               content={content}
               onContentChange={updateContent}
               readOnly={isReadOnly}

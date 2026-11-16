@@ -111,12 +111,51 @@
   border-radius: 50%;
 }
 
-.themed-flow .react-flow__handle.target {
-  pointer-events: none;
+/* The small bar beside whatever is selected */
+.flow-quickbar {
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 1px;
 }
 
-.themed-flow.flow-connecting .react-flow__handle.target {
-  pointer-events: all;
+.flow-quickbar .button.themed-button {
+  min-width: 0;
+  padding: 0 6px;
+}
+
+.flow-quickbar .button.themed-button .themed-icon {
+  margin: 0;
+}
+
+/* A locked box does not offer to be dragged; a collapsed group shows only its title bar */
+.themed-flow .react-flow__node.flow-locked {
+  cursor: default;
+}
+
+.themed-flow .react-flow__node-group.flow-collapsed {
+  overflow: hidden;
+  border-style: solid;
+}
+
+/* A step that has been given a size fills it */
+.themed-flow .flow-node.flow-node-sized,
+.themed-flow .flow-node.flow-node-sized .flow-node-surface {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* The group a dragged step or a connector would join */
+.themed-flow .react-flow__node-group.flow-drop-target,
+.themed-flow.flow-connecting .react-flow__node-group:hover {
+  border-style: solid;
+  border-color: var(--success-color);
+  background-color: color-mix(in srgb, var(--success-color), transparent 85%);
 }
 
 /* A group has no connection points; its hidden anchor only lets a connector to its border exist */

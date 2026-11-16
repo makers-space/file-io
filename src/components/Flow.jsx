@@ -31,7 +31,7 @@
  * - Set expandParent: true to auto-expand parent when child is dragged to edge
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -41,6 +41,12 @@ import {
   Handle,
   Position,
   NodeResizer,
+  NodeToolbar,
+  EdgeToolbar,
+  ReactFlowProvider,
+  ConnectionMode,
+  SelectionMode,
+  useNodesInitialized,
   BaseEdge,
   getStraightPath,
   getBezierPath,
@@ -214,7 +220,7 @@ const FLOW_DASHES = '6 5';
 
 const FLOW_TAG = /<\s*(Node|Group|Edge)\b((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/\s*>|>([^<]*)<\/\s*\1\s*>|>)/gi;
 const FLOW_ATTRIBUTE = /([A-Za-z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\}|([^\s"'>/]+))/g;
-const FLOW_NODE_KEYS = ['id', 'label', 'color', 'shape', 'x', 'y', 'width', 'height', 'group', 'size', 'weight', 'align'];
+const FLOW_NODE_KEYS = ['id', 'label', 'color', 'shape', 'x', 'y', 'width', 'height', 'group', 'size', 'weight', 'align', 'locked', 'collapsed'];
 const FLOW_SHAPES = NODE_SHAPE_OPTIONS.map((option) => option.value);
 const FLOW_SIZES = ['xs', 'sm', 'md', 'lg', 'xl', '2xl'];
 const FLOW_WEIGHTS = ['light', 'normal', 'medium', 'semibold', 'bold', 'extrabold'];
@@ -425,7 +431,12 @@ export const parseFlow = (text) => {
     id: props.id,
     type: 'group',
     position: { x: flowNumber(props.x) ?? index * 340, y: flowNumber(props.y) ?? 0 },
-    data: { label: props.label ?? '', color: resolveColorToken(props.color, 'neutral') },
+    data: {
+      label: props.label ?? '',
+      color: resolveColorToken(props.color, 'neutral'),
+      ...(props.locked === 'true' ? { locked: true } : {}),
+      ...(props.collapsed === 'true' ? { collapsed: true } : {})
+    },
     style: { width: flowNumber(props.width) ?? 300, height: flowNumber(props.height) ?? 200 }
   }));
 
@@ -462,11 +473,14 @@ export const parseFlow = (text) => {
     if (oneOf(props.weight, FLOW_WEIGHTS)) data.fontWeight = oneOf(props.weight, FLOW_WEIGHTS);
     if (oneOf(props.align, FLOW_ALIGNS)) data.textAlign = oneOf(props.align, FLOW_ALIGNS);
     if (Object.keys(details).length > 0) data.details = details;
+    if (props.locked === 'true') data.locked = true;
     return {
       id: props.id,
       type: 'editable',
       position,
       data,
+      ...(flowNumber(props.width) > 0 ? { width: flowNumber(props.width) } : {}),
+      ...(flowNumber(props.height) > 0 ? { height: flowNumber(props.height) } : {}),
       ...(parent ? { parentId: parent, extent: 'parent', expandParent: true } : {})
     };
   });
@@ -480,19 +494,24 @@ export const parseFlow = (text) => {
       id: `edge-${index}`,
       source: props.source,
       target: props.target,
-      sourceHandle: `${oneOf(props.from, FLOW_SIDES) || (toGroup ? side : 'right')}-source`,
-      targetHandle: toGroup ? 'border' : `${side}-target`,
+      sourceHandle: `${oneOf(props.from, FLOW_SIDES) || (toGroup ? side : 'right')}`,
+      targetHandle: toGroup ? 'border' : `${side}`,
       ...(props.label ? { label: props.label } : {}),
       type: toGroup ? 'member' : oneOf(props.type, FLOW_EDGE_TYPES) || 'smoothstep',
       animated: props.animated === 'true',
       data: {
         color: resolveColorToken(props.color, DEFAULT_EDGE_COLOR_TOKEN),
-        ...(toGroup ? { side, along: Math.min(Math.max(flowNumber(props.at) ?? 50, 0), 100) / 100, line: oneOf(props.type, FLOW_EDGE_TYPES) || 'straight' } : {})
+        ...(flowNumber(props.bend) !== null ? { bend: Math.min(Math.max(flowNumber(props.bend), 0), 100) / 100 } : {}),
+        ...(flowNumber(props.corner) !== null ? { corner: Math.min(Math.max(flowNumber(props.corner), 0), 40) } : {}),
+        ...(FLOW_LABEL_PX[props.labelsize] ? { labelSize: props.labelsize } : {}),
+        ...(toGroup ? { side, along: Math.min(Math.max(flowNumber(props.at) ?? 50, 0), 100) / 100, line: oneOf(props.type, FLOW_EDGE_TYPES) || 'step', follow: props.color === undefined } : {})
       },
       style: { strokeWidth: Math.min(Math.max(flowNumber(props.width) ?? 2, 1), 10), ...(props.dashed === 'true' && props.animated !== 'true' ? { strokeDasharray: FLOW_DASHES } : {}) },
       ...(toGroup ? { zIndex: 10 } : {}),
       ...(arrow === 'none' ? {} : { markerEnd: { type: arrow === 'open' ? 'arrow' : 'arrowclosed' } }),
-      ...(start === 'open' || start === 'filled' ? { markerStart: { type: start === 'open' ? 'arrow' : 'arrowclosed' } } : {})
+      ...(start === 'open' || start === 'filled' ? { markerStart: { type: start === 'open' ? 'arrow' : 'arrowclosed' } } : {}),
+      ...(FLOW_LABEL_PX[props.labelsize] ? { labelStyle: { fontSize: FLOW_LABEL_PX[props.labelsize] } } : {}),
+      ...(props.labelbg === 'false' ? { labelShowBg: false } : {})
     };
   });
 
@@ -512,7 +531,8 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
       ['id', node.id], ['label', node.data?.label],
       ['color', color === 'neutral' ? null : color],
       ['x', Math.round(node.position?.x ?? 0)], ['y', Math.round(node.position?.y ?? 0)],
-      ['width', flowNumber(node.width ?? node.style?.width) ?? 300], ['height', flowNumber(node.height ?? node.style?.height) ?? 200]
+      ['width', flowNumber(node.width ?? node.style?.width) ?? 300], ['height', flowNumber(node.height ?? node.style?.height) ?? 200],
+      ['locked', node.data?.locked ? 'true' : null], ['collapsed', node.data?.collapsed ? 'true' : null]
     ]));
   }
   for (const node of nodes) {
@@ -529,6 +549,8 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
       ['size', data.fontSize && data.fontSize !== 'md' ? data.fontSize : null],
       ['weight', data.fontWeight && data.fontWeight !== 'semibold' ? data.fontWeight : null],
       ['align', data.textAlign && data.textAlign !== 'center' ? data.textAlign : null],
+      ['width', flowNumber(node.width) > 0 ? flowNumber(node.width) : null], ['height', flowNumber(node.height) > 0 ? flowNumber(node.height) : null],
+      ['locked', data.locked ? 'true' : null],
       ...details
     ]));
   }
@@ -541,13 +563,13 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
     const along = member ? Math.round(Math.min(Math.max(edge.data?.along ?? 0.5, 0), 1) * 100) : null;
     const marker = typeof edge.markerEnd === 'string' ? edge.markerEnd : edge.markerEnd?.type;
     const startMarker = typeof edge.markerStart === 'string' ? edge.markerStart : edge.markerStart?.type;
-    const curve = member ? edge.data?.line || 'straight' : edge.type;
+    const curve = member ? edge.data?.line || 'step' : edge.type;
     const width = flowNumber(edge.style?.strokeWidth) ?? 2;
     lines.push(line('Edge', [
       ['source', edge.source], ['target', edge.target],
       ['label', typeof edge.label === 'string' ? edge.label : null],
-      ['color', color === DEFAULT_EDGE_COLOR_TOKEN ? null : color],
-      ['type', curve && curve !== (member ? 'straight' : 'smoothstep') ? curve : null],
+      ['color', edge.type === 'member' ? (edge.data?.follow ? null : color) : (color === DEFAULT_EDGE_COLOR_TOKEN ? null : color)],
+      ['type', curve && curve !== (member ? 'step' : 'smoothstep') ? curve : null],
       ['animated', edge.animated ? 'true' : null],
       ['dashed', !edge.animated && edge.style?.strokeDasharray ? 'true' : null],
       ['arrow', !marker ? 'none' : marker === 'arrow' ? 'open' : null],
@@ -555,13 +577,43 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
       ['width', width !== 2 ? width : null],
       ['from', from && from !== (member ? to : 'right') ? from : null],
       ['to', to && to !== 'left' ? to : null],
-      ['at', member && along !== 50 ? along : null]
+      ['at', member && along !== 50 ? along : null],
+      ['bend', edge.data?.bend !== undefined && Math.round(edge.data.bend * 100) !== 25 ? Math.round(edge.data.bend * 100) : null],
+      ['corner', edge.data?.corner !== undefined && edge.data.corner !== 5 ? edge.data.corner : null],
+      ['labelsize', FLOW_LABEL_PX[edge.data?.labelSize] ? edge.data.labelSize : null],
+      ['labelbg', edge.labelShowBg === false ? 'false' : null]
     ]));
   }
   return `<Flow>\n${lines.join('\n')}${lines.length ? '\n' : ''}</Flow>\n`;
 };
 
 const FlowLock = createContext(false);
+// What the small bars beside a selected step, group or connector can do: { run(action, id), single }.
+const FlowActions = createContext(null);
+
+const QUICK_ACTIONS = {
+  edit: ['FiEdit2', 'Edit (E)'],
+  duplicate: ['FiCopy', 'Duplicate (Ctrl+D)'],
+  delete: ['FiTrash2', 'Delete (Delete)'],
+  collapse: ['FiMinimize2', 'Collapse or open this group'],
+  lock: ['FiLock', 'Lock or unlock where this sits']
+};
+
+// The small bar beside whatever is selected.
+const QuickBar = ({ id, items }) => {
+  const actions = useContext(FlowActions);
+  return (
+    <div className="flow-quickbar">
+      <ButtonGroup selectable={false} size="xs">
+        {items.map((item) => (
+          <Button key={item} size="xs" variant="ghost" title={QUICK_ACTIONS[item][1]} onClick={() => actions?.run(item, id)}>
+            <Icon name={QUICK_ACTIONS[item][0]} size="xs" />
+          </Button>
+        ))}
+      </ButtonGroup>
+    </div>
+  );
+};
 
 // One compact form for a step, a group or a connector. Fields sit in two columns; a "wide" field spans both.
 // Each field is { key, label, type: 'text' | 'number' | 'switch' | 'select', options?, wide? }.
@@ -573,6 +625,7 @@ const FLOW_OPTIONS = {
   line: [['default', 'Curve'], ['simplebezier', 'Simple curve'], ['smoothstep', 'Rounded steps'], ['step', 'Square steps'], ['straight', 'Straight']],
   arrow: [['arrowclosed', 'Filled'], ['arrow', 'Open'], ['none', 'None']],
   side: [['top', 'Top'], ['right', 'Right'], ['bottom', 'Bottom'], ['left', 'Left']],
+  labelSize: [['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large']],
   dash: [['solid', 'Solid'], ['dashed', 'Dashed'], ['moving', 'Moving dashes']],
   hold: [['parent', 'Held inside the group'], ['free', 'Free to leave']]
 };
@@ -616,9 +669,11 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
 const FLOW_ACTIONS = [
   { id: 'step', kind: 'edit', icon: 'FiPlusSquare', label: 'Add a step', keys: 'N' },
   { id: 'group', kind: 'edit', icon: 'FiGrid', label: 'Add a group', keys: 'G' },
-  { id: 'edit', kind: 'edit', icon: 'FiEdit2', label: 'Edit what is selected', keys: 'E', needs: 'one' },
-  { id: 'duplicate', kind: 'edit', icon: 'FiCopy', label: 'Duplicate', keys: 'Ctrl+D', needs: 'steps' },
-  { id: 'delete', kind: 'edit', icon: 'FiTrash2', label: 'Delete', keys: 'Delete', needs: 'any' },
+  // These three sit on the small bar beside what is selected, so they are shortcuts only here.
+  { id: 'edit', kind: 'edit', icon: 'FiEdit2', label: 'Edit what is selected', keys: 'E', needs: 'one', hidden: true },
+  { id: 'duplicate', kind: 'edit', icon: 'FiCopy', label: 'Duplicate', keys: 'Ctrl+D', needs: 'steps', hidden: true },
+  { id: 'delete', kind: 'edit', icon: 'FiTrash2', label: 'Delete', keys: 'Delete', needs: 'any', hidden: true },
+  { id: 'box', kind: 'view', icon: 'FiMousePointer', label: 'Select by dragging a box', keys: 'B' },
   { id: 'selectAll', kind: 'edit', icon: 'FiCheckSquare', label: 'Select everything', keys: 'Ctrl+A' },
   { id: 'undo', kind: 'edit', icon: 'FiCornerUpLeft', label: 'Undo', keys: 'Ctrl+Z', needs: 'undo' },
   { id: 'redo', kind: 'edit', icon: 'FiCornerUpRight', label: 'Redo', keys: 'Ctrl+Y', needs: 'redo' },
@@ -626,11 +681,16 @@ const FLOW_ACTIONS = [
   { id: 'zoomIn', kind: 'view', icon: 'FiZoomIn', label: 'Zoom in', keys: '+' },
   { id: 'zoomOut', kind: 'view', icon: 'FiZoomOut', label: 'Zoom out', keys: '-' },
   { id: 'fit', kind: 'view', icon: 'FiMaximize', label: 'Fit everything on screen', keys: 'F' },
+  { id: 'actual', kind: 'view', icon: 'FiSearch', label: 'Zoom to full size', keys: '0' },
+  { id: 'focus', kind: 'view', icon: 'FiTarget', label: 'Zoom to what is selected', keys: 'Z', needs: 'any' },
   { id: 'snap', kind: 'edit', icon: 'FiCrosshair', label: 'Snap to the dots', keys: 'S' },
   { id: 'lock', kind: 'edit', icon: 'FiLock', label: 'Lock moving', keys: 'K' },
   { id: 'map', kind: 'view', icon: 'FiMap', label: 'Show or hide the map', keys: 'M' }
 ];
 const FLOW_HISTORY = 100;
+const FLOW_PATTERNS = ['dots', 'lines', 'cross'];
+const FLOW_PATTERN_ICONS = { dots: 'FiMoreHorizontal', lines: 'FiHash', cross: 'FiPlus' };
+const FLOW_LABEL_PX = { sm: null, md: 14, lg: 18 };
 const FLOW_LAYOUTS = [
   { id: 'lr', icon: 'FiArrowRight', label: 'Arrange everything left to right (L)' },
   { id: 'tb', icon: 'FiArrowDown', label: 'Arrange everything top to bottom (Shift+L)' },
@@ -646,7 +706,8 @@ const FLOW_ALIGNMENTS = [
 
 // Custom Node for inline editing with bidirectional handles on all four sides
 // Each position has BOTH source and target handles to allow any-to-any connections
-const EditableNode = ({ data, id }) => {
+const EditableNode = ({ data, id, selected, width }) => {
+  const actions = useContext(FlowActions);
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data.label);
   const reactFlow = useReactFlow();
@@ -667,9 +728,7 @@ const EditableNode = ({ data, id }) => {
   const handleDoubleClick = () => { if (!locked) setIsEditing(true); };
 
   const handleSave = () => {
-    reactFlow.setNodes((nds) =>
-      nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, label } } : n))
-    );
+    reactFlow.updateNodeData(id, { label });
     setIsEditing(false);
   };
 
@@ -684,22 +743,16 @@ const EditableNode = ({ data, id }) => {
   };
 
   return (
-    <div className="flow-node" onDoubleClick={handleDoubleClick}>
-      {/* Bidirectional connection handles on all four sides - each position has both source and target */}
-      {/* Source handles can start connections, target handles can receive them */}
-      <Handle type="source" position={Position.Top} id="top-source" isConnectableStart={true} isConnectableEnd={false} />
-      <Handle type="target" position={Position.Top} id="top-target" isConnectableStart={false} isConnectableEnd={true} />
+    <div className={`flow-node ${width ? 'flow-node-sized' : ''}`} onDoubleClick={handleDoubleClick}>
+      {!locked && <NodeResizer isVisible={Boolean(selected) && !data.locked} minWidth={80} minHeight={40} />}
+      {!locked && actions && (
+        <NodeToolbar isVisible={Boolean(selected) && actions.single} position={Position.Top} offset={8}>
+          <QuickBar id={id} items={['edit', 'duplicate', 'lock', 'delete']} />
+        </NodeToolbar>
+      )}
+      {FLOW_SIDES.map((side) => <Handle key={side} type="source" position={side} id={side} />)}
 
-      <Handle type="source" position={Position.Right} id="right-source" isConnectableStart={true} isConnectableEnd={false} />
-      <Handle type="target" position={Position.Right} id="right-target" isConnectableStart={false} isConnectableEnd={true} />
-
-      <Handle type="source" position={Position.Bottom} id="bottom-source" isConnectableStart={true} isConnectableEnd={false} />
-      <Handle type="target" position={Position.Bottom} id="bottom-target" isConnectableStart={false} isConnectableEnd={true} />
-
-      <Handle type="source" position={Position.Left} id="left-source" isConnectableStart={true} isConnectableEnd={false} />
-      <Handle type="target" position={Position.Left} id="left-target" isConnectableStart={false} isConnectableEnd={true} />
-
-      <div 
+      <div
         className={`flow-node-surface ${getNodeColorClass(colorToken)}`} 
         data-shape={shape} 
         data-color={colorToken}
@@ -727,11 +780,17 @@ const EditableNode = ({ data, id }) => {
 
 // Simple GroupNode to render label since native group doesn't render it by default
 // A group shows its label, and resize handles while it is selected
-const GroupNode = ({ data, selected }) => {
+const GroupNode = ({ data, id, selected }) => {
   const locked = useContext(FlowLock);
+  const actions = useContext(FlowActions);
   return (
     <>
-      {!locked && <NodeResizer isVisible={Boolean(selected)} minWidth={160} minHeight={100} />}
+      {!locked && <NodeResizer isVisible={Boolean(selected) && !data.collapsed && !data.locked} minWidth={160} minHeight={100} />}
+      {!locked && actions && (
+        <NodeToolbar isVisible={Boolean(selected) && actions.single} position={Position.Top} offset={8}>
+          <QuickBar id={id} items={['edit', 'collapse', 'lock', 'delete']} />
+        </NodeToolbar>
+      )}
       <Handle type="target" position={Position.Left} id="border" className="flow-group-anchor" isConnectable={false} />
       {data.label}
     </>
@@ -756,24 +815,73 @@ const borderPoint = (group, side, along) => {
 
 const FACING = { left: Position.Right, right: Position.Left, top: Position.Bottom, bottom: Position.Top };
 
-const MemberEdge = ({ id, target, sourceX, sourceY, sourcePosition, data, style, markerEnd, markerStart, label }) => {
+// data.bend tightens or loosens a curve (0 to 1); data.corner rounds the corners of rounded steps (pixels).
+const linePath = (line, ends, tune = {}) => (
+  line === 'default' ? getBezierPath({ ...ends, curvature: tune.bend ?? 0.25 })
+    : line === 'simplebezier' ? getSimpleBezierPath(ends)
+    : line === 'smoothstep' ? getSmoothStepPath({ ...ends, borderRadius: tune.corner ?? 5 })
+    : line === 'step' ? getSmoothStepPath({ ...ends, borderRadius: 0 })
+    : getStraightPath(ends)
+);
+
+const drawEdge = (props, [path, labelX, labelY]) => (
+  <>
+    <BaseEdge
+      id={props.id}
+      path={path}
+      style={props.style}
+      markerEnd={props.markerEnd}
+      markerStart={props.markerStart}
+      label={props.label}
+      labelX={labelX}
+      labelY={labelY}
+      labelStyle={props.labelStyle}
+      labelShowBg={props.labelShowBg}
+      labelBgStyle={props.labelBgStyle}
+      labelBgPadding={props.labelBgPadding}
+      labelBgBorderRadius={props.labelBgBorderRadius}
+      interactionWidth={props.interactionWidth}
+    />
+    <EdgeBar id={props.id} x={labelX} y={labelY} selected={props.selected} />
+  </>
+);
+
+const EdgeBar = ({ id, x, y, selected }) => {
+  const locked = useContext(FlowLock);
+  const actions = useContext(FlowActions);
+  if (locked || !actions) return null;
+  return (
+    <EdgeToolbar edgeId={id} x={x} y={y} isVisible={Boolean(selected) && actions.single} alignY="bottom">
+      <QuickBar id={id} items={['edit', 'delete']} />
+    </EdgeToolbar>
+  );
+};
+
+const lineEdge = (line) => function LineEdge(props) {
+  const { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, data } = props;
+  return drawEdge(props, linePath(line, { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition }, data));
+};
+
+// A connector to a group reaches the border from inside the group, at the spot where it was attached.
+const MemberEdge = (props) => {
+  const { target, sourceX, sourceY, sourcePosition, data } = props;
   const group = useInternalNode(target);
   if (!group) return null;
   const side = data?.side || 'left';
   const end = borderPoint(group, side, data?.along ?? 0.5);
-  const ends = { sourceX, sourceY, sourcePosition, targetX: end.x, targetY: end.y, targetPosition: FACING[side] };
-  const line = data?.line || 'straight';
-  const [path, labelX, labelY] = line === 'default' ? getBezierPath(ends)
-    : line === 'simplebezier' ? getSimpleBezierPath(ends)
-    : line === 'smoothstep' ? getSmoothStepPath(ends)
-    : line === 'step' ? getSmoothStepPath({ ...ends, borderRadius: 0 })
-    : getStraightPath(ends);
-  return <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} markerStart={markerStart} label={label} labelX={labelX} labelY={labelY} />;
+  return drawEdge(props, linePath(data?.line || 'step', { sourceX, sourceY, sourcePosition, targetX: end.x, targetY: end.y, targetPosition: FACING[side] }, data));
 };
 
-const edgeTypes = { member: MemberEdge };
+const edgeTypes = {
+  default: lineEdge('default'),
+  simplebezier: lineEdge('simplebezier'),
+  smoothstep: lineEdge('smoothstep'),
+  step: lineEdge('step'),
+  straight: lineEdge('straight'),
+  member: MemberEdge
+};
 
-export const Flow = ({
+const FlowCanvas = forwardRef(({
   nodes: initialNodes = [],
   edges: initialEdges = [],
   fitView = true,
@@ -816,6 +924,11 @@ export const Flow = ({
   onContentChange,
   readOnly = false,
   toolbar = true,
+  children,
+  onSelect,
+  viewKey = null,
+  canConnect,
+  canDelete,
   proOptions = { hideAttribution: true },
   connectEdgeOptions = {
     type: 'default',
@@ -825,8 +938,11 @@ export const Flow = ({
     markerEnd: buildMarkerEnd('arrowclosed', NEW_EDGE_COLOR_TOKEN)
   },
   ...reactFlowProps
-}) => {
+}, ref) => {
   const { currentTheme } = useTheme();
+  const initialized = useNodesInitialized();
+  const [fitSoon, setFitSoon] = useState(false);
+  const [dropTarget, setDropTarget] = useState(null);
   const containerRef = useRef(null);
   const anchorRef = useRef(null);
   // Store ReactFlow instance for coordinate transformation in onPaneClick (before hook context available)
@@ -843,6 +959,27 @@ export const Flow = ({
   const [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
   const [locked, setLocked] = useState(false);
   const [snap, setSnap] = useState(false);
+  const [boxSelect, setBoxSelect] = useState(false);
+  const [paneMenu, setPaneMenu] = useState(null);
+  const paneAnchorRef = useRef(null);
+  // With a viewKey, where a person left the view and the background they chose are kept in their own browser.
+  const viewStore = viewKey ? `flow-view:${viewKey}` : null;
+  const savedView = useMemo(() => {
+    if (!viewStore) return null;
+    try {
+      const kept = JSON.parse(localStorage.getItem(viewStore) || 'null');
+      return kept && Number.isFinite(kept.zoom) ? kept : null;
+    } catch {
+      return null;
+    }
+  }, [viewStore]);
+  const [pattern, setPattern] = useState(() => (FLOW_PATTERNS.includes(savedView?.pattern) ? savedView.pattern : backgroundVariant));
+  const keepView = useCallback((viewport, chosen) => {
+    if (!viewStore || !viewport) return;
+    try {
+      localStorage.setItem(viewStore, JSON.stringify({ x: viewport.x, y: viewport.y, zoom: viewport.zoom, pattern: chosen }));
+    } catch { /* the view is simply not remembered */ }
+  }, [viewStore]);
   const [arrangeOpen, setArrangeOpen] = useState(false);
   const arrangeAnchorRef = useRef(null);
   const [connecting, setConnecting] = useState(false);
@@ -933,12 +1070,12 @@ export const Flow = ({
   }, [drawText]);
 
   const attachRef = useRef(null);
-  const addBox = useCallback((kind) => {
+  const addBox = useCallback((kind, at = null) => {
     const rect = containerRef.current?.getBoundingClientRect();
     const instance = reactFlowInstanceRef.current;
-    const centre = rect && instance?.screenToFlowPosition
+    const centre = at || (rect && instance
       ? instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
-      : { x: 0, y: 0 };
+      : { x: 0, y: 0 });
     setNodes((current) => {
       const prefix = kind === 'group' ? 'group' : 'step';
       let number = current.length + 1;
@@ -946,7 +1083,7 @@ export const Flow = ({
       const nudge = (current.length % 6) * 24;
       // With one group selected, a new step is made inside it.
       const chosen = current.filter((node) => node.selected);
-      const home = kind !== 'group' && chosen.length === 1 && chosen[0].type === 'group' ? chosen[0] : null;
+      const home = !at && kind !== 'group' && chosen.length === 1 && chosen[0].type === 'group' ? chosen[0] : null;
       if (home) {
         const inside = current.filter((node) => node.parentId === home.id).length;
         const id = `${prefix}-${number}`;
@@ -1041,7 +1178,7 @@ export const Flow = ({
       // Let sanitizeEdge handle all color resolution and theming
       const themedEdge = sanitizeEdge(mergedEdge);
 
-      setEdges((eds) => addEdge(themedEdge, eds));
+      setEdges((eds) => (eds.some((edge) => edge.source === params.source && edge.target === params.target) ? eds : addEdge(themedEdge, eds)));
       onConnectProp?.(params);
     },
     [setEdges, connectEdgeOptions, onConnectProp]
@@ -1056,11 +1193,11 @@ export const Flow = ({
       id: `member-${source}-${target}`,
       source,
       target,
-      sourceHandle: sourceHandle || `${side}-source`,
+      sourceHandle: sourceHandle || `${side}`,
       targetHandle: 'border',
       type: 'member',
       zIndex: 10,
-      data: { color: NEW_EDGE_COLOR_TOKEN, side, along: Math.min(Math.max(along, 0), 1), line: 'default' },
+      data: { follow: true, side, along: Math.min(Math.max(along, 0), 1), line: 'step' },
       style: { strokeWidth: 2 },
       markerEnd: { type: 'arrowclosed' }
     });
@@ -1089,8 +1226,10 @@ export const Flow = ({
       fontWeight: node.data?.fontWeight ?? 'semibold',
       textAlign: node.data?.textAlign ?? 'center',
       nodeType: node.type ?? 'editable',
-      width: Math.round(node.measured?.width ?? node.width ?? node.style?.width ?? 300),
-      height: Math.round(node.measured?.height ?? node.height ?? node.style?.height ?? 200),
+      width: node.type === 'group' ? Math.round(node.measured?.width ?? node.width ?? node.style?.width ?? 300) : Math.round(node.width || 0),
+      height: node.type === 'group' ? Math.round(node.measured?.height ?? node.height ?? node.style?.height ?? 200) : Math.round(node.height || 0),
+      locked: Boolean(node.data?.locked),
+      collapsed: Boolean(node.data?.collapsed),
       parentId: node.parentId ?? '',
       extent: node.extent ?? ''
     });
@@ -1108,15 +1247,19 @@ export const Flow = ({
       x: rect ? e.clientX - rect.left : e.clientX,
       y: rect ? e.clientY - rect.top : e.clientY,
       label: String(edge.label ?? ''),
-      type: edge.type === 'member' ? edge.data?.line || 'straight' : edge.type || 'smoothstep',
+      type: edge.type === 'member' ? edge.data?.line || 'step' : edge.type || 'smoothstep',
       from: sideOf(edge.sourceHandle) || 'right',
       to: edge.type === 'member' ? edge.data?.side || 'left' : sideOf(edge.targetHandle) || 'left',
       markerStart: (typeof edge.markerStart === 'string' ? edge.markerStart : edge.markerStart?.type) || '',
       dash: edge.animated ? 'moving' : edge.style?.strokeDasharray ? 'dashed' : 'solid',
-      color,
+      color: edge.type === 'member' && edge.data?.follow ? 'group' : color,
       strokeWidth: edge.style?.strokeWidth || 2,
       markerEnd: (typeof edge.markerEnd === 'string' ? edge.markerEnd : edge.markerEnd?.type) || '',
-      member: edge.type === 'member'
+      member: edge.type === 'member',
+      bend: Math.round((edge.data?.bend ?? 0.25) * 100),
+      corner: edge.data?.corner ?? 5,
+      labelSize: edge.data?.labelSize || 'sm',
+      labelBg: edge.labelShowBg !== false
     });
     setNodeEditor(null);
   }, [readOnly]);
@@ -1136,7 +1279,8 @@ export const Flow = ({
       nds.map((n) => {
         if (n.id !== nodeEditor.nodeId) return n;
         const sanitizedStyle = stripNodeColorStyle(n.style);
-        const { style: _omit, parentId: _parent, extent: _extent, expandParent: _expand, ...rest } = n;
+        const { style: _omit, parentId: _parent, extent: _extent, expandParent: _expand, width: _wide, height: _tall, ...rest } = n;
+        const stepSize = (value, least) => (value > 0 ? Math.min(Math.max(value, least), 2000) : null);
         
         // Set default style for group nodes
         const groupStyle = nodeType === 'group' ? {
@@ -1161,10 +1305,14 @@ export const Flow = ({
             color: colorToken,
             fontSize,
             fontWeight,
-            textAlign
+            textAlign,
+            locked: nodeEditor.locked ? true : undefined,
+            collapsed: nodeType === 'group' && nodeEditor.collapsed ? true : undefined
           },
           ...(groupStyle ? { style: groupStyle } : {}),
           ...(isGroup ? { width: groupStyle.width, height: groupStyle.height } : {}),
+          ...(!isGroup && stepSize(nodeEditor.width, 80) ? { width: stepSize(nodeEditor.width, 80) } : {}),
+          ...(!isGroup && stepSize(nodeEditor.height, 40) ? { height: stepSize(nodeEditor.height, 40) } : {}),
           ...(parentId ? { parentId } : {}),
           ...(extent ? { extent } : {}),
           ...(parentId ? { expandParent: true } : {})
@@ -1184,10 +1332,19 @@ export const Flow = ({
               ...e,
               label: edgeEditor.label || undefined,
               type: e.type === 'member' ? 'member' : edgeEditor.type,
-              sourceHandle: `${edgeEditor.from}-source`,
-              targetHandle: e.type === 'member' ? 'border' : `${edgeEditor.to}-target`,
+              sourceHandle: `${edgeEditor.from}`,
+              targetHandle: e.type === 'member' ? 'border' : `${edgeEditor.to}`,
               animated: edgeEditor.dash === 'moving',
-              data: { ...e.data, color: colorToken, ...(e.type === 'member' ? { side: edgeEditor.to, line: edgeEditor.type } : {}) },
+              data: {
+                ...e.data,
+                color: colorToken,
+                bend: Math.min(Math.max(edgeEditor.bend ?? 25, 0), 100) / 100,
+                corner: Math.min(Math.max(edgeEditor.corner ?? 5, 0), 40),
+                labelSize: edgeEditor.labelSize,
+                ...(e.type === 'member' ? { side: edgeEditor.to, line: edgeEditor.type, follow: edgeEditor.color === 'group' } : {})
+              },
+              labelStyle: FLOW_LABEL_PX[edgeEditor.labelSize] ? { fontSize: FLOW_LABEL_PX[edgeEditor.labelSize] } : undefined,
+              labelShowBg: edgeEditor.labelBg ? undefined : false,
               className: withEdgeColorClass(e.className, colorToken),
               markerStart: buildMarkerEnd(edgeEditor.markerStart, colorToken),
               style: buildEdgeStyle({ ...e.style, strokeDasharray: edgeEditor.dash === 'dashed' ? FLOW_DASHES : undefined }, colorToken, edgeEditor.strokeWidth ?? e.style?.strokeWidth ?? 2),
@@ -1199,6 +1356,43 @@ export const Flow = ({
     setEdgeEditor(null);
   }, [edgeEditor, setEdges]);
   
+  const shownNodes = useMemo(() => {
+    const shut = new Set(nodes.filter((node) => node.type === 'group' && node.data?.collapsed).map((node) => node.id));
+    return nodes.map((node) => {
+      const isShut = shut.has(node.id);
+      const fixed = Boolean(node.data?.locked);
+      const classes = [node.className, node.id === dropTarget && 'flow-drop-target', fixed && 'flow-locked', isShut && 'flow-collapsed'].filter(Boolean).join(' ');
+      return {
+        ...node,
+        ariaLabel: `${node.type === 'group' ? 'Group' : 'Step'}: ${node.data?.label || node.id}`,
+        hidden: shut.has(node.parentId),
+        ...(classes ? { className: classes } : {}),
+        ...(fixed ? { draggable: false } : {}),
+        ...(isShut ? { height: 44, style: { ...node.style, height: 44 } } : {})
+      };
+    });
+  }, [nodes, dropTarget]);
+
+  const shownEdges = useMemo(() => {
+    const names = new Map(shownNodes.map((node) => [node.id, node.data?.label || node.id]));
+    const gone = new Set(shownNodes.filter((node) => node.hidden).map((node) => node.id));
+    const tint = new Map(shownNodes.filter((node) => node.type === 'group').map((node) => [node.id, resolveColorToken(node.data?.color, 'neutral')]));
+    return edges.map((edge) => ({
+      ...(edge.type === 'member' && edge.data?.follow && tint.has(edge.target)
+        ? sanitizeEdge({ ...edge, data: { ...edge.data, color: tint.get(edge.target) } })
+        : edge),
+      ariaLabel: `Connector from ${names.get(edge.source)} to ${names.get(edge.target)}`,
+      hidden: gone.has(edge.source) || gone.has(edge.target)
+    }));
+  }, [edges, shownNodes]);
+
+  // A connector cannot join a box to itself, repeat one that is already there, or break a rule the page gives.
+  const validConnection = useCallback((link) => (
+    link.source !== link.target
+    && !edges.some((edge) => edge.source === link.source && edge.target === link.target && edge.sourceHandle === link.sourceHandle && edge.targetHandle === link.targetHandle)
+    && (canConnect ? canConnect(link) !== false : true)
+  ), [edges, canConnect]);
+
   const canEdit = !readOnly && toolbar !== 'view';
   const chosenNodes = nodes.filter((node) => node.selected);
   const chosenEdges = edges.filter((edge) => edge.selected);
@@ -1230,7 +1424,7 @@ export const Flow = ({
       const middle = { x: a.x + a.wide / 2, y: a.y + a.tall / 2 };
       if (edge.type === 'member') {
         const { side, along } = onBorder({ ...to, position: { x: b.x, y: b.y }, measured: { width: b.wide, height: b.tall } }, middle);
-        return { ...edge, sourceHandle: `${side}-source`, data: { ...edge.data, side, along } };
+        return { ...edge, sourceHandle: `${side}`, data: { ...edge.data, side, along } };
       }
       const across = b.x + b.wide / 2 - middle.x;
       const down = b.y + b.tall / 2 - middle.y;
@@ -1242,12 +1436,12 @@ export const Flow = ({
           const y = ring.y - (box.y + box.tall / 2);
           return Math.abs(x) >= Math.abs(y) ? (x >= 0 ? 'right' : 'left') : (y >= 0 ? 'bottom' : 'top');
         };
-        return { ...edge, sourceHandle: `${facing(a)}-source`, targetHandle: `${facing(b)}-target` };
+        return { ...edge, sourceHandle: `${facing(a)}`, targetHandle: `${facing(b)}` };
       }
       const [out, into] = Math.abs(across) >= Math.abs(down)
         ? (across >= 0 ? ['right', 'left'] : ['left', 'right'])
         : (down >= 0 ? ['bottom', 'top'] : ['top', 'bottom']);
-      return { ...edge, sourceHandle: `${out}-source`, targetHandle: `${into}-target` };
+      return { ...edge, sourceHandle: `${out}`, targetHandle: `${into}` };
     }));
   };
 
@@ -1308,8 +1502,18 @@ export const Flow = ({
       ring = { x, y, neighbour: 2 * radius * Math.sin(Math.PI / centres.length) * 1.25 };
     }
     reroute(place, sizes, ring);
-    setTimeout(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }), 80);
+    setFitSoon(true);
   };
+
+  useEffect(() => {
+    if (!fitSoon || !initialized) return undefined;
+    const frame = requestAnimationFrame(() => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }));
+    setFitSoon(false);
+    return () => cancelAnimationFrame(frame);
+  }, [fitSoon, initialized, nodes]);
+
+  const arrangeRef = useRef(arrange);
+  arrangeRef.current = arrange;
 
   const alignChosen = (how) => {
     const picked = nodes.filter((node) => node.selected && node.type !== 'group');
@@ -1341,6 +1545,12 @@ export const Flow = ({
     if (id === 'zoomIn') instance?.zoomIn({ duration: 150 });
     if (id === 'zoomOut') instance?.zoomOut({ duration: 150 });
     if (id === 'fit') instance?.fitView({ padding: 0.2, duration: 200 });
+    if (id === 'actual') instance?.zoomTo(1, { duration: 150 });
+    if (id === 'box') setBoxSelect((now) => !now);
+    if (id === 'focus') {
+      const ids = chosenNodes.length ? chosenNodes.map((node) => node.id) : [...new Set(chosenEdges.flatMap((edge) => [edge.source, edge.target]))];
+      instance?.fitView({ nodes: ids.map((nodeId) => ({ id: nodeId })), padding: 0.4, duration: 200, maxZoom: 1.5 });
+    }
     if (id === 'lock') setLocked((now) => !now);
     if (id === 'map') setMapShown((now) => !now);
     if (id === 'undo') stepBack('past', 'future');
@@ -1376,6 +1586,42 @@ export const Flow = ({
   const runActionRef = useRef(runAction);
   runActionRef.current = runAction;
 
+  const quick = (action, id) => {
+    const instance = reactFlowInstanceRef.current;
+    const node = instance?.getNode(id);
+    const edge = node ? null : instance?.getEdge(id);
+    if (!node && !edge) return;
+    if (action === 'delete') instance.deleteElements({ nodes: node ? [node] : [], edges: edge ? [edge] : [] });
+    if (action === 'duplicate' || action === 'edit') runActionRef.current(action);
+    if (action === 'lock' && node) instance.updateNodeData(id, { locked: !node.data?.locked });
+    if (action === 'collapse' && node) instance.updateNodeData(id, { collapsed: !node.data?.collapsed });
+  };
+  const quickRef = useRef(quick);
+  quickRef.current = quick;
+  const single = chosenNodes.length + chosenEdges.length === 1;
+  const actionsValue = useMemo(() => ({ run: (action, id) => quickRef.current(action, id), single }), [single]);
+
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const chosenKey = [...chosenNodes, ...chosenEdges].map((item) => item.id).join(' ');
+  useEffect(() => {
+    onSelectRef.current?.({ nodes: chosenNodes, edges: chosenEdges });
+  }, [chosenKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useImperativeHandle(ref, () => ({
+    run: (id) => runActionRef.current(id),
+    arrange: (kind) => arrangeRef.current(kind),
+    text: () => writtenTextRef.current,
+    fit: () => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }),
+    select: (ids = []) => {
+      const wanted = new Set(ids);
+      setNodes((current) => current.map((node) => ({ ...node, selected: wanted.has(node.id) })));
+      setEdges((current) => current.map((edge) => ({ ...edge, selected: wanted.has(edge.id) })));
+    },
+    update: (id, data) => reactFlowInstanceRef.current?.updateNodeData(id, data),
+    instance: () => reactFlowInstanceRef.current
+  }), [setNodes, setEdges]);
+
   // Keyboard shortcuts work while the pointer is over the flow or something inside it has focus.
   useEffect(() => {
     if (toolbar === false) return undefined;
@@ -1387,7 +1633,7 @@ export const Flow = ({
       const command = event.ctrlKey || event.metaKey;
       const id = command
         ? ({ a: 'selectAll', d: 'duplicate', z: event.shiftKey ? 'redo' : 'undo', y: 'redo' })[key]
-        : ({ n: 'step', g: 'group', e: 'edit', l: event.shiftKey ? 'tidyDown' : 'tidy', s: 'snap', f: 'fit', k: 'lock', m: 'map', '+': 'zoomIn', '=': 'zoomIn', '-': 'zoomOut' })[key];
+        : ({ n: 'step', g: 'group', e: 'edit', l: event.shiftKey ? 'tidyDown' : 'tidy', s: 'snap', f: 'fit', k: 'lock', m: 'map', b: 'box', z: 'focus', 0: 'actual', '+': 'zoomIn', '=': 'zoomIn', '-': 'zoomOut' })[key];
       if (!id) return;
       event.preventDefault();
       runActionRef.current(id);
@@ -1415,7 +1661,7 @@ export const Flow = ({
     const at = step.internals?.positionAbsolute || step.position;
     const own = sizeOf(step, 120, 48);
     const { side, along } = onBorder(group, { x: at.x + own.wide / 2, y: at.y + own.tall / 2 });
-    connectToGroup({ source: stepId, sourceHandle: `${side}-source`, target: groupId, side, along });
+    connectToGroup({ source: stepId, sourceHandle: `${side}`, target: groupId, side, along });
   }, [connectToGroup]);
   attachRef.current = attach;
 
@@ -1443,30 +1689,31 @@ export const Flow = ({
     }
   }, [leaveGroup]);
 
-  // Dropping a step on a group puts it in that group. A member cannot be dragged out; deleting its connector takes it out.
+  // Dropping a step wholly inside a group puts it in that group. A member cannot be dragged out; deleting its
+  // connector takes it out. While a step is dragged, the group it would join is lit.
+  const groupUnder = useCallback((item) => {
+    if (!item || item.type === 'group' || item.parentId) return null;
+    return reactFlowInstanceRef.current?.getIntersectingNodes(item, false).find((node) => node.type === 'group') || null;
+  }, []);
+
+  const onNodeDragHandler = useCallback((_event, node) => {
+    const home = groupUnder(node)?.id || null;
+    setDropTarget((now) => (now === home ? now : home));
+  }, [groupUnder]);
+
   const onNodeDragStopHandler = useCallback((_event, _node, dragged = []) => {
-    const instance = reactFlowInstanceRef.current;
-    if (!instance?.getInternalNode) return;
-    const groups = instance.getNodes().filter((node) => node.type === 'group');
+    setDropTarget(null);
     for (const item of dragged) {
-      if (item.type === 'group' || item.parentId) continue;
-      const inner = instance.getInternalNode(item.id);
-      const at = inner?.internals?.positionAbsolute;
-      if (!at) continue;
-      const own = sizeOf(inner, 120, 48);
-      const middle = { x: at.x + own.wide / 2, y: at.y + own.tall / 2 };
-      const home = groups.find((group) => {
-        const room = sizeOf(group, 300, 200);
-        return middle.x >= group.position.x && middle.x <= group.position.x + room.wide && middle.y >= group.position.y && middle.y <= group.position.y + room.tall;
-      });
+      const home = groupUnder(item);
       if (home) attach(item.id, home.id);
     }
-  }, [attach]);
+  }, [attach, groupUnder]);
 
   const onPaneClickHandler = useCallback((e) => {
     setNodeEditor(null);
     setEdgeEditor(null);
     setArrangeOpen(false);
+    setPaneMenu(null);
     if (enableNodeCreation && !readOnly) {
       const keyMatch = !nodeCreationKey || nodeCreationKey === 'none' ||
         (nodeCreationKey === 'ctrl' && (e.ctrlKey || e.metaKey)) ||
@@ -1476,11 +1723,7 @@ export const Flow = ({
         const instance = reactFlowInstanceRef.current;
         let position = null;
 
-        if (instance && typeof instance.screenToFlowPosition === 'function') {
-          position = instance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-        } else if (instance && typeof instance.project === 'function') {
-          position = instance.project({ x: e.clientX, y: e.clientY });
-        }
+        if (instance) position = instance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
         if (!position) {
           const bounds = e.currentTarget.getBoundingClientRect();
@@ -1511,10 +1754,23 @@ export const Flow = ({
     onPaneClick?.(e);
   }, [enableNodeCreation, readOnly, nodeCreationKey, defaultNodeData, defaultNodeStyle, setNodes, onPaneClick]);
 
+  const onPaneMenu = useCallback((event) => {
+    event.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    setNodeEditor(null);
+    setEdgeEditor(null);
+    setPaneMenu({
+      x: event.clientX - (rect?.left ?? 0),
+      y: event.clientY - (rect?.top ?? 0),
+      at: reactFlowInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) || null
+    });
+  }, []);
+
   const handleInit = useCallback((instance) => {
     reactFlowInstanceRef.current = instance;
+    if (savedView) instance.setViewport({ x: savedView.x, y: savedView.y, zoom: savedView.zoom });
     onInit?.(instance);
-  }, [onInit]);
+  }, [onInit, savedView]);
 
   // Screen size detection - Flow only works on larger screens (tablets and above)
   const [isLargeScreen, setIsLargeScreen] = useState(true);
@@ -1591,6 +1847,45 @@ export const Flow = ({
       />
       
       <div
+        ref={paneAnchorRef}
+        style={{
+          position: 'absolute',
+          left: `${paneMenu?.x ?? 0}px`,
+          top: `${paneMenu?.y ?? 0}px`,
+          width: 0,
+          height: 0,
+          pointerEvents: 'none'
+        }}
+      />
+
+      {/* Canvas menu: right-click on empty canvas */}
+      <Genie visible={Boolean(paneMenu)} triggerRef={paneAnchorRef} onClose={() => setPaneMenu(null)} variant="menu" animation="scale" layout="flex-column" padding="xs">
+        <Container layout="flex-column" gap="xs" padding="none">
+          <ButtonGroup selectable={false} size="xs">
+            <Button size="xs" variant="ghost" title="Add a step here" onClick={() => { addBox('node', paneMenu?.at); setPaneMenu(null); }}>
+              <Icon name="FiPlusSquare" size="xs" />
+            </Button>
+            <Button size="xs" variant="ghost" title="Add a group here" onClick={() => { addBox('group', paneMenu?.at); setPaneMenu(null); }}>
+              <Icon name="FiGrid" size="xs" />
+            </Button>
+            <Button size="xs" variant="ghost" title="Select everything (Ctrl+A)" onClick={() => { runAction('selectAll'); setPaneMenu(null); }}>
+              <Icon name="FiCheckSquare" size="xs" />
+            </Button>
+            <Button size="xs" variant="ghost" title="Fit everything on screen (F)" onClick={() => { runAction('fit'); setPaneMenu(null); }}>
+              <Icon name="FiMaximize" size="xs" />
+            </Button>
+          </ButtonGroup>
+          <ButtonGroup selectable={false} size="xs">
+            {FLOW_PATTERNS.map((choice) => (
+              <Button key={choice} size="xs" variant="ghost" selected={pattern === choice} title={`Background: ${choice}`} onClick={() => { setPattern(choice); keepView(reactFlowInstanceRef.current?.getViewport(), choice); }}>
+                <Icon name={FLOW_PATTERN_ICONS[choice]} size="xs" />
+              </Button>
+            ))}
+          </ButtonGroup>
+        </Container>
+      </Genie>
+
+      <div
         ref={edgeAnchorRef}
         style={{
           position: 'absolute',
@@ -1616,7 +1911,9 @@ export const Flow = ({
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
               { key: 'nodeType', label: 'Kind', type: 'select', options: flowChoices('kind') },
               { key: 'width', label: 'Width', type: 'number', least: 160, most: 4000 },
-              { key: 'height', label: 'Height', type: 'number', least: 100, most: 4000 }
+              { key: 'height', label: 'Height', type: 'number', least: 100, most: 4000 },
+              { key: 'locked', label: 'Locked in place', type: 'switch' },
+              { key: 'collapsed', label: 'Collapsed', type: 'switch' }
             ] : [
               { key: 'label', label: 'Label', type: 'text', wide: true },
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
@@ -1633,7 +1930,10 @@ export const Flow = ({
                 wide: !nodeEditor.parentId,
                 options: [{ value: 'none', label: 'None' }, ...nodes.filter((node) => node.id !== nodeEditor.nodeId && node.type === 'group').map((node) => ({ value: node.id, label: node.data?.label || node.id }))]
               },
-              ...(nodeEditor.parentId ? [{ key: 'extent', label: 'Movement', type: 'select', empty: 'free', options: flowChoices('hold') }] : [])
+              ...(nodeEditor.parentId ? [{ key: 'extent', label: 'Movement', type: 'select', empty: 'free', options: flowChoices('hold') }] : []),
+              { key: 'width', label: 'Width (0 fits the text)', type: 'number', most: 2000 },
+              { key: 'height', label: 'Height (0 fits the text)', type: 'number', most: 2000 },
+              { key: 'locked', label: 'Locked in place', type: 'switch', wide: true }
             ]}
           />
         )}
@@ -1670,23 +1970,28 @@ export const Flow = ({
             onCancel={() => setEdgeEditor(null)}
             fields={[
               { key: 'label', label: 'Label', type: 'text', wide: true },
-              { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
+              { key: 'color', label: 'Colour', type: 'select', options: edgeEditor.member ? [{ value: 'group', label: 'Same as the group' }, ...COLOR_OPTIONS] : COLOR_OPTIONS },
               { key: 'strokeWidth', label: 'Width', type: 'number', least: 1, most: 10 },
               { key: 'type', label: 'Curve shape', type: 'select', options: flowChoices('line') },
               { key: 'markerStart', label: 'Arrow at start', type: 'select', empty: 'none', options: flowChoices('arrow') },
               { key: 'markerEnd', label: 'Arrow at end', type: 'select', empty: 'none', options: flowChoices('arrow') },
               { key: 'dash', label: 'Dashes', type: 'select', options: flowChoices('dash') },
               { key: 'from', label: 'Leaves from', type: 'select', options: flowChoices('side') },
-              { key: 'to', label: edgeEditor.member ? 'Side of the group' : 'Arrives at', type: 'select', options: flowChoices('side') }
+              { key: 'to', label: edgeEditor.member ? 'Side of the group' : 'Arrives at', type: 'select', options: flowChoices('side') },
+              ...(edgeEditor.type === 'default' ? [{ key: 'bend', label: 'Curve bend (0 to 100)', type: 'number', least: 0, most: 100 }] : []),
+              ...(edgeEditor.type === 'smoothstep' ? [{ key: 'corner', label: 'Corner rounding', type: 'number', least: 0, most: 40 }] : []),
+              { key: 'labelSize', label: 'Label size', type: 'select', options: flowChoices('labelSize') },
+              { key: 'labelBg', label: 'Label background', type: 'switch', wide: !['default', 'smoothstep'].includes(edgeEditor.type) }
             ]}
           />
         )}
       </Genie>
 
       <FlowLock.Provider value={readOnly}>
+      <FlowActions.Provider value={canEdit ? actionsValue : null}>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={shownNodes}
+        edges={shownEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
@@ -1705,30 +2010,43 @@ export const Flow = ({
         onEdgeClick={(e, edge) => { setNodeEditor(null); setEdgeEditor(null); onEdgeClick?.(e, edge); }}
         onEdgeContextMenu={onEdgeContextMenuHandler}
         onPaneClick={onPaneClickHandler}
+        onNodeDrag={readOnly ? undefined : onNodeDragHandler}
         onNodeDragStop={readOnly ? undefined : onNodeDragStopHandler}
+        connectionMode={ConnectionMode.Loose}
+        isValidConnection={validConnection}
+        onBeforeDelete={canDelete}
+        selectionOnDrag={boxSelect}
+        panOnDrag={boxSelect ? [1, 2] : true}
+        selectionMode={SelectionMode.Partial}
+        minZoom={0.1}
+        maxZoom={4}
+        onlyRenderVisibleElements={nodes.length > 150}
+        onPaneContextMenu={readOnly ? undefined : onPaneMenu}
+        onEdgeDoubleClick={readOnly ? undefined : onEdgeContextMenuHandler}
+        onMoveEnd={(_event, viewport) => keepView(viewport, pattern)}
         nodesDraggable={draggable && !readOnly && !locked}
         nodesConnectable={connectable && !readOnly}
         elementsSelectable={selectable}
         deleteKeyCode={deletable && !readOnly ? ['Backspace', 'Delete'] : null}
         zoomOnScroll={zoomable}
         panOnScroll={pannable}
-        fitView={fitView}
+        fitView={fitView && !savedView}
         fitViewOptions={fitViewOptions}
   proOptions={proOptions}
   onInit={handleInit}
         {...reactFlowProps}
       >
-        {background && <Background variant={backgroundVariant} gap={backgroundGap} size={backgroundSize} {...backgroundProps} />}
+        {background && <Background variant={pattern} gap={backgroundGap} size={backgroundSize} {...backgroundProps} />}
         {controls && toolbar === false && <Controls showInteractive={!readOnly} {...controlsProps} />}
         {toolbar !== false && (
           <Panel position="top-left" className="flow-toolbar">
             <ButtonGroup vertical selectable={false} size="xs">
-              {FLOW_ACTIONS.filter((action) => action.kind === 'view' || canEdit).map((action) => (
+              {FLOW_ACTIONS.filter((action) => !action.hidden && (action.kind === 'view' || canEdit)).map((action) => (
                 <Button
                   key={action.id}
                   size="xs"
                   variant="ghost"
-                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap) || (action.id === 'tidy' && arrangeOpen)}
+                  selected={(action.id === 'lock' && locked) || (action.id === 'map' && mapShown) || (action.id === 'snap' && snap) || (action.id === 'tidy' && arrangeOpen) || (action.id === 'box' && boxSelect)}
                   disabled={Boolean(action.needs) && !actionReady[action.needs]}
                   title={`${action.label} (${action.keys})`}
                   aria-label={`${action.label} (${action.keys})`}
@@ -1753,12 +2071,24 @@ export const Flow = ({
             {...minimapProps}
           />
         )}
+        {children}
       </ReactFlow>
+      </FlowActions.Provider>
       </FlowLock.Provider>
       </>
       )}
     </div>
   );
-};
+});
+
+FlowCanvas.displayName = 'FlowCanvas';
+
+export const Flow = forwardRef((props, ref) => (
+  <ReactFlowProvider>
+    <FlowCanvas {...props} ref={ref} />
+  </ReactFlowProvider>
+));
+
+Flow.displayName = 'Flow';
 
 export default Flow;

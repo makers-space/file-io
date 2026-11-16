@@ -71,7 +71,8 @@ body {
   --z-modal: 1050;
   --z-popover: 1060;
   --z-tooltip: 1070;
-  --z-select-dropdown: 1000000; /* Select dropdowns above all components */
+  --z-select-dropdown: 2147483000; /* Select dropdowns above everything, including every pop-up however many have opened */
+  --z-tip: 2147483600; /* Button helper text, above dropdowns too */
   --z-fab: 100000; /* Floating Action Buttons */
   --z-genie: 999999; /* Genie overlays (highest priority) */  /* Transitions */
   --transition-fast: 50ms ease;

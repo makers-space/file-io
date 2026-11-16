@@ -648,7 +648,7 @@
 .button-tip {
     position: fixed;
     transform: translate(-50%, 0);
-    z-index: 100000;
+    z-index: var(--z-tip, 2147483600);
     max-width: 90vw;
     padding: 4px 8px;
     font-family: var(--font-family);

@@ -2178,7 +2178,7 @@ const FlowCanvas = forwardRef(({
             ))}
           </ButtonGroup>
           {chosenSteps.length < 2 ? (
-            <Typography size="xs" color="muted">Ctrl+click steps to line them up</Typography>
+            <Typography size="xxs" color="muted" align="center">Ctrl+click steps to line them up</Typography>
           ) : (
             <ButtonGroup selectable={false} size="xs">
               {FLOW_ALIGNMENTS.filter((alignment) => chosenSteps.length >= alignment.least).map((alignment) => (

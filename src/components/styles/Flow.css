@@ -277,6 +277,13 @@
   background: var(--secondary-color);
 }
 
+/* The resize lines along a group's sides still take the pointer but are not drawn, so the group's own border shows */
+.themed-flow .react-flow__resize-control.line,
+.themed-flow .react-flow__resize-control.line:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
 /* Attribution (if not hidden) */
 .themed-flow .react-flow__attribution {
   background: var(--card-background);

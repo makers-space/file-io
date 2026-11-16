@@ -636,7 +636,7 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
     <Typography size="xs" weight="semibold">{title}</Typography>
     <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
       {fields.map((field) => (
-        <Container key={field.key} padding="none" width="100%" minWidth="0" span={field.wide ? 'full' : null}>
+        <Container key={field.key} className={field.type === 'switch' ? 'flow-form-switch' : ''} padding="none" width="100%" minWidth="0" span={field.wide ? 'full' : null}>
           {field.type === 'select' && (
             <Select label={field.label} value={values[field.key] || field.empty || ''} onChange={(value) => onChange(field.key, value === field.empty ? '' : value)} size="xs" width="100%" options={field.options} />
           )}
@@ -777,10 +777,26 @@ const EditableNode = ({ data, id, selected, width }) => {
 // A group shows its label, and resize handles while it is selected
 const GroupNode = ({ data, id, selected }) => {
   const locked = useContext(FlowLock);
+  const reactFlow = useReactFlow();
   return (
     <>
       {!locked && <NodeResizer isVisible={Boolean(selected) && !data.collapsed && !data.locked} minWidth={160} minHeight={100} />}
       <Handle type="target" position={Position.Left} id="border" className="flow-group-anchor" isConnectable={false} />
+      {!locked && (
+        <div className="flow-group-toggle nodrag nopan">
+          <Button
+            size="xs"
+            variant="ghost"
+            title={data.collapsed ? 'Open this group' : 'Collapse this group'}
+            onClick={(event) => {
+              event.stopPropagation();
+              reactFlow.updateNodeData(id, { collapsed: data.collapsed ? undefined : true });
+            }}
+          >
+            <Icon name={data.collapsed ? 'FiChevronRight' : 'FiChevronDown'} size="xs" />
+          </Button>
+        </div>
+      )}
       {data.label}
     </>
   );
@@ -1205,8 +1221,8 @@ const FlowCanvas = forwardRef(({
       fontWeight: node.data?.fontWeight ?? 'semibold',
       textAlign: node.data?.textAlign ?? 'center',
       nodeType: node.type ?? 'editable',
-      width: node.type === 'group' ? Math.round(node.measured?.width ?? node.width ?? node.style?.width ?? 300) : Math.round(node.width || 0),
-      height: node.type === 'group' ? Math.round(node.measured?.height ?? node.height ?? node.style?.height ?? 200) : Math.round(node.height || 0),
+      width: node.type === 'group' ? Math.round(node.width ?? node.style?.width ?? node.measured?.width ?? 300) : Math.round(node.width || 0),
+      height: node.type === 'group' ? Math.round(node.height ?? node.style?.height ?? node.measured?.height ?? 200) : Math.round(node.height || 0),
       locked: Boolean(node.data?.locked),
       collapsed: Boolean(node.data?.collapsed),
       parentId: node.parentId ?? '',

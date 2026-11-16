@@ -440,3 +440,69 @@
 .switch-container.justify-self-stretch {
     justify-self: stretch;
 }
+
+/* A switch row is as tall as an input of the same size, and its label uses the input's text size, at every
+   screen width. These values mirror the .input-<size> rules in Input.css; change them together. */
+
+.switch-row-xs { min-height: 1.25rem; }
+.switch-row-xs .switch-label { font-size: 0.625rem; }
+.switch-row-sm { min-height: 1.5rem; }
+.switch-row-sm .switch-label { font-size: 0.6875rem; }
+.switch-row-md { min-height: 1.875rem; }
+.switch-row-md .switch-label { font-size: 0.75rem; }
+.switch-row-lg { min-height: 2rem; }
+.switch-row-lg .switch-label { font-size: 0.8125rem; }
+.switch-row-xl { min-height: 2.25rem; }
+.switch-row-xl .switch-label { font-size: 0.875rem; }
+
+@media (min-width: 480px) {
+    .switch-row-xs { min-height: 1.5rem; }
+    .switch-row-xs .switch-label { font-size: 0.6875rem; }
+    .switch-row-sm { min-height: 1.75rem; }
+    .switch-row-sm .switch-label { font-size: 0.75rem; }
+    .switch-row-md { min-height: 2rem; }
+    .switch-row-md .switch-label { font-size: 0.8125rem; }
+    .switch-row-lg { min-height: 2.25rem; }
+    .switch-row-lg .switch-label { font-size: 0.875rem; }
+    .switch-row-xl { min-height: 2.5rem; }
+    .switch-row-xl .switch-label { font-size: 0.9375rem; }
+}
+
+@media (min-width: 768px) {
+    .switch-row-xs { min-height: 1.75rem; }
+    .switch-row-xs .switch-label { font-size: 0.75rem; }
+    .switch-row-sm { min-height: 2rem; }
+    .switch-row-sm .switch-label { font-size: 0.8125rem; }
+    .switch-row-md { min-height: 2.25rem; }
+    .switch-row-md .switch-label { font-size: 0.875rem; }
+    .switch-row-lg { min-height: 2.5rem; }
+    .switch-row-lg .switch-label { font-size: 0.9375rem; }
+    .switch-row-xl { min-height: 2.875rem; }
+    .switch-row-xl .switch-label { font-size: 1rem; }
+}
+
+@media (min-width: 1025px) {
+    .switch-row-xs { min-height: 2rem; }
+    .switch-row-xs .switch-label { font-size: 0.8125rem; }
+    .switch-row-sm { min-height: 2.25rem; }
+    .switch-row-sm .switch-label { font-size: 0.875rem; }
+    .switch-row-md { min-height: 2.5rem; }
+    .switch-row-md .switch-label { font-size: 0.9375rem; }
+    .switch-row-lg { min-height: 2.75rem; }
+    .switch-row-lg .switch-label { font-size: 1rem; }
+    .switch-row-xl { min-height: 3.125rem; }
+    .switch-row-xl .switch-label { font-size: 1.0625rem; }
+}
+
+@media (min-width: 1440px) {
+    .switch-row-xs { min-height: 2.125rem; }
+    .switch-row-xs .switch-label { font-size: 0.875rem; }
+    .switch-row-sm { min-height: 2.375rem; }
+    .switch-row-sm .switch-label { font-size: 0.9375rem; }
+    .switch-row-md { min-height: 2.75rem; }
+    .switch-row-md .switch-label { font-size: 1rem; }
+    .switch-row-lg { min-height: 3rem; }
+    .switch-row-lg .switch-label { font-size: 1.0625rem; }
+    .switch-row-xl { min-height: 3.5rem; }
+    .switch-row-xl .switch-label { font-size: 1.125rem; }
+}

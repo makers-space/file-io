@@ -142,9 +142,26 @@
   border-style: solid;
 }
 
-/* Switches in the edit forms sit on one line with a small label */
-.flow-form .switch-label {
-  font-size: var(--font-size-xs);
+/* A switch in an edit form lines up with the field boxes beside it, not with their labels */
+.flow-form .flow-form-switch {
+  align-self: end;
+}
+
+/* The button on a group that collapses it or opens it again */
+.themed-flow .flow-group-toggle {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+}
+
+.themed-flow .flow-group-toggle .button.themed-button {
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.themed-flow .flow-group-toggle .button.themed-button .themed-icon {
+  margin: 0;
 }
 
 /* A step that has been given a size fills it */

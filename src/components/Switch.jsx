@@ -92,7 +92,7 @@ export const Switch = ({
 
     return (
         <div 
-            className={`switch-wrapper flex items-center gap-sm ${getJustifySelfClass()} ${className}`}
+            className={`switch-wrapper switch-row-${['xs', 'sm', 'lg', 'xl'].includes(size) ? size : 'md'} flex items-center gap-sm ${getJustifySelfClass()} ${className}`}
             style={getSwitchStyle()}
         >
             <div 

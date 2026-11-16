@@ -513,7 +513,7 @@ const layoutLinked = (items, wires, kind) => {
 };
 
 // Boxes that connectors join, directly or through others, are arranged as a set. Each set is then treated as one
-// box, and the sets, along with any boxes that connect to nothing, are arranged around each other the same way.
+// box, and the smaller sets, along with any boxes that connect to nothing, are spread round the largest.
 const layoutItems = (items, wires, kind) => {
   const lead = new Map(items.map((item) => [item.id, item.id]));
   const find = (id) => {
@@ -538,28 +538,25 @@ const layoutItems = (items, wires, kind) => {
       tall: Math.max(...members.map((member) => inner.get(member.id).y + member.tall)) + room * 2
     };
   }).sort((one, other) => other.wide * other.tall - one.wide * one.tall);
-  let outer = new Map();
-  if (kind === 'lr' || kind === 'tb') {
-    const sideways = kind === 'lr';
-    const length = (part) => (sideways ? part.wide : part.tall);
-    const depth = (part) => (sideways ? part.tall : part.wide);
-    const end = Math.max(600, ...parts.map(length));
-    let along = 0;
-    let off = 0;
-    let deepest = 0;
-    for (const part of parts) {
-      if (along > 0 && along + length(part) > end) {
-        along = 0;
-        off += deepest + 40;
-        deepest = 0;
-      }
-      outer.set(part.id, sideways ? { x: along, y: off } : { x: off, y: along });
-      along += length(part) + 24;
-      deepest = Math.max(deepest, depth(part));
-    }
-  } else {
-    outer = layoutLinked(parts, [], kind);
-  }
+  // The largest set sits in the middle; the rest are spaced evenly along a box drawn round it, on every side.
+  const [core, ...rest] = parts;
+  const wide = Math.max(...rest.map((part) => part.wide));
+  const tall = Math.max(...rest.map((part) => part.tall));
+  const grow = Math.max(0, rest.length * Math.max(wide, tall) * 1.5 - 2 * (core.wide + wide + core.tall + tall)) / 4;
+  const across = core.wide + wide + grow;
+  const down = core.tall + tall + grow;
+  const outer = new Map([[core.id, { x: 0, y: 0 }]]);
+  rest.forEach((part, index) => {
+    const at = ((index + 0.5) / rest.length) * 2 * (across + down);
+    const spot = at < across ? { x: at, y: 0 }
+      : at < across + down ? { x: across, y: at - across }
+        : at < across * 2 + down ? { x: across * 2 + down - at, y: down }
+          : { x: 0, y: (across + down) * 2 - at };
+    outer.set(part.id, {
+      x: spot.x - (across - core.wide) / 2 - part.wide / 2,
+      y: spot.y - (down - core.tall) / 2 - part.tall / 2
+    });
+  });
   const place = new Map();
   for (const part of parts) {
     for (const member of part.members) {

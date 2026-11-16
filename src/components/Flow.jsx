@@ -688,6 +688,7 @@ const FLOW_ACTIONS = [
 ];
 const FLOW_HISTORY = 100;
 const FLOW_PATTERNS = ['dots', 'lines', 'cross'];
+const FLOW_MEMBER_STEP = 56;
 const FLOW_PATTERN_ICONS = { dots: 'FiMoreHorizontal', lines: 'FiHash', cross: 'FiPlus' };
 const FLOW_LABEL_PX = { sm: null, md: 14, lg: 18 };
 const FLOW_LAYOUTS = [
@@ -1376,7 +1377,13 @@ const FlowCanvas = forwardRef(({
       const middle = { x: step.position.x + own.wide / 2, y: step.position.y + own.tall / 2 };
       const gaps = { left: middle.x, right: room.wide - middle.x, top: middle.y, bottom: room.tall - middle.y };
       const side = Object.keys(gaps).sort((a, b) => gaps[a] - gaps[b])[0];
-      const along = side === 'left' || side === 'right' ? middle.y / room.tall : middle.x / room.wide;
+      // The line meets the border a fixed distance to one side of the step, towards the middle of that side,
+      // so it always has a clear step in it and never runs straight.
+      const upright = side === 'left' || side === 'right';
+      const span = upright ? room.tall : room.wide;
+      const level = upright ? middle.y : middle.x;
+      const meet = Math.min(Math.max(level + (level < span / 2 ? FLOW_MEMBER_STEP : -FLOW_MEMBER_STEP), 16), Math.max(16, span - 16));
+      const along = meet / span;
       drawn.push(sanitizeEdge({
         id: `member-${step.id}`,
         source: step.id,
@@ -1390,7 +1397,7 @@ const FlowCanvas = forwardRef(({
         reconnectable: false,
         className: 'flow-member-edge',
         ariaLabel: `${names.get(step.id)} is in ${names.get(group.id)}`,
-        data: { color: tint.get(group.id), side, along: Math.min(Math.max(along, 0.02), 0.98), line: 'smoothstep' },
+        data: { color: tint.get(group.id), side, along, line: 'smoothstep', corner: 14 },
         style: { strokeWidth: 2 },
         markerEnd: { type: 'arrowclosed' }
       }));

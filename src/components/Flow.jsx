@@ -41,7 +41,6 @@ import {
   Handle,
   Position,
   NodeResizer,
-  NodeToolbar,
   EdgeToolbar,
   ReactFlowProvider,
   ConnectionMode,
@@ -485,7 +484,7 @@ export const parseFlow = (text) => {
     };
   });
 
-  const edges = wires.map(({ props }, index) => {
+  const edges = wires.filter(({ props }) => stepIds.has(props.target)).map(({ props }, index) => {
     const arrow = String(props.arrow ?? '').toLowerCase();
     const start = String(props.start ?? '').toLowerCase();
     const toGroup = groupIds.has(props.target);
@@ -555,7 +554,7 @@ export const writeFlow = (nodes = [], edges = [], { positions = true } = {}) => 
     ]));
   }
   for (const edge of edges) {
-    if (!stepIds.has(edge.source) || !(stepIds.has(edge.target) || groupIds.has(edge.target))) continue;
+    if (!stepIds.has(edge.source) || !stepIds.has(edge.target)) continue;
     const color = resolveColorToken(edge.data?.color, DEFAULT_EDGE_COLOR_TOKEN);
     const from = sideOf(edge.sourceHandle);
     const member = edge.type === 'member';
@@ -596,7 +595,8 @@ const QUICK_ACTIONS = {
   duplicate: ['FiCopy', 'Duplicate (Ctrl+D)'],
   delete: ['FiTrash2', 'Delete (Delete)'],
   collapse: ['FiMinimize2', 'Collapse or open this group'],
-  lock: ['FiLock', 'Lock or unlock where this sits']
+  lock: ['FiLock', 'Lock or unlock where this sits'],
+  leave: ['FiLogOut', 'Take out of its group']
 };
 
 // The small bar beside whatever is selected.
@@ -669,10 +669,9 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
 const FLOW_ACTIONS = [
   { id: 'step', kind: 'edit', icon: 'FiPlusSquare', label: 'Add a step', keys: 'N' },
   { id: 'group', kind: 'edit', icon: 'FiGrid', label: 'Add a group', keys: 'G' },
-  // These three sit on the small bar beside what is selected, so they are shortcuts only here.
-  { id: 'edit', kind: 'edit', icon: 'FiEdit2', label: 'Edit what is selected', keys: 'E', needs: 'one', hidden: true },
-  { id: 'duplicate', kind: 'edit', icon: 'FiCopy', label: 'Duplicate', keys: 'Ctrl+D', needs: 'steps', hidden: true },
-  { id: 'delete', kind: 'edit', icon: 'FiTrash2', label: 'Delete', keys: 'Delete', needs: 'any', hidden: true },
+  { id: 'edit', kind: 'edit', icon: 'FiEdit2', label: 'Edit what is selected', keys: 'E', needs: 'one' },
+  { id: 'duplicate', kind: 'edit', icon: 'FiCopy', label: 'Duplicate', keys: 'Ctrl+D', needs: 'steps' },
+  { id: 'delete', kind: 'edit', icon: 'FiTrash2', label: 'Delete', keys: 'Delete', needs: 'any' },
   { id: 'box', kind: 'view', icon: 'FiMousePointer', label: 'Select by dragging a box', keys: 'B' },
   { id: 'selectAll', kind: 'edit', icon: 'FiCheckSquare', label: 'Select everything', keys: 'Ctrl+A' },
   { id: 'undo', kind: 'edit', icon: 'FiCornerUpLeft', label: 'Undo', keys: 'Ctrl+Z', needs: 'undo' },
@@ -681,8 +680,8 @@ const FLOW_ACTIONS = [
   { id: 'zoomIn', kind: 'view', icon: 'FiZoomIn', label: 'Zoom in', keys: '+' },
   { id: 'zoomOut', kind: 'view', icon: 'FiZoomOut', label: 'Zoom out', keys: '-' },
   { id: 'fit', kind: 'view', icon: 'FiMaximize', label: 'Fit everything on screen', keys: 'F' },
-  { id: 'actual', kind: 'view', icon: 'FiSearch', label: 'Zoom to full size', keys: '0' },
-  { id: 'focus', kind: 'view', icon: 'FiTarget', label: 'Zoom to what is selected', keys: 'Z', needs: 'any' },
+  { id: 'actual', kind: 'view', icon: 'FiSearch', label: 'Zoom to full size', keys: '0', hidden: true },
+  { id: 'focus', kind: 'view', icon: 'FiTarget', label: 'Zoom to what is selected', keys: 'Z', needs: 'any', hidden: true },
   { id: 'snap', kind: 'edit', icon: 'FiCrosshair', label: 'Snap to the dots', keys: 'S' },
   { id: 'lock', kind: 'edit', icon: 'FiLock', label: 'Lock moving', keys: 'K' },
   { id: 'map', kind: 'view', icon: 'FiMap', label: 'Show or hide the map', keys: 'M' }
@@ -707,7 +706,6 @@ const FLOW_ALIGNMENTS = [
 // Custom Node for inline editing with bidirectional handles on all four sides
 // Each position has BOTH source and target handles to allow any-to-any connections
 const EditableNode = ({ data, id, selected, width }) => {
-  const actions = useContext(FlowActions);
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data.label);
   const reactFlow = useReactFlow();
@@ -745,11 +743,6 @@ const EditableNode = ({ data, id, selected, width }) => {
   return (
     <div className={`flow-node ${width ? 'flow-node-sized' : ''}`} onDoubleClick={handleDoubleClick}>
       {!locked && <NodeResizer isVisible={Boolean(selected) && !data.locked} minWidth={80} minHeight={40} />}
-      {!locked && actions && (
-        <NodeToolbar isVisible={Boolean(selected) && actions.single} position={Position.Top} offset={8}>
-          <QuickBar id={id} items={['edit', 'duplicate', 'lock', 'delete']} />
-        </NodeToolbar>
-      )}
       {FLOW_SIDES.map((side) => <Handle key={side} type="source" position={side} id={side} />)}
 
       <div
@@ -782,15 +775,9 @@ const EditableNode = ({ data, id, selected, width }) => {
 // A group shows its label, and resize handles while it is selected
 const GroupNode = ({ data, id, selected }) => {
   const locked = useContext(FlowLock);
-  const actions = useContext(FlowActions);
   return (
     <>
       {!locked && <NodeResizer isVisible={Boolean(selected) && !data.collapsed && !data.locked} minWidth={160} minHeight={100} />}
-      {!locked && actions && (
-        <NodeToolbar isVisible={Boolean(selected) && actions.single} position={Position.Top} offset={8}>
-          <QuickBar id={id} items={['edit', 'collapse', 'lock', 'delete']} />
-        </NodeToolbar>
-      )}
       <Handle type="target" position={Position.Left} id="border" className="flow-group-anchor" isConnectable={false} />
       {data.label}
     </>
@@ -1186,24 +1173,11 @@ const FlowCanvas = forwardRef(({
 
   // Attaches a step to a point on a group's border: the step joins the group and the connector is kept.
   // A step belongs to one group at a time, so a connector it had to any group is replaced.
-  const connectToGroup = useCallback(({ source, sourceHandle, target, side, along }) => {
+  const connectToGroup = useCallback(({ source, target, side }) => {
     const groups = groupIdsNow();
     if (!groups.has(target) || groups.has(source)) return;
-    const edge = sanitizeEdge({
-      id: `member-${source}-${target}`,
-      source,
-      target,
-      sourceHandle: sourceHandle || `${side}`,
-      targetHandle: 'border',
-      type: 'member',
-      zIndex: 10,
-      data: { follow: true, side, along: Math.min(Math.max(along, 0), 1), line: 'step' },
-      style: { strokeWidth: 2 },
-      markerEnd: { type: 'arrowclosed' }
-    });
-    setEdges((current) => [...current.filter((each) => !(each.source === source && groups.has(each.target))), edge]);
     joinGroup(source, target, side);
-  }, [setEdges, joinGroup]);
+  }, [joinGroup]);
 
   const getNodeVisualState = useCallback((node) => ({
     color: inferNodeColorToken(node),
@@ -1274,12 +1248,18 @@ const FlowCanvas = forwardRef(({
     const nodeType = nodeEditor.nodeType || 'editable';
     const parentId = nodeEditor.parentId || undefined;
     const extent = nodeEditor.extent || undefined;
+    // Moving to another group, or to none, goes through the same joining and leaving as everywhere else.
+    const was = nodes.find((node) => node.id === nodeEditor.nodeId)?.parentId || undefined;
+    if (was !== parentId) {
+      if (was) leaveGroup(nodeEditor.nodeId, was);
+      if (parentId) joinGroup(nodeEditor.nodeId, parentId);
+    }
 
     setNodes((nds) =>
       nds.map((n) => {
         if (n.id !== nodeEditor.nodeId) return n;
         const sanitizedStyle = stripNodeColorStyle(n.style);
-        const { style: _omit, parentId: _parent, extent: _extent, expandParent: _expand, width: _wide, height: _tall, ...rest } = n;
+        const { style: _omit, width: _wide, height: _tall, ...rest } = n;
         const stepSize = (value, least) => (value > 0 ? Math.min(Math.max(value, least), 2000) : null);
         
         // Set default style for group nodes
@@ -1313,14 +1293,14 @@ const FlowCanvas = forwardRef(({
           ...(isGroup ? { width: groupStyle.width, height: groupStyle.height } : {}),
           ...(!isGroup && stepSize(nodeEditor.width, 80) ? { width: stepSize(nodeEditor.width, 80) } : {}),
           ...(!isGroup && stepSize(nodeEditor.height, 40) ? { height: stepSize(nodeEditor.height, 40) } : {}),
-          ...(parentId ? { parentId } : {}),
-          ...(extent ? { extent } : {}),
-          ...(parentId ? { expandParent: true } : {})
+          ...(n.parentId && parentId === n.parentId && !extent ? { extent: undefined } : {}),
+          ...(n.parentId && parentId === n.parentId && extent ? { extent } : {})
+
         };
       })
     );
     setNodeEditor(null);
-  }, [nodeEditor, setNodes]);
+  }, [nodeEditor, setNodes, nodes, joinGroup, leaveGroup]);
   
   const saveEdge = useCallback(() => {
     if (!edgeEditor) return;
@@ -1377,13 +1357,43 @@ const FlowCanvas = forwardRef(({
     const names = new Map(shownNodes.map((node) => [node.id, node.data?.label || node.id]));
     const gone = new Set(shownNodes.filter((node) => node.hidden).map((node) => node.id));
     const tint = new Map(shownNodes.filter((node) => node.type === 'group').map((node) => [node.id, resolveColorToken(node.data?.color, 'neutral')]));
-    return edges.map((edge) => ({
-      ...(edge.type === 'member' && edge.data?.follow && tint.has(edge.target)
-        ? sanitizeEdge({ ...edge, data: { ...edge.data, color: tint.get(edge.target) } })
-        : edge),
+    const drawn = edges.map((edge) => ({
+      ...edge,
       ariaLabel: `Connector from ${names.get(edge.source)} to ${names.get(edge.target)}`,
       hidden: gone.has(edge.source) || gone.has(edge.target)
     }));
+    // Every step in a group gets a line to the nearest point of the group's border. These lines are the
+    // component's own: one fixed style in the group's colour, not selectable, not editable, not in the file.
+    const boxes = new Map(shownNodes.map((node) => [node.id, node]));
+    for (const step of shownNodes) {
+      const group = step.parentId ? boxes.get(step.parentId) : null;
+      if (!group || step.hidden || group.data?.collapsed) continue;
+      const own = sizeOf(step, 120, 48);
+      const room = sizeOf(group, 300, 200);
+      const middle = { x: step.position.x + own.wide / 2, y: step.position.y + own.tall / 2 };
+      const gaps = { left: middle.x, right: room.wide - middle.x, top: middle.y, bottom: room.tall - middle.y };
+      const side = Object.keys(gaps).sort((a, b) => gaps[a] - gaps[b])[0];
+      const along = side === 'left' || side === 'right' ? middle.y / room.tall : middle.x / room.wide;
+      drawn.push(sanitizeEdge({
+        id: `member-${step.id}`,
+        source: step.id,
+        target: group.id,
+        sourceHandle: side,
+        targetHandle: 'border',
+        type: 'member',
+        zIndex: 10,
+        selectable: false,
+        focusable: false,
+        deletable: false,
+        reconnectable: false,
+        className: 'flow-member-edge',
+        ariaLabel: `${names.get(step.id)} is in ${names.get(group.id)}`,
+        data: { color: tint.get(group.id), side, along: Math.min(Math.max(along, 0.02), 0.98), line: 'smoothstep' },
+        style: { strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed' }
+      }));
+    }
+    return drawn;
   }, [edges, shownNodes]);
 
   // A connector cannot join a box to itself, repeat one that is already there, or break a rule the page gives.
@@ -1594,6 +1604,7 @@ const FlowCanvas = forwardRef(({
     if (action === 'delete') instance.deleteElements({ nodes: node ? [node] : [], edges: edge ? [edge] : [] });
     if (action === 'duplicate' || action === 'edit') runActionRef.current(action);
     if (action === 'lock' && node) instance.updateNodeData(id, { locked: !node.data?.locked });
+    if (action === 'leave' && node?.parentId) leaveGroup(id, node.parentId);
     if (action === 'collapse' && node) instance.updateNodeData(id, { collapsed: !node.data?.collapsed });
   };
   const quickRef = useRef(quick);
@@ -1681,13 +1692,6 @@ const FlowCanvas = forwardRef(({
     if (!group) return;
     connectToGroup({ source: state.fromNode.id, sourceHandle: state.fromHandle.id, target: group.id, ...onBorder(group, at) });
   }, [readOnly, connectToGroup]);
-
-  const onEdgesDeleteHandler = useCallback((deleted = []) => {
-    const groups = groupIdsNow();
-    for (const edge of deleted) {
-      if (groups.has(edge.target)) leaveGroup(edge.source, edge.target);
-    }
-  }, [leaveGroup]);
 
   // Dropping a step wholly inside a group puts it in that group. A member cannot be dragged out; deleting its
   // connector takes it out. While a step is dragged, the group it would join is lit.
@@ -1874,6 +1878,12 @@ const FlowCanvas = forwardRef(({
             <Button size="xs" variant="ghost" title="Fit everything on screen (F)" onClick={() => { runAction('fit'); setPaneMenu(null); }}>
               <Icon name="FiMaximize" size="xs" />
             </Button>
+            <Button size="xs" variant="ghost" title="Zoom to full size (0)" onClick={() => { runAction('actual'); setPaneMenu(null); }}>
+              <Icon name="FiSearch" size="xs" />
+            </Button>
+            <Button size="xs" variant="ghost" title="Zoom to what is selected (Z)" disabled={!actionReady.any} onClick={() => { runAction('focus'); setPaneMenu(null); }}>
+              <Icon name="FiTarget" size="xs" />
+            </Button>
           </ButtonGroup>
           <ButtonGroup selectable={false} size="xs">
             {FLOW_PATTERNS.map((choice) => (
@@ -1999,7 +2009,6 @@ const FlowCanvas = forwardRef(({
         onConnect={connectable && !readOnly ? onConnect : undefined}
         onConnectStart={() => setConnecting(true)}
         onConnectEnd={onConnectEndHandler}
-        onEdgesDelete={readOnly ? undefined : onEdgesDeleteHandler}
         edgesReconnectable={connectable && !readOnly}
         onReconnect={(oldEdge, connection) => { if (oldEdge.type !== 'member') setEdges((current) => reconnectEdge(oldEdge, connection, current).map(sanitizeEdge)); }}
         snapToGrid={snap}

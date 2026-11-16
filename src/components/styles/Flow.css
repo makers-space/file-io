@@ -314,7 +314,7 @@
 /* Make cross pattern more visible */
 .themed-flow .react-flow__background-pattern.cross {
   stroke-width: 1.5;
-  opacity: 0.5;
+  opacity: 0.9;
 }
 
 /* Controls styling - blend with theme */

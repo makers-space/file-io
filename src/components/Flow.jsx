@@ -2270,7 +2270,7 @@ const FlowCanvas = forwardRef(({
   onInit={handleInit}
         {...reactFlowProps}
       >
-        {background && <Background variant={pattern} gap={backgroundGap} size={backgroundSize} {...backgroundProps} />}
+        {background && <Background variant={pattern} gap={backgroundGap} size={pattern === 'cross' ? 8 : backgroundSize} {...backgroundProps} />}
         {controls && toolbar === false && <Controls showInteractive={!readOnly} {...controlsProps} />}
         {toolbar !== false && (
           <Panel position="top-left" className="flow-toolbar">

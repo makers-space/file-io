@@ -632,7 +632,7 @@ const FLOW_OPTIONS = {
 const flowChoices = (name) => FLOW_OPTIONS[name].map(([value, label]) => ({ value, label }));
 
 const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
-  <Container layout="flex-column" gap="xs" padding="none" width="100%">
+  <Container className="flow-form" layout="flex-column" gap="xs" padding="none" width="100%">
     <Typography size="xs" weight="semibold">{title}</Typography>
     <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
       {fields.map((field) => (
@@ -641,7 +641,7 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
             <Select label={field.label} value={values[field.key] || field.empty || ''} onChange={(value) => onChange(field.key, value === field.empty ? '' : value)} size="xs" width="100%" options={field.options} />
           )}
           {field.type === 'switch' && (
-            <Switch label={field.label} size="sm" checked={Boolean(values[field.key])} onChange={(event) => onChange(field.key, event.target.checked)} />
+            <Switch label={field.label} size="xs" checked={Boolean(values[field.key])} onChange={(event) => onChange(field.key, event.target.checked)} />
           )}
           {(field.type === 'text' || field.type === 'number') && (
             <Input
@@ -689,6 +689,7 @@ const FLOW_ACTIONS = [
 const FLOW_HISTORY = 100;
 const FLOW_PATTERNS = ['dots', 'lines', 'cross'];
 const FLOW_MEMBER_STEP = 56;
+const FLOW_MARKS = ['flow-drop-target', 'flow-locked', 'flow-collapsed'];
 const FLOW_PATTERN_ICONS = { dots: 'FiMoreHorizontal', lines: 'FiHash', cross: 'FiPlus' };
 const FLOW_LABEL_PX = { sm: null, md: 14, lg: 18 };
 const FLOW_LAYOUTS = [
@@ -1345,14 +1346,16 @@ const FlowCanvas = forwardRef(({
     return nodes.map((node) => {
       const isShut = shut.has(node.id);
       const fixed = Boolean(node.data?.locked);
-      const classes = [node.className, node.id === dropTarget && 'flow-drop-target', fixed && 'flow-locked', isShut && 'flow-collapsed'].filter(Boolean).join(' ');
+      // The library hands these drawn copies back when it updates a box, so each marker is worked out afresh
+      // every time and never left over from the last drawing.
+      const kept = (node.className || '').split(' ').filter((name) => name && !FLOW_MARKS.includes(name));
+      const classes = [...kept, node.id === dropTarget && 'flow-drop-target', fixed && 'flow-locked', isShut && 'flow-collapsed'].filter(Boolean).join(' ');
       return {
         ...node,
         ariaLabel: `${node.type === 'group' ? 'Group' : 'Step'}: ${node.data?.label || node.id}`,
         hidden: shut.has(node.parentId),
-        ...(classes ? { className: classes } : {}),
-        ...(fixed ? { draggable: false } : {}),
-        ...(isShut ? { height: 44, style: { ...node.style, height: 44 } } : {})
+        className: classes || undefined,
+        draggable: fixed ? false : undefined
       };
     });
   }, [nodes, dropTarget]);
@@ -1963,7 +1966,7 @@ const FlowCanvas = forwardRef(({
               { key: 'nodeType', label: 'Kind', type: 'select', options: flowChoices('kind') },
               { key: 'width', label: 'Width', type: 'number', least: 160, most: 4000 },
               { key: 'height', label: 'Height', type: 'number', least: 100, most: 4000 },
-              { key: 'locked', label: 'Locked in place', type: 'switch' },
+              { key: 'locked', label: 'Locked', type: 'switch' },
               { key: 'collapsed', label: 'Collapsed', type: 'switch' }
             ] : [
               { key: 'label', label: 'Label', type: 'text', wide: true },
@@ -1984,7 +1987,7 @@ const FlowCanvas = forwardRef(({
               ...(nodeEditor.parentId ? [{ key: 'extent', label: 'Movement', type: 'select', empty: 'free', options: flowChoices('hold') }] : []),
               { key: 'width', label: 'Width (0 fits the text)', type: 'number', most: 2000 },
               { key: 'height', label: 'Height (0 fits the text)', type: 'number', most: 2000 },
-              { key: 'locked', label: 'Locked in place', type: 'switch', wide: true }
+              { key: 'locked', label: 'Locked', type: 'switch' }
             ]}
           />
         )}

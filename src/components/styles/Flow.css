@@ -134,9 +134,17 @@
   cursor: default;
 }
 
+/* Collapsing only changes how the group looks; its real size is kept, so opening it puts everything back */
 .themed-flow .react-flow__node-group.flow-collapsed {
+  height: 44px !important;
+  min-height: 0 !important;
   overflow: hidden;
   border-style: solid;
+}
+
+/* Switches in the edit forms sit on one line with a small label */
+.flow-form .switch-label {
+  font-size: var(--font-size-xs);
 }
 
 /* A step that has been given a size fills it */

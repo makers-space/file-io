@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
+import { useDesktopDownloads } from '@/client/app.client';
 import { Page, Container, Card, Button, Typography, Icon, Badge } from '@components/Components';
 
 // ─── Content data ─────────────────────────────────────────────────────────────
@@ -262,6 +263,7 @@ const HomePage = () => {
     const { user } = useAuth();
     const pageRef = useRef(null);
     const [navHidden, setNavHidden] = useState(false);
+    const desktop = useDesktopDownloads().find((download) => download.mine);
 
     useEffect(() => {
         const scroller = pageRef.current;
@@ -373,6 +375,12 @@ const HomePage = () => {
                             {!user && (
                                 <Button color="secondary" size="lg" onClick={() => navigate('/login')}>
                                     Sign in
+                                </Button>
+                            )}
+                            {desktop && (
+                                <Button color="secondary" size="lg" title={`Download the Filesystem One desktop app for ${desktop.label}`} onClick={desktop.open}>
+                                    <Icon name={desktop.icon} size="sm" />
+                                    Download for {desktop.label}
                                 </Button>
                             )}
                         </Container>

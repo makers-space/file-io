@@ -8,6 +8,7 @@ import { userService } from '@/client/user.client';
 import { themeService } from '@/client/theme.client';
 import { listFontKeys, ensureFontsLoaded } from '@/styles/font.registry';
 import { integrationService } from '@/client/integration.client';
+import { useDesktopDownloads } from '@/client/app.client';
 import {
     Page,
     Container,
@@ -28,6 +29,7 @@ import {
 // ─── Account Tab (Profile + Password) ────────────────────────────────────────
 
 const AccountTab = ({ user }) => {
+    const desktopDownloads = useDesktopDownloads();
     const { success: showSuccess, error: showError } = useNotification();
 
     const [profileForm, setProfileForm] = useState({
@@ -128,6 +130,21 @@ const AccountTab = ({ user }) => {
                     </Button>
                 </Container>
             </Container>
+
+            {desktopDownloads.length > 0 && (
+                <>
+                    <Divider color="surface" margin="xs" />
+                    <Section title="Desktop app" note="Filesystem One in its own window, running in the tray.">
+                        <ButtonGroup size="xs" spaced selectable={false} justify="start">
+                            {desktopDownloads.map((download) => (
+                                <Button key={download.id} size="xs" color="secondary" title={`Download the Filesystem One desktop app for ${download.label}`} onClick={download.open}>
+                                    <Icon name={download.icon} size="xs" /> {download.label}
+                                </Button>
+                            ))}
+                        </ButtonGroup>
+                    </Section>
+                </>
+            )}
         </Container>
     );
 };

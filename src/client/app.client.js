@@ -2,6 +2,7 @@
  * Direct HTTP calls to server app management endpoints
  */
 
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 
 // Use environment variable with fallback
@@ -292,6 +293,45 @@ export const appService = {
     async getDetailedHealth() {
         return await api.get('/health');
     }
+};
+
+// The desktop app's installers are published as releases of a public repository.
+const INSTALLERS = 'mkrspc-one/file-installers';
+const DESKTOP_SYSTEMS = [
+    { id: 'windows', label: 'Windows', icon: 'FaWindows', ending: '-Setup.exe', agent: /Windows/i },
+    { id: 'mac', label: 'macOS', icon: 'FaApple', ending: '.dmg', agent: /Macintosh/i },
+    { id: 'linux', label: 'Linux', icon: 'FaLinux', ending: '.AppImage', agent: /Linux/i }
+];
+
+// The installers a browser can be offered, each marked when it is the one for this kind of computer. Empty inside
+// the desktop app and until a release exists. The staging site offers the staging app, every other address the released one.
+export const useDesktopDownloads = () => {
+    const [downloads, setDownloads] = useState([]);
+
+    useEffect(() => {
+        if (window.desktop) return undefined;
+        let live = true;
+        const name = window.location.hostname.startsWith('staging.') ? 'FilesystemOne-Staging' : 'FilesystemOne';
+        const agent = navigator.userAgent;
+        const handheld = /Android|iPhone|iPad/i.test(agent) || (/Macintosh/i.test(agent) && navigator.maxTouchPoints > 1);
+        fetch(`https://api.github.com/repos/${INSTALLERS}/releases/latest`)
+            .then((reply) => (reply.ok ? reply.json() : {}))
+            .then((release) => {
+                const files = (release.assets || []).map((asset) => asset.name);
+                if (!live) return;
+                setDownloads(DESKTOP_SYSTEMS.filter((system) => files.includes(`${name}${system.ending}`)).map(({ id, label, icon, ending, agent: pattern }) => ({
+                    id,
+                    label,
+                    icon,
+                    mine: !handheld && pattern.test(agent),
+                    open: () => window.open(`https://github.com/${INSTALLERS}/releases/latest/download/${name}${ending}`, '_blank', 'noopener')
+                })));
+            })
+            .catch(() => undefined);
+        return () => { live = false; };
+    }, []);
+
+    return downloads;
 };
 
 export default appService;

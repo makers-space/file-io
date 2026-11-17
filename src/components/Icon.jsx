@@ -7,6 +7,10 @@ import * as HiIcons from 'react-icons/hi'; // Heroicons
 import * as FaIcons from 'react-icons/fa'; // Font Awesome icons
 import * as GrIcons from 'react-icons/gr';
 import * as TbIcons from 'react-icons/tb';
+// App logos, named one by one so only these are bundled.
+import { SiNotion, SiAtlassian, SiAirtable, SiCoda, SiLinear, SiClickup, SiTrello, SiTodoist, SiGithub, SiGitlab, SiSentry, SiNetlify, SiCloudflare, SiSupabase, SiNeon, SiPosthog, SiUpstash, SiMiro, SiWebflow, SiWix, SiWordpress, SiCalendly, SiStripe, SiHuggingface, SiZapier, SiMake } from 'react-icons/si';
+
+const BrandIcons = { SiNotion, SiAtlassian, SiAirtable, SiCoda, SiLinear, SiClickup, SiTrello, SiTodoist, SiGithub, SiGitlab, SiSentry, SiNetlify, SiCloudflare, SiSupabase, SiNeon, SiPosthog, SiUpstash, SiMiro, SiWebflow, SiWix, SiWordpress, SiCalendly, SiStripe, SiHuggingface, SiZapier, SiMake };
 
 // Get icon component from libraries
 const getIcon = (iconName) => {
@@ -17,6 +21,7 @@ const getIcon = (iconName) => {
         FaIcons[iconName] ||
         GrIcons[iconName] ||
         TbIcons[iconName] ||
+        BrandIcons[iconName] ||
         Icons.FiHelpCircle; // fallback
 };
 

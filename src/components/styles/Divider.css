@@ -14,7 +14,8 @@
 .divider.divider-vertical {
     flex-direction: column;
     width: auto;
-    height: 100%;
+    height: auto;
+    min-height: 100%;
     align-self: stretch;
 }
 

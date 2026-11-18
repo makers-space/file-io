@@ -621,10 +621,10 @@
 }
 
 .flow-node-surface[data-shape="rectangle"] {
-  min-width: 120px;
-  min-height: 56px;
-  max-width: 300px;
-  padding: 14px 20px;
+  min-width: 72px;
+  min-height: 32px;
+  max-width: 320px;
+  padding: 10px 14px;
 }
 
 .flow-node-surface[data-shape="circle"] {
@@ -909,11 +909,11 @@
 .flow-writer .mdxeditor {
     width: 100%;
     min-width: 0;
-    max-width: 100%;
 }
 
 /* A step with a table or a code block grows to show it whole. */
-.flow-node-surface:has(table, pre) {
+.flow-node-surface:has(table, pre),
+.flow-node-surface[data-shape]:has(table, pre) {
     max-width: none;
 }
 .flow-markdown table {
@@ -949,4 +949,27 @@
 .flow-writer .mdxeditor-root-contenteditable,
 .flow-writer [class*="rootContentEditableWrapper"] {
     overflow: visible !important;
+}
+
+/* The editor box is as wide as its content: tables and code keep their natural width, ordinary text wraps at a
+   comfortable line length, and the tools wrap to whatever width that gives instead of setting it. */
+.flow-writer .mdxeditor-toolbar {
+    contain: inline-size;
+}
+.flow-writer [contenteditable] > p,
+.flow-writer [contenteditable] > ul,
+.flow-writer [contenteditable] > ol,
+.flow-writer [contenteditable] > blockquote,
+.flow-writer [contenteditable] > h1,
+.flow-writer [contenteditable] > h2,
+.flow-writer [contenteditable] > h3,
+.flow-writer [contenteditable] > h4 {
+    max-width: 520px;
+}
+.flow-writer [class*="codeMirrorWrapper"],
+.flow-writer .cm-editor,
+.flow-writer .cm-scroller,
+.flow-writer .cm-content {
+    width: max-content !important;
+    min-width: 100%;
 }

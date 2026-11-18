@@ -2262,7 +2262,7 @@ const FlowCanvas = forwardRef(({
         ref={writerAnchorRef}
         style={{ position: 'absolute', left: `${writer?.x ?? 0}px`, top: `${writer?.y ?? 0}px`, width: 0, height: 0, pointerEvents: 'none' }}
       />
-      <Genie visible={Boolean(writer)} triggerRef={writerAnchorRef} onClose={saveWriter} closeOnClickOutside={false} variant="menu" animation="scale" layout="flex-column" padding="xs" width="fit-content" minWidth="380px" maxWidth="560px">
+      <Genie visible={Boolean(writer)} triggerRef={writerAnchorRef} onClose={saveWriter} closeOnClickOutside={false} variant="menu" animation="scale" layout="flex-column" padding="xs" width="fit-content" minWidth="380px" maxWidth="94vw">
         {writer && (
           <Container ref={writerBoxRef} layout="flex-column" gap="xs" padding="none" width="100%">
             <Editor

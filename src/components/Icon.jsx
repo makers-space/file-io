@@ -8,9 +8,9 @@ import * as FaIcons from 'react-icons/fa'; // Font Awesome icons
 import * as GrIcons from 'react-icons/gr';
 import * as TbIcons from 'react-icons/tb';
 // App logos, named one by one so only these are bundled.
-import { SiNotion, SiAtlassian, SiAirtable, SiCoda, SiLinear, SiClickup, SiTrello, SiTodoist, SiGithub, SiGitlab, SiSentry, SiNetlify, SiCloudflare, SiSupabase, SiNeon, SiPosthog, SiUpstash, SiMiro, SiWebflow, SiWix, SiWordpress, SiCalendly, SiStripe, SiHuggingface, SiZapier, SiMake } from 'react-icons/si';
+import { SiNotion, SiAtlassian, SiAirtable, SiCoda, SiLinear, SiClickup, SiTrello, SiTodoist, SiGithub, SiGitlab, SiSentry, SiNetlify, SiCloudflare, SiSupabase, SiNeon, SiPosthog, SiUpstash, SiMiro, SiWebflow, SiWix, SiWordpress, SiCalendly, SiStripe, SiHuggingface, SiZapier, SiMake, SiBlender, SiGooglechrome, SiDocker, SiXcode, SiGit, SiGodotengine, SiFreecad, SiModelcontextprotocol } from 'react-icons/si';
 
-const BrandIcons = { SiNotion, SiAtlassian, SiAirtable, SiCoda, SiLinear, SiClickup, SiTrello, SiTodoist, SiGithub, SiGitlab, SiSentry, SiNetlify, SiCloudflare, SiSupabase, SiNeon, SiPosthog, SiUpstash, SiMiro, SiWebflow, SiWix, SiWordpress, SiCalendly, SiStripe, SiHuggingface, SiZapier, SiMake };
+const BrandIcons = { SiNotion, SiAtlassian, SiAirtable, SiCoda, SiLinear, SiClickup, SiTrello, SiTodoist, SiGithub, SiGitlab, SiSentry, SiNetlify, SiCloudflare, SiSupabase, SiNeon, SiPosthog, SiUpstash, SiMiro, SiWebflow, SiWix, SiWordpress, SiCalendly, SiStripe, SiHuggingface, SiZapier, SiMake, SiBlender, SiGooglechrome, SiDocker, SiXcode, SiGit, SiGodotengine, SiFreecad, SiModelcontextprotocol };
 
 // Get icon component from libraries
 const getIcon = (iconName) => {

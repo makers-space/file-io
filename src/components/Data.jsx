@@ -30,6 +30,32 @@ import './styles/Data.css';
  *   - Callbacks available for show/hide events with item context
  *   - Table variant: Genie attaches to the entire row, positioned based on row location
  */
+// First, previous, a run of page numbers around the current page, next and last. "span" is how many numbers show.
+export const Pagination = ({ page, pages, onPage, size = 'sm', span = 3, justify = 'center', disabled = false, width = null }) => {
+    const count = Math.max(1, Math.min(span, pages));
+    const first = Math.max(1, Math.min(page - Math.floor(count / 2), pages - count + 1));
+    const numbers = Array.from({ length: count }, (unused, index) => first + index);
+    const step = (icon, target, off, label) => (
+        <Button size={size} selected={false} onClick={() => onPage(target)} disabled={disabled || off} title={label} aria-label={label}>
+            <Icon name={icon} size="xs" />
+        </Button>
+    );
+
+    return (
+        <ButtonGroup size={size} spaced wrap={false} justify={justify} width={width}>
+            {step('FiChevronsLeft', 1, page === 1, 'First page')}
+            {step('FiChevronLeft', page - 1, page === 1, 'Previous page')}
+            {numbers.map((number) => (
+                <Button key={number} size={size} variant="secondary" selected={number === page} disabled={disabled} onClick={() => onPage(number)} aria-label={`Page ${number}`}>
+                    {number}
+                </Button>
+            ))}
+            {step('FiChevronRight', page + 1, page === pages, 'Next page')}
+            {step('FiChevronsRight', pages, page === pages, 'Last page')}
+        </ButtonGroup>
+    );
+};
+
 export const Data = forwardRef(({
     data = [],
     fieldConfig = {},
@@ -1201,58 +1227,7 @@ export const Data = forwardRef(({
 
                     {/* Right Side: Pagination Controls */}
                     <Container layout="flex" padding="none" justify="end" flexFill wrap={false}>
-                        <ButtonGroup size={getButtonSize()} spaced wrap={false} justify="end">
-                            <Button size={getButtonSize()} selected={false} onClick={() => setPage(1)} disabled={page === 1}><Icon
-                                name="FiChevronsLeft" size='xs'/></Button>
-                            <Button size={getButtonSize()} selected={false} onClick={() => setPage(page - 1)}
-                                    disabled={page === 1}><Icon name="FiChevronLeft" size='xs'/></Button>
-
-                            {/* Three page buttons showing current page and adjacent pages */}
-                            {(() => {
-                                // Calculate which three pages to show
-                                let startPage, middlePage, endPage;
-
-                                if (page === 1) {
-                                    // First page: show 1, 2, 3
-                                    startPage = 1;
-                                    middlePage = Math.min(2, totalFilteredPages);
-                                    endPage = Math.min(3, totalFilteredPages);
-                                } else if (page === totalFilteredPages) {
-                                    // Last page: show (last-2), (last-1), last
-                                    startPage = Math.max(1, totalFilteredPages - 2);
-                                    middlePage = Math.max(1, totalFilteredPages - 1);
-                                    endPage = totalFilteredPages;
-                                } else {
-                                    // Middle pages: show (current-1), current, (current+1)
-                                    startPage = page - 1;
-                                    middlePage = page;
-                                    endPage = page + 1;
-                                }
-
-                                const pages = [startPage, middlePage, endPage].filter((p, i, arr) =>
-                                    p > 0 && p <= totalFilteredPages && arr.indexOf(p) === i // Remove duplicates and invalid pages
-                                );
-
-                                return pages.map(pageNum => (
-                                    <Button
-                                        key={pageNum}
-                                        size={getButtonSize()}
-                                        variant="secondary"
-                                        selected={pageNum === page}
-                                        onClick={() => setPage(pageNum)}
-                                    >
-                                        {pageNum}
-                                    </Button>
-                                ));
-                            })()}
-
-                            <Button size={getButtonSize()} selected={false} onClick={() => setPage(page + 1)}
-                                    disabled={page === totalFilteredPages}><Icon name="FiChevronRight"
-                                                                                 size='xs'/></Button>
-                            <Button size={getButtonSize()} selected={false} onClick={() => setPage(totalFilteredPages)}
-                                    disabled={page === totalFilteredPages}><Icon name="FiChevronsRight"
-                                                                                 size='xs'/></Button>
-                        </ButtonGroup>
+                        <Pagination size={getButtonSize()} page={page} pages={totalFilteredPages} onPage={setPage} justify="end" />
                     </Container>
                 </Container>
 

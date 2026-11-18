@@ -1,0 +1,11 @@
+.frame {
+    display: block;
+    max-width: 100%;
+    border: none;
+    background: var(--surface-color);
+    border-radius: var(--card-radius, var(--border-radius-md));
+}
+
+.frame-bordered {
+    border: 1px solid var(--border-color);
+}

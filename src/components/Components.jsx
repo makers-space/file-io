@@ -35,4 +35,5 @@ export {default as Video} from './Video';
 export {default as Audio} from './Audio';
 export {default as Model3D} from './Model3D';
 export {default as PdfViewer} from './PdfViewer';
+export {default as Frame} from './Frame';
 export {useGenie, useGenieTrigger, withGenie, GenieTrigger} from './Genie';

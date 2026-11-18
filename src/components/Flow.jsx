@@ -41,6 +41,7 @@ import {
   Handle,
   Position,
   NodeResizer,
+  NodeToolbar,
   EdgeToolbar,
   EdgeLabelRenderer,
   ReactFlowProvider,
@@ -60,6 +61,11 @@ import {
   useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import { UndoRedo, Separator, BoldItalicUnderlineToggles, BlockTypeSelect, ListsToggle, CreateLink } from '@mdxeditor/editor';
+import { Editor } from './Editor';
 import { useTheme } from '../contexts/ThemeContext';
 import Genie from './Genie';
 import { Input } from './Input';
@@ -770,7 +776,8 @@ const FlowLock = createContext(false);
 const FlowActions = createContext(null);
 
 const QUICK_ACTIONS = {
-  edit: ['FiEdit2', 'Edit (E)'],
+  edit: ['FiEdit2', 'Write (double-click)'],
+  settings: ['FiSettings', 'Settings (E)'],
   duplicate: ['FiCopy', 'Duplicate (Ctrl+D)'],
   delete: ['FiTrash2', 'Delete (Delete)'],
   collapse: ['FiMinimize2', 'Collapse or open this group'],
@@ -778,14 +785,39 @@ const QUICK_ACTIONS = {
   leave: ['FiLogOut', 'Take out of its group']
 };
 
+// A step's text and a connector's label are Markdown, drawn as formatted text with no editor around it.
+// Raw HTML in the text is shown as text, never run.
+const FLOW_MARKDOWN_PLUGINS = [remarkGfm, remarkBreaks];
+const FLOW_MARKDOWN_PARTS = {
+  a: ({ href, children }) => <a className="nodrag" href={href} target="_blank" rel="noreferrer noopener">{children}</a>,
+  img: () => null
+};
+const FlowMarkdown = ({ text, inline = false }) => (
+  <div className={`flow-markdown${inline ? ' flow-markdown-inline' : ''}`}>
+    <ReactMarkdown remarkPlugins={FLOW_MARKDOWN_PLUGINS} components={FLOW_MARKDOWN_PARTS}>{String(text ?? '')}</ReactMarkdown>
+  </div>
+);
+// The writing tools: small and few, for notes inside a diagram.
+const FlowWriterTools = () => (
+  <>
+    <UndoRedo />
+    <Separator />
+    <BoldItalicUnderlineToggles />
+    <Separator />
+    <BlockTypeSelect />
+    <ListsToggle />
+    <CreateLink />
+  </>
+);
+
 // The small bar beside whatever is selected.
 const QuickBar = ({ id, items }) => {
   const actions = useContext(FlowActions);
   return (
-    <div className="flow-quickbar">
+    <div className="flow-quickbar nodrag nopan" onDoubleClick={(event) => event.stopPropagation()}>
       <ButtonGroup selectable={false} size="xs">
         {items.map((item) => (
-          <Button key={item} size="xs" variant="ghost" title={QUICK_ACTIONS[item][1]} onClick={() => actions?.run(item, id)}>
+          <Button key={item} size="xs" variant="ghost" title={QUICK_ACTIONS[item][1]} onClick={(event) => { event.stopPropagation(); actions?.run(item, id); }}>
             <Icon name={QUICK_ACTIONS[item][0]} size="xs" />
           </Button>
         ))}
@@ -870,7 +902,7 @@ const FLOW_PATTERNS = ['dots', 'lines', 'cross'];
 const FLOW_MEMBER_STEP = 56;
 const FLOW_MARKS = ['flow-drop-target', 'flow-locked', 'flow-collapsed'];
 const FLOW_PATTERN_ICONS = { dots: 'FiMoreHorizontal', lines: 'FiHash', cross: 'FiPlus' };
-const FLOW_LABEL_PX = { sm: null, md: 14, lg: 18 };
+const FLOW_LABEL_PX = { sm: null, md: 12, lg: 15 };
 const FLOW_LAYOUTS = [
   { id: 'lr', icon: 'FiArrowRight', label: 'Arrange everything left to right (L)' },
   { id: 'tb', icon: 'FiArrowDown', label: 'Arrange everything top to bottom (Shift+L)' },
@@ -887,67 +919,41 @@ const FLOW_ALIGNMENTS = [
 // Custom Node for inline editing with bidirectional handles on all four sides
 // Each position has BOTH source and target handles to allow any-to-any connections
 const EditableNode = ({ data, id, selected, width }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [label, setLabel] = useState(data.label);
   const reactFlow = useReactFlow();
   const locked = useContext(FlowLock);
+  const actions = useContext(FlowActions);
   const nodeInstance = reactFlow.getNode ? reactFlow.getNode(id) : null;
   const colorToken = useMemo(() => inferNodeColorToken({ data, style: nodeInstance?.style }), [data, nodeInstance?.style]);
   const shape = data.shape || DEFAULT_NODE_SHAPE;
-  
+
   // Typography props with defaults
   const fontSize = data.fontSize || 'md';
   const fontWeight = data.fontWeight || 'semibold';
   const textAlign = data.textAlign || 'center';
 
-  useEffect(() => {
-    setLabel(data.label);
-  }, [data.label]);
-
-  const handleDoubleClick = () => { if (!locked) setIsEditing(true); };
-
-  const handleSave = () => {
-    reactFlow.updateNodeData(id, { label });
-    setIsEditing(false);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSave();
-    } else if (e.key === 'Escape') {
-      setLabel(data.label);
-      setIsEditing(false);
-    }
-  };
+  // A double-click on a step opens the writing editor for its text.
+  const handleDoubleClick = () => { if (!locked) actions?.run('edit', id); };
 
   return (
     <div className={`flow-node ${width ? 'flow-node-sized' : ''}`} onDoubleClick={handleDoubleClick}>
       {!locked && <NodeResizer isVisible={Boolean(selected) && !data.locked} minWidth={80} minHeight={40} />}
+      {!locked && actions && (
+        <NodeToolbar isVisible={Boolean(selected) && actions.single} position={Position.Bottom}>
+          <QuickBar id={id} items={['edit', 'settings']} />
+        </NodeToolbar>
+      )}
       {FLOW_SIDES.map((side) => <Handle key={side} type="source" position={side} id={side} />)}
 
       <div
-        className={`flow-node-surface ${getNodeColorClass(colorToken)}`} 
-        data-shape={shape} 
+        className={`flow-node-surface ${getNodeColorClass(colorToken)}`}
+        data-shape={shape}
         data-color={colorToken}
         data-font-size={fontSize}
         data-font-weight={fontWeight}
         data-text-align={textAlign}
       >
         <div className="flow-node-geometry" aria-hidden="true" />
-        {isEditing ? (
-          <textarea
-            className="flow-node-input nodrag"
-            autoFocus
-            rows={String(label ?? '').split('\n').length}
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={handleSave}
-          />
-        ) : (
-          <span className="flow-node-label">{data.label}</span>
-        )}
+        <div className="flow-node-label"><FlowMarkdown text={data.label} /></div>
       </div>
     </div>
   );
@@ -1025,7 +1031,7 @@ const drawEdge = (props, [path, labelX, labelY], items) => (
           className={`flow-edge-label flow-edge-label-${FLOW_LABEL_PX[props.data?.labelSize] ? props.data.labelSize : 'sm'}${props.labelShowBg === false ? ' flow-edge-label-bare' : ''}`}
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
         >
-          {props.label}
+          <FlowMarkdown text={props.label} inline />
         </div>
       </EdgeLabelRenderer>
     )}
@@ -1033,12 +1039,12 @@ const drawEdge = (props, [path, labelX, labelY], items) => (
   </>
 );
 
-const EdgeBar = ({ id, x, y, selected, items = ['edit', 'delete'] }) => {
+const EdgeBar = ({ id, x, y, selected, items = ['edit', 'settings', 'delete'] }) => {
   const locked = useContext(FlowLock);
   const actions = useContext(FlowActions);
   if (locked || !actions) return null;
   return (
-    <EdgeToolbar edgeId={id} x={x} y={y} isVisible={Boolean(selected) && actions.single} alignY="bottom">
+    <EdgeToolbar edgeId={id} x={x} y={y + 14} isVisible={Boolean(selected) && actions.single} alignY="top">
       <QuickBar id={id} items={items} />
     </EdgeToolbar>
   );
@@ -1176,6 +1182,32 @@ const FlowCanvas = forwardRef(({
   const hoverRef = useRef(false);
   
   const [nodes, setNodes, onNodesChange] = useNodesState(sanitizedInitialNodes);
+  // The writing editor for a step's text or a connector's label: { id, isNode, x, y, text }.
+  const [writer, setWriter] = useState(null);
+  const writerAnchorRef = useRef(null);
+  const writerBoxRef = useRef(null);
+  const writerRef = useRef(null);
+  writerRef.current = writer;
+  const saveWriter = useCallback(() => {
+    const open = writerRef.current;
+    if (!open) return;
+    const text = String(open.text ?? '').replace(/\s+$/, '').slice(0, FLOW_LIMITS.text);
+    if (open.isNode) reactFlowInstanceRef.current?.updateNodeData(open.id, { label: text });
+    else setEdges((all) => all.map((edge) => (edge.id === open.id ? { ...edge, label: text } : edge)));
+    setWriter(null);
+  }, []);
+  // A click anywhere else keeps what was written, as the old in-place editing did. The editor's own menus are not "elsewhere".
+  useEffect(() => {
+    if (!writer) return undefined;
+    const away = (event) => {
+      const target = event.target;
+      if (!document.body.contains(target) || writerBoxRef.current?.contains(target)) return;
+      if (target.closest?.('.mdxeditor-popup-container, [data-radix-popper-content-wrapper], [role="listbox"], [role="dialog"]')) return;
+      saveWriter();
+    };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [Boolean(writer), saveWriter]);
   const [edges, setEdges, onEdgesChange] = useEdgesState(sanitizedInitialEdges);
   const [nodeEditor, setNodeEditor] = useState(null);
   const [edgeEditor, setEdgeEditor] = useState(null);
@@ -1819,13 +1851,30 @@ const FlowCanvas = forwardRef(({
   const runActionRef = useRef(runAction);
   runActionRef.current = runAction;
 
+  // Where a form or the writing editor opens: below the middle of the step or connector it is for.
+  const anchorBelow = (target) => {
+    const box = containerRef.current?.getBoundingClientRect();
+    const drawn = containerRef.current?.querySelector(`[data-id="${CSS.escape(target.id)}"]`)?.getBoundingClientRect();
+    return { clientX: drawn ? drawn.left + drawn.width / 2 : (box?.left ?? 0) + (box?.width ?? 0) / 2, clientY: drawn ? drawn.bottom : (box?.top ?? 0) + (box?.height ?? 0) / 2, preventDefault: () => {} };
+  };
+  const openWriter = (target, isNode) => {
+    const at = anchorBelow(target);
+    const box = containerRef.current?.getBoundingClientRect();
+    setNodeEditor(null);
+    setEdgeEditor(null);
+    setWriter({ id: target.id, isNode, x: box ? at.clientX - box.left : at.clientX, y: box ? at.clientY - box.top : at.clientY, text: String((isNode ? target.data?.label : target.label) ?? '') });
+  };
+
   const quick = (action, id) => {
     const instance = reactFlowInstanceRef.current;
     const node = instance?.getNode(id);
     const edge = node ? null : instance?.getEdge(id);
     if (!node && !edge) return;
     if (action === 'delete') instance.deleteElements({ nodes: node ? [node] : [], edges: edge ? [edge] : [] });
-    if (action === 'duplicate' || action === 'edit') runActionRef.current(action);
+    if (action === 'duplicate') runActionRef.current(action);
+    if (action === 'edit' && edge?.type !== 'member') openWriter(node || edge, Boolean(node));
+    if (action === 'settings' && node) onContextMenu(anchorBelow(node), node);
+    if (action === 'settings' && edge) onEdgeContextMenuHandler(anchorBelow(edge), edge);
     if (action === 'lock' && node) instance.updateNodeData(id, { locked: !node.data?.locked });
     if (action === 'leave' && node?.parentId) leaveGroup(id, node.parentId);
     if (action === 'collapse' && node) instance.updateNodeData(id, { collapsed: !node.data?.collapsed });
@@ -2196,6 +2245,44 @@ const FlowCanvas = forwardRef(({
         </Container>
       </Genie>
 
+      {/* Writing editor */}
+      <div
+        ref={writerAnchorRef}
+        style={{ position: 'absolute', left: `${writer?.x ?? 0}px`, top: `${writer?.y ?? 0}px`, width: 0, height: 0, pointerEvents: 'none' }}
+      />
+      <Genie visible={Boolean(writer)} triggerRef={writerAnchorRef} onClose={saveWriter} closeOnClickOutside={false} variant="menu" animation="scale" layout="flex-column" padding="xs" width="380px">
+        {writer && (
+          <Container ref={writerBoxRef} layout="flex-column" gap="xs" padding="none" width="100%">
+            <Editor
+              key={writer.id}
+              className="flow-writer"
+              mode="markdown"
+              content={writer.text}
+              autoFocus
+              placeholder="Write here. Bold, headings, lists and links all work."
+              customToolbar={FlowWriterTools}
+              minHeight="96px"
+              maxHeight="260px"
+              onChange={(text) => setWriter((now) => (now ? { ...now, text } : now))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  saveWriter();
+                }
+                if (event.key === 'Escape') setWriter(null);
+              }}
+            />
+            <Container layout="flex" align="center" justify="between" gap="xs" padding="none" width="100%" wrap={false}>
+              <Typography size="xxs" color="muted">Ctrl+Enter saves · Esc cancels</Typography>
+              <ButtonGroup size="xs" spaced selectable={false} justify="end" wrap={false}>
+                <Button size="xs" color="secondary" onClick={() => setWriter(null)}>Cancel</Button>
+                <Button size="xs" color="primary" onClick={saveWriter}>Save</Button>
+              </ButtonGroup>
+            </Container>
+          </Container>
+        )}
+      </Genie>
+
       {/* Connector editor */}
       <Genie visible={Boolean(edgeEditor)} triggerRef={edgeAnchorRef} onClose={() => setEdgeEditor(null)} variant="menu" animation="scale" layout="flex-column" padding="sm" width="300px">
         {edgeEditor && (
@@ -2244,6 +2331,7 @@ const FlowCanvas = forwardRef(({
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onContextMenu}
         onEdgeClick={(e, edge) => { setNodeEditor(null); setEdgeEditor(null); onEdgeClick?.(e, edge); }}
+        onEdgeDoubleClick={readOnly ? undefined : (e, edge) => { if (edge.type !== 'member') openWriter(edge, false); }}
         onEdgeContextMenu={onEdgeContextMenuHandler}
         onPaneClick={onPaneClickHandler}
         onNodeDrag={readOnly ? undefined : onNodeDragHandler}
@@ -2256,7 +2344,6 @@ const FlowCanvas = forwardRef(({
         maxZoom={4}
         onlyRenderVisibleElements={nodes.length > 150}
         onPaneContextMenu={readOnly ? undefined : onPaneMenu}
-        onEdgeDoubleClick={readOnly ? undefined : onEdgeContextMenuHandler}
         onMoveEnd={(_event, viewport) => keepView(viewport, pattern)}
         nodesDraggable={draggable && !readOnly && !locked}
         nodesConnectable={connectable && !readOnly}

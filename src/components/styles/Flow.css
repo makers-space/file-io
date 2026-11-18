@@ -5,8 +5,6 @@
   position: relative;
   width: 100%;
   background: var(--surface-color);
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--border-color);
   overflow: hidden;
 }
 
@@ -272,7 +270,7 @@
   border-radius: var(--border-radius-sm);
   background-color: var(--surface-color);
   color: var(--text-color);
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   font-weight: 500;
   line-height: 1.3;
   text-align: center;
@@ -281,11 +279,11 @@
 }
 
 .themed-flow .flow-edge-label-md {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .themed-flow .flow-edge-label-lg {
-  font-size: 18px;
+  font-size: 15px;
 }
 
 .themed-flow .flow-edge-label-bare {
@@ -410,8 +408,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 120px;
-  min-height: 48px;
+  min-width: 88px;
+  min-height: 32px;
 }
 
 .flow-node-surface {
@@ -420,13 +418,13 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 16px 20px;
+  padding: 8px 12px;
   color: var(--flow-node-text, var(--text-color));
   font-weight: 600;
   line-height: 1.3;
-  min-width: 100px;
-  min-height: 48px;
-  max-width: 280px;
+  min-width: 72px;
+  min-height: 32px;
+  max-width: 240px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   pointer-events: auto;
   cursor: pointer;
@@ -512,37 +510,37 @@
 /* Typography size variants */
 .flow-node-surface[data-font-size="xs"] .flow-node-label,
 .flow-node-surface[data-font-size="xs"] .flow-node-input {
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   line-height: 1.2;
 }
 
 .flow-node-surface[data-font-size="sm"] .flow-node-label,
 .flow-node-surface[data-font-size="sm"] .flow-node-input {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   line-height: 1.25;
 }
 
 .flow-node-surface[data-font-size="md"] .flow-node-label,
 .flow-node-surface[data-font-size="md"] .flow-node-input {
-  font-size: 1rem;
+  font-size: 0.8125rem;
   line-height: 1.3;
 }
 
 .flow-node-surface[data-font-size="lg"] .flow-node-label,
 .flow-node-surface[data-font-size="lg"] .flow-node-input {
-  font-size: 1.125rem;
+  font-size: 0.9375rem;
   line-height: 1.35;
 }
 
 .flow-node-surface[data-font-size="xl"] .flow-node-label,
 .flow-node-surface[data-font-size="xl"] .flow-node-input {
-  font-size: 1.25rem;
+  font-size: 1.0625rem;
   line-height: 1.4;
 }
 
 .flow-node-surface[data-font-size="2xl"] .flow-node-label,
 .flow-node-surface[data-font-size="2xl"] .flow-node-input {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   line-height: 1.4;
 }
 
@@ -717,7 +715,7 @@
   /* Ensure text is visible */
   color: var(--text-color);
   font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
 }
 
 .themed-flow .react-flow__node-group:hover {
@@ -793,4 +791,107 @@
 .flow-node-surface.flow-node-color-surface .flow-node-geometry,
 .flow-node-surface.flow-node-color-background .flow-node-geometry {
   border-color: var(--border-color);
+}
+
+/* A step's text and a connector's label, written in Markdown and drawn without an editor around them. */
+.flow-node-label .flow-markdown {
+    white-space: normal;
+}
+.flow-markdown > :first-child {
+    margin-top: 0;
+}
+.flow-markdown > :last-child {
+    margin-bottom: 0;
+}
+.flow-markdown p {
+    margin: 0 0 0.35em;
+}
+.flow-markdown h1,
+.flow-markdown h2,
+.flow-markdown h3,
+.flow-markdown h4 {
+    margin: 0 0 0.3em;
+    line-height: 1.2;
+    font-weight: 700;
+}
+.flow-markdown h1 { font-size: 1.35em; }
+.flow-markdown h2 { font-size: 1.2em; }
+.flow-markdown h3,
+.flow-markdown h4 { font-size: 1.05em; }
+.flow-markdown ul,
+.flow-markdown ol {
+    margin: 0 0 0.35em;
+    padding-left: 1.2em;
+    text-align: left;
+    font-weight: normal;
+}
+.flow-markdown li {
+    margin: 0.1em 0;
+}
+.flow-markdown code {
+    font-family: var(--font-family-monospace, monospace);
+    font-size: 0.85em;
+    padding: 0 0.25em;
+    border-radius: 3px;
+    background-color: color-mix(in srgb, currentColor, transparent 88%);
+}
+.flow-markdown pre {
+    margin: 0 0 0.35em;
+    padding: 0.4em 0.5em;
+    border-radius: 4px;
+    text-align: left;
+    overflow: auto;
+    background-color: color-mix(in srgb, currentColor, transparent 92%);
+}
+.flow-markdown pre code {
+    padding: 0;
+    background: none;
+}
+.flow-markdown blockquote {
+    margin: 0 0 0.35em;
+    padding-left: 0.6em;
+    border-left: 2px solid currentColor;
+    opacity: 0.85;
+    text-align: left;
+}
+.flow-markdown table {
+    border-collapse: collapse;
+    margin: 0 auto 0.35em;
+    font-size: 0.9em;
+    font-weight: normal;
+}
+.flow-markdown th,
+.flow-markdown td {
+    border: 1px solid color-mix(in srgb, currentColor, transparent 70%);
+    padding: 0.15em 0.4em;
+}
+.flow-markdown a {
+    color: inherit;
+    text-decoration: underline;
+}
+.flow-markdown hr {
+    border: none;
+    border-top: 1px solid color-mix(in srgb, currentColor, transparent 70%);
+    margin: 0.4em 0;
+}
+.flow-markdown-inline p {
+    margin: 0;
+}
+
+/* The writing editor: a small box with a short, compact row of tools. */
+.flow-writer .mdxeditor-toolbar {
+    padding: 2px;
+    gap: 2px;
+    min-height: 0;
+}
+.flow-writer .mdxeditor-toolbar button {
+    padding: 2px;
+}
+.flow-writer .mdxeditor-toolbar svg {
+    width: 16px;
+    height: 16px;
+}
+.flow-writer [contenteditable] {
+    font-size: var(--font-size-sm, 0.875rem);
+    padding: 6px 8px;
 }

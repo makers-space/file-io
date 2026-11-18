@@ -64,7 +64,7 @@ import '@xyflow/react/dist/style.css';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { UndoRedo, Separator, BoldItalicUnderlineToggles, BlockTypeSelect, ListsToggle, CreateLink } from '@mdxeditor/editor';
+import { UndoRedo, Separator, BoldItalicUnderlineToggles, StrikeThroughSupSubToggles, CodeToggle, BlockTypeSelect, ListsToggle, CreateLink, InsertTable, InsertCodeBlock, InsertThematicBreak } from '@mdxeditor/editor';
 import { Editor } from './Editor';
 import { useTheme } from '../contexts/ThemeContext';
 import Genie from './Genie';
@@ -785,28 +785,35 @@ const QUICK_ACTIONS = {
   leave: ['FiLogOut', 'Take out of its group']
 };
 
-// A step's text and a connector's label are Markdown, drawn as formatted text with no editor around it.
+// A step's text is Markdown, drawn as formatted text with no editor around it.
 // Raw HTML in the text is shown as text, never run.
 const FLOW_MARKDOWN_PLUGINS = [remarkGfm, remarkBreaks];
 const FLOW_MARKDOWN_PARTS = {
   a: ({ href, children }) => <a className="nodrag" href={href} target="_blank" rel="noreferrer noopener">{children}</a>,
   img: () => null
 };
-const FlowMarkdown = ({ text, inline = false }) => (
-  <div className={`flow-markdown${inline ? ' flow-markdown-inline' : ''}`}>
+const FlowMarkdown = ({ text }) => (
+  <div className="flow-markdown">
     <ReactMarkdown remarkPlugins={FLOW_MARKDOWN_PLUGINS} components={FLOW_MARKDOWN_PARTS}>{String(text ?? '')}</ReactMarkdown>
   </div>
 );
-// The writing tools: small and few, for notes inside a diagram.
+// The writing tools. Each one writes plain Markdown, so the step shows exactly what was written; tools that would
+// write HTML (underline, highlight, superscript) are left out.
 const FlowWriterTools = () => (
   <>
     <UndoRedo />
     <Separator />
-    <BoldItalicUnderlineToggles />
+    <BoldItalicUnderlineToggles options={['Bold', 'Italic']} />
+    <StrikeThroughSupSubToggles options={['Strikethrough']} />
+    <CodeToggle />
     <Separator />
     <BlockTypeSelect />
     <ListsToggle />
+    <Separator />
     <CreateLink />
+    <InsertTable />
+    <InsertCodeBlock />
+    <InsertThematicBreak />
   </>
 );
 
@@ -1031,7 +1038,7 @@ const drawEdge = (props, [path, labelX, labelY], items) => (
           className={`flow-edge-label flow-edge-label-${FLOW_LABEL_PX[props.data?.labelSize] ? props.data.labelSize : 'sm'}${props.labelShowBg === false ? ' flow-edge-label-bare' : ''}`}
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
         >
-          <FlowMarkdown text={props.label} inline />
+          {props.label}
         </div>
       </EdgeLabelRenderer>
     )}
@@ -1039,7 +1046,7 @@ const drawEdge = (props, [path, labelX, labelY], items) => (
   </>
 );
 
-const EdgeBar = ({ id, x, y, selected, items = ['edit', 'settings', 'delete'] }) => {
+const EdgeBar = ({ id, x, y, selected, items = ['settings', 'delete'] }) => {
   const locked = useContext(FlowLock);
   const actions = useContext(FlowActions);
   if (locked || !actions) return null;
@@ -1872,7 +1879,7 @@ const FlowCanvas = forwardRef(({
     if (!node && !edge) return;
     if (action === 'delete') instance.deleteElements({ nodes: node ? [node] : [], edges: edge ? [edge] : [] });
     if (action === 'duplicate') runActionRef.current(action);
-    if (action === 'edit' && edge?.type !== 'member') openWriter(node || edge, Boolean(node));
+    if (action === 'edit' && node) openWriter(node, true);
     if (action === 'settings' && node) onContextMenu(anchorBelow(node), node);
     if (action === 'settings' && edge) onEdgeContextMenuHandler(anchorBelow(edge), edge);
     if (action === 'lock' && node) instance.updateNodeData(id, { locked: !node.data?.locked });
@@ -2250,7 +2257,7 @@ const FlowCanvas = forwardRef(({
         ref={writerAnchorRef}
         style={{ position: 'absolute', left: `${writer?.x ?? 0}px`, top: `${writer?.y ?? 0}px`, width: 0, height: 0, pointerEvents: 'none' }}
       />
-      <Genie visible={Boolean(writer)} triggerRef={writerAnchorRef} onClose={saveWriter} closeOnClickOutside={false} variant="menu" animation="scale" layout="flex-column" padding="xs" width="380px">
+      <Genie visible={Boolean(writer)} triggerRef={writerAnchorRef} onClose={saveWriter} closeOnClickOutside={false} variant="menu" animation="scale" layout="flex-column" padding="xs" width="440px">
         {writer && (
           <Container ref={writerBoxRef} layout="flex-column" gap="xs" padding="none" width="100%">
             <Editor
@@ -2331,7 +2338,7 @@ const FlowCanvas = forwardRef(({
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onContextMenu}
         onEdgeClick={(e, edge) => { setNodeEditor(null); setEdgeEditor(null); onEdgeClick?.(e, edge); }}
-        onEdgeDoubleClick={readOnly ? undefined : (e, edge) => { if (edge.type !== 'member') openWriter(edge, false); }}
+        onEdgeDoubleClick={readOnly ? undefined : onEdgeContextMenuHandler}
         onEdgeContextMenu={onEdgeContextMenuHandler}
         onPaneClick={onPaneClickHandler}
         onNodeDrag={readOnly ? undefined : onNodeDragHandler}

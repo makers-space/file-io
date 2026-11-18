@@ -874,15 +874,15 @@
     border-top: 1px solid color-mix(in srgb, currentColor, transparent 70%);
     margin: 0.4em 0;
 }
-.flow-markdown-inline p {
-    margin: 0;
-}
 
 /* The writing editor: a small box with a short, compact row of tools. */
 .flow-writer .mdxeditor-toolbar {
     padding: 2px;
     gap: 2px;
     min-height: 0;
+    flex-wrap: wrap;
+    overflow: visible;
+    height: auto;
 }
 .flow-writer .mdxeditor-toolbar button {
     padding: 2px;
@@ -894,4 +894,14 @@
 .flow-writer [contenteditable] {
     font-size: var(--font-size-sm, 0.875rem);
     padding: 6px 8px;
+}
+
+.flow-writer,
+.flow-writer .mdxeditor {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+.flow-writer [contenteditable] {
+    overflow-x: auto;
 }

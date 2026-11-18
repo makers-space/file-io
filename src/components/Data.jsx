@@ -30,10 +30,11 @@ import './styles/Data.css';
  *   - Callbacks available for show/hide events with item context
  *   - Table variant: Genie attaches to the entire row, positioned based on row location
  */
-// First, previous, a run of page numbers around the current page, next and last. "span" is how many numbers show.
-export const Pagination = ({ page, pages, onPage, size = 'sm', span = 3, justify = 'center', disabled = false, width = null }) => {
-    const count = Math.max(1, Math.min(span, pages));
-    const first = Math.max(1, Math.min(page - Math.floor(count / 2), pages - count + 1));
+// The footer of anything shown a page at a time: how many per page on the left, then anything passed in (the table
+// puts its sort choice there), and on the right first, previous, three page numbers, next and last.
+export const Pagination = ({ page, pages, onPage, pageSize = null, pageSizes = null, onPageSize = null, size = 'sm', padding = 'xs', disabled = false, children = null }) => {
+    const count = Math.min(3, Math.max(1, pages));
+    const first = Math.max(1, Math.min(page - 1, pages - count + 1));
     const numbers = Array.from({ length: count }, (unused, index) => first + index);
     const step = (icon, target, off, label) => (
         <Button size={size} selected={false} onClick={() => onPage(target)} disabled={disabled || off} title={label} aria-label={label}>
@@ -42,17 +43,33 @@ export const Pagination = ({ page, pages, onPage, size = 'sm', span = 3, justify
     );
 
     return (
-        <ButtonGroup size={size} spaced wrap={false} justify={justify} width={width}>
-            {step('FiChevronsLeft', 1, page === 1, 'First page')}
-            {step('FiChevronLeft', page - 1, page === 1, 'Previous page')}
-            {numbers.map((number) => (
-                <Button key={number} size={size} variant="secondary" selected={number === page} disabled={disabled} onClick={() => onPage(number)} aria-label={`Page ${number}`}>
-                    {number}
-                </Button>
-            ))}
-            {step('FiChevronRight', page + 1, page === pages, 'Next page')}
-            {step('FiChevronsRight', pages, page === pages, 'Last page')}
-        </ButtonGroup>
+        <Container layout="flex" padding={padding} width="100%">
+            <Container layout="flex" padding="none" align="center" flexFill>
+                {pageSizes && (
+                    <Select
+                        size={size}
+                        value={String(pageSize)}
+                        disabled={disabled}
+                        onChange={(chosen) => onPageSize?.(Number(chosen?.target?.value ?? chosen))}
+                        options={pageSizes.map((option) => ({ value: String(option), label: String(option) }))}
+                    />
+                )}
+                {children}
+            </Container>
+            <Container layout="flex" padding="none" justify="end" flexFill wrap={false}>
+                <ButtonGroup size={size} spaced wrap={false} justify="end">
+                    {step('FiChevronsLeft', 1, page === 1, 'First page')}
+                    {step('FiChevronLeft', page - 1, page === 1, 'Previous page')}
+                    {numbers.map((number) => (
+                        <Button key={number} size={size} variant="secondary" selected={number === page} disabled={disabled} onClick={() => onPage(number)} aria-label={`Page ${number}`}>
+                            {number}
+                        </Button>
+                    ))}
+                    {step('FiChevronRight', page + 1, page === pages, 'Next page')}
+                    {step('FiChevronsRight', pages, page === pages, 'Last page')}
+                </ButtonGroup>
+            </Container>
+        </Container>
     );
 };
 
@@ -1194,42 +1211,28 @@ export const Data = forwardRef(({
                 {renderVariant()}
 
                 {/* Table Footer with Pagination and Sort Controls */}
-                <Container layout="flex" padding="xs">
-                    {/* Left Side: Rows per page with entries count as helper text */}
-                    <Container layout="flex" padding="none" flexFill>
+                <Pagination
+                    size={getButtonSize()}
+                    page={page}
+                    pages={totalFilteredPages}
+                    onPage={setPage}
+                    pageSize={pageSize}
+                    pageSizes={[5, 10, 20, 50, 100]}
+                    onPageSize={(chosen) => {
+                        setPageSize(chosen);
+                        setPage(1);
+                    }}
+                >
+                    {sortable && (
                         <Select
                             size={getButtonSize()}
-                            value={pageSize.toString()}
-                            onChange={(e) => {
-                                setPageSize(Number(e.target.value));
-                                setPage(1);
-                            }}
-                            options={[
-                                {value: '5', label: '5'},
-                                {value: '10', label: '10'},
-                                {value: '20', label: '20'},
-                                {value: '50', label: '50'},
-                                {value: '100', label: '100'}
-                            ]}
+                            value={getCurrentSortValue()}
+                            onChange={(chosen) => handleSortChange(chosen?.target?.value ?? chosen)}
+                            options={getSortOptions()}
+                            placeholder="Sort by..."
                         />
-
-                        {/* Center: Sort by selector */}
-                        {sortable && (
-                            <Select
-                                size={getButtonSize()}
-                                value={getCurrentSortValue()}
-                                onChange={(e) => handleSortChange(e.target.value)}
-                                options={getSortOptions()}
-                                placeholder="Sort by..."
-                            />
-                        )}
-                    </Container>
-
-                    {/* Right Side: Pagination Controls */}
-                    <Container layout="flex" padding="none" justify="end" flexFill wrap={false}>
-                        <Pagination size={getButtonSize()} page={page} pages={totalFilteredPages} onPage={setPage} justify="end" />
-                    </Container>
-                </Container>
+                    )}
+                </Pagination>
 
             </Card>
         );

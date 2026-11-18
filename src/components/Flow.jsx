@@ -937,12 +937,16 @@ const EditableNode = ({ data, id, selected, width }) => {
   const fontSize = data.fontSize || 'md';
   const fontWeight = data.fontWeight || 'semibold';
   const textAlign = data.textAlign || 'center';
+  // A size chosen for a step is the least it takes up: the step still grows to show all of its content. Text wraps at
+  // the chosen width; a table or a code block may make it wider.
+  const chosen = nodeInstance?.width ? { width: nodeInstance.width, height: nodeInstance.height } : null;
+  const wide = /(^|\n)\s*(\|.*\||```)/.test(String(data.label ?? ''));
 
   // A double-click on a step opens the writing editor for its text.
   const handleDoubleClick = () => { if (!locked) actions?.run('edit', id); };
 
   return (
-    <div className={`flow-node ${width ? 'flow-node-sized' : ''}`} onDoubleClick={handleDoubleClick}>
+    <div className={`flow-node ${chosen ? 'flow-node-sized' : ''}`} onDoubleClick={handleDoubleClick}>
       {!locked && <NodeResizer isVisible={Boolean(selected) && !data.locked} minWidth={80} minHeight={40} />}
       {!locked && actions && (
         <NodeToolbar isVisible={Boolean(selected) && actions.single} position={Position.Bottom}>
@@ -958,6 +962,7 @@ const EditableNode = ({ data, id, selected, width }) => {
         data-font-size={fontSize}
         data-font-weight={fontWeight}
         data-text-align={textAlign}
+        style={chosen ? { minWidth: chosen.width, maxWidth: wide ? 'none' : chosen.width, minHeight: chosen.height || undefined } : undefined}
       >
         <div className="flow-node-geometry" aria-hidden="true" />
         <div className="flow-node-label"><FlowMarkdown text={data.label} /></div>
@@ -1202,7 +1207,7 @@ const FlowCanvas = forwardRef(({
     if (open.isNode) reactFlowInstanceRef.current?.updateNodeData(open.id, { label: text });
     else setEdges((all) => all.map((edge) => (edge.id === open.id ? { ...edge, label: text } : edge)));
     setWriter(null);
-  }, []);
+  }, [setNodes]);
   // A click anywhere else keeps what was written, as the old in-place editing did. The editor's own menus are not "elsewhere".
   useEffect(() => {
     if (!writer) return undefined;
@@ -1286,7 +1291,7 @@ const FlowCanvas = forwardRef(({
     historyRef.current.jump = writeFlow(next.nodes.map(sanitizeNode), next.edges.map(sanitizeEdge));
     setNodes(next.nodes.map(sanitizeNode));
     setEdges(next.edges.map(sanitizeEdge));
-  }, [setNodes, setEdges]);
+  }, [setNodes]);
 
   const stepBack = useCallback((from, to) => {
     const history = historyRef.current;
@@ -2257,7 +2262,7 @@ const FlowCanvas = forwardRef(({
         ref={writerAnchorRef}
         style={{ position: 'absolute', left: `${writer?.x ?? 0}px`, top: `${writer?.y ?? 0}px`, width: 0, height: 0, pointerEvents: 'none' }}
       />
-      <Genie visible={Boolean(writer)} triggerRef={writerAnchorRef} onClose={saveWriter} closeOnClickOutside={false} variant="menu" animation="scale" layout="flex-column" padding="xs" width="440px">
+      <Genie visible={Boolean(writer)} triggerRef={writerAnchorRef} onClose={saveWriter} closeOnClickOutside={false} variant="menu" animation="scale" layout="flex-column" padding="xs" width="fit-content" minWidth="380px" maxWidth="560px">
         {writer && (
           <Container ref={writerBoxRef} layout="flex-column" gap="xs" padding="none" width="100%">
             <Editor
@@ -2269,7 +2274,6 @@ const FlowCanvas = forwardRef(({
               placeholder="Write here. Bold, headings, lists and links all work."
               customToolbar={FlowWriterTools}
               minHeight="96px"
-              maxHeight="260px"
               onChange={(text) => setWriter((now) => (now ? { ...now, text } : now))}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {

@@ -6,7 +6,7 @@ import React, {
     useRef,
     useState
 } from 'react';
-import { useTheme } from '@contexts/ThemeContext';
+import { useTheme, ThemeProvider } from '@contexts/ThemeContext';
 import Button from './Button';
 import Icon from './Icon';
 import Typography from './Typography';

@@ -1,16 +1,4 @@
-/* The Sheet keeps the rules of the Hairline figures. The numbers are the rules they answer to.
-   04 accent: the stroke is the only highlight, and one thing is bright at a time. No fills, glows or shadows.
-   06 honesty: a plate is filled with the ground colour, so what scrolls behind a heading is hidden by it.
-   08 clock: a choice moves on one long ease-out.
-   09 radius: every corner is round, the outline is bright and the lines inside it are dim, and few are drawn.
-   10 quiet: what a cell holds is named in the corner read-out, not on the drawing. */
 .sheet {
-    --sheet-ground: var(--background-color);
-    --sheet-hi: var(--text-color);
-    --sheet-edge: color-mix(in srgb, var(--text-color) 60%, var(--background-color));
-    --sheet-mid: color-mix(in srgb, var(--text-color) 34%, var(--background-color));
-    --sheet-lo: color-mix(in srgb, var(--text-color) 14%, var(--background-color));
-    --sheet-ease: 700ms cubic-bezier(0.32, 0.72, 0, 1);
     min-height: 0;
 }
 
@@ -18,24 +6,19 @@
     position: relative;
     min-height: 160px;
     overflow: hidden;
-    border: 1px solid var(--sheet-edge);
-    border-radius: 14px;
-    background: var(--sheet-ground);
+    border: 1px solid var(--border-color);
+    border-radius: var(--card-radius, var(--border-radius-md));
+    background: var(--surface-color);
 }
 
 .sheet .sheet-tags {
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--sheet-lo);
-}
-
-.sheet .sheet-tag {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    letter-spacing: 0.02em;
-    font-variant-numeric: tabular-nums;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .sheet .sheet-tag-on {
-    color: var(--sheet-hi);
+    color: var(--primary-color);
+    font-weight: 600;
 }
 
 .sheet-read {
@@ -45,10 +28,11 @@
 .sheet-grid {
     min-height: 0;
     overflow: auto;
+    background: var(--background-color);
 }
 
 .sheet-rest .figure {
-    --hairline-plate: var(--sheet-ground);
+    --hairline-plate: var(--background-color);
 }
 
 .sheet-table {
@@ -57,19 +41,19 @@
     border-spacing: 0;
     font-family: var(--font-family-primary);
     font-size: var(--font-size-xs);
-    color: var(--sheet-edge);
+    color: var(--text-color);
 }
 
 .sheet-table th,
 .sheet-table td {
-    padding: 5px 12px;
-    border-bottom: 1px solid var(--sheet-lo);
+    padding: 4px 10px;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
     white-space: nowrap;
     max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: left;
-    transition: color var(--sheet-ease), outline-color var(--sheet-ease);
 }
 
 .sheet-table th {
@@ -77,48 +61,34 @@
     top: 0;
     z-index: 1;
     min-width: 44px;
-    background: var(--sheet-ground);
-    color: var(--sheet-mid);
-    font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    letter-spacing: 0.02em;
-    font-weight: 400;
+    background: var(--surface-color);
+    color: var(--text-muted, var(--text-color));
+    font-weight: 500;
     text-align: center;
     user-select: none;
-}
-
-.sheet-table thead th {
-    border-bottom-color: var(--sheet-mid);
 }
 
 .sheet-table tbody th {
     left: 0;
     top: auto;
-    border-right: 1px solid var(--sheet-mid);
 }
 
 .sheet-table .sheet-corner {
     left: 0;
     z-index: 2;
-    border-right: 1px solid var(--sheet-mid);
-}
-
-.sheet-table tbody tr:last-child th,
-.sheet-table tbody tr:last-child td {
-    border-bottom-color: transparent;
 }
 
 .sheet-table .sheet-fill {
     width: 100%;
     min-width: 0;
     padding: 0;
+    border-right: none;
     cursor: default;
 }
 
 .sheet-table td {
     min-width: 76px;
     cursor: cell;
-    outline: 1px solid transparent;
-    outline-offset: -1px;
 }
 
 .sheet-table .sheet-number {
@@ -131,46 +101,15 @@
 }
 
 .sheet-table .sheet-waiting {
-    color: var(--sheet-mid);
+    color: var(--warning-color);
     font-style: italic;
 }
 
 .sheet-table .sheet-on {
-    color: var(--sheet-hi);
-    outline-color: var(--sheet-hi);
-    border-radius: 3px;
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
 }
 
 .sheet-table .sheet-head-on {
-    color: var(--sheet-hi);
-}
-
-/* The sheet's own tabs are drawn as strokes: the open one is bright and the others recede. The Button's colours are
-   set with !important, so these are too; they go when the Button itself is redrawn to the same rules. */
-.sheet .sheet-tabs .button.themed-button {
-    border: 1px solid var(--sheet-lo) !important;
-    border-radius: 8px;
-    background-color: transparent !important;
-    box-shadow: none !important;
-    color: var(--sheet-mid) !important;
-    transform: none !important;
-    transition: color var(--sheet-ease), border-color var(--sheet-ease);
-}
-
-.sheet .sheet-tabs .button.themed-button:hover {
-    border-color: var(--sheet-mid) !important;
-    color: var(--sheet-edge) !important;
-}
-
-.sheet .sheet-tabs .button.themed-button.selected {
-    border-color: var(--sheet-hi) !important;
-    color: var(--sheet-hi) !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .sheet-table th,
-    .sheet-table td,
-    .sheet .sheet-tabs .button.themed-button {
-        transition: none;
-    }
+    color: var(--primary-color);
 }

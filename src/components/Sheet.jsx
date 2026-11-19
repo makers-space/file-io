@@ -138,6 +138,18 @@ const readCsv = (text, name, mark = ',') => {
     return { name, rows: cells.length, columns, cells, spans: new Map(), covered: new Set(), pending: 0, text: true };
 };
 
+// The rows of a CSV file as records for the Data component: row 1 gives the field names, and a column with no name
+// of its own, or a name already used, goes by its letter.
+export const csvRecords = (text, fileName = '') => {
+    const { cells, columns } = readCsv(text || '', '', /\.tsv$/i.test(fileName) ? '\t' : ',');
+    const names = [];
+    for (let column = 0; column < columns; column += 1) {
+        const given = (cells[0]?.[column] || '').trim();
+        names.push(given && !names.includes(given) ? given : columnName(column));
+    }
+    return cells.slice(1).map((line) => Object.fromEntries(names.map((name, column) => [name, line[column] ?? ''])));
+};
+
 // A spreadsheet file shown as a grid, read in the browser. It shows what the file holds: a formula is shown with the
 // result stored beside it, and is not worked out again here. Row 1 is taken as the headings: it stays on top of every
 // page and names the columns in the search, filter, column and sort controls, which are the Data component's own.

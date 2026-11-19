@@ -522,9 +522,9 @@ export const Data = forwardRef(({
                 return;
             }
 
-            const [field, direction] = sortValue.split('-');
-            setSortField(field);
-            setSortDirection(direction || 'asc');
+            const cut = sortValue.lastIndexOf('-');
+            setSortField(sortValue.slice(0, cut));
+            setSortDirection(sortValue.slice(cut + 1) || 'asc');
         };
 
         // Get sort options for select dropdown

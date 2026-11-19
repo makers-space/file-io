@@ -31,8 +31,10 @@ import {
   Model3D,
   PdfViewer,
   Slides,
-  Sheet
+  Sheet,
+  Data
 } from '../components/Components';
+import { csvRecords } from '../components/Sheet';
 
 const escapeHtml = (value) => value
   .replace(/&/g, '&amp;')
@@ -2101,6 +2103,11 @@ const CommentPanel = ({ file }) => {
 
 // ─── File Metadata Bar ───────────────────────────────────────────────────────
 
+const CsvData = ({ text, fileName }) => {
+  const records = useMemo(() => csvRecords(text, fileName), [text, fileName]);
+  return <Data data={records} size="xs" pageSize={20} width="100%" />;
+};
+
 const FileMetadata = ({ file, typeBadge, isReadOnly, onDownload, onVersionLoaded, onSave, isSavingImage }) => {
   const [metadata, setMetadata] = useState(null);
   const [lastModified, setLastModified] = useState(null);
@@ -2822,6 +2829,7 @@ export const FilesPage = () => {
   const [isSavingImage, setIsSavingImage] = useState(false);
   const [isStarred, setIsStarred] = useState(false);
   const [flowAsText, setFlowAsText] = useState(false);
+  const [csvAsData, setCsvAsData] = useState(false);
 
   const imageRef = useRef(null);
 
@@ -3223,7 +3231,8 @@ export const FilesPage = () => {
 
     const flowPage = isFlowFile && !showFlowText;
     const isTableFile = viewerType === 'text' && /\.(csv|tsv)$/i.test(activePath || '');
-    const sheetPage = isTableFile && !flowAsText;
+    const dataPage = isTableFile && !flowAsText && csvAsData;
+    const sheetPage = isTableFile && !flowAsText && !csvAsData;
 
     return (
       <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
@@ -3283,6 +3292,11 @@ export const FilesPage = () => {
             <Typography size="xs">
               {metadata.filePath}
             </Typography>
+            {isTableFile && !flowAsText && (
+              <Button size="sm" variant="ghost" onClick={() => setCsvAsData(shown => !shown)} title={csvAsData ? 'Show the sheet' : 'Show as data'}>
+                <Icon name={csvAsData ? 'FiGrid' : 'FiList'} size="xs" />
+              </Button>
+            )}
             {((isFlowFile && !flowError) || isTableFile) && (
               <Button size="sm" variant="ghost" onClick={() => setFlowAsText(shown => !shown)} title={flowAsText ? (isTableFile ? 'Show the sheet' : 'Show the diagram') : 'Show the text'}>
                 <Icon name={flowAsText ? (isTableFile ? 'FiGrid' : 'FiGitMerge') : 'FiCode'} size="xs" />
@@ -3307,6 +3321,10 @@ export const FilesPage = () => {
               height="100%"
               minHeight="100%"
             />
+          ) : dataPage ? (
+            <Container layout="block" padding="none" width="100%" height="100%" overflow="auto">
+              <CsvData key={`data-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} />
+            </Container>
           ) : sheetPage ? (
             <Sheet key={`sheet-text-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} />
           ) : viewerType === 'text' ? (

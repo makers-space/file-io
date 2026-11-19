@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ThemeProvider, useTheme } from '@contexts/ThemeContext';
 import Card from './Card';
 import Container from './Container';
@@ -31,10 +31,20 @@ import './styles/Data.css';
  *   - Table variant: Genie attaches to the entire row, positioned based on row location
  */
 // The footer of anything shown a page at a time: how many per page on the left, then anything passed in (the table
-// puts its sort choice there), and on the right first, previous, three page numbers, next and last.
+// puts its sort choice there), and on the right first, previous, five page numbers, next and last. On a screen as
+// narrow as a phone the page buttons take a line of their own and show three numbers, so nothing runs off the side.
+const NARROW_SCREEN = '(max-width: 560px)';
 export const Pagination = ({ page, pages, onPage, pageSize = null, pageSizes = null, onPageSize = null, size = 'sm', padding = 'xs', disabled = false, children = null }) => {
-    const count = Math.min(3, Math.max(1, pages));
-    const first = Math.max(1, Math.min(page - 1, pages - count + 1));
+    const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.(NARROW_SCREEN).matches));
+    useEffect(() => {
+        const media = window.matchMedia?.(NARROW_SCREEN);
+        if (!media) return undefined;
+        const changed = () => setNarrow(media.matches);
+        media.addEventListener('change', changed);
+        return () => media.removeEventListener('change', changed);
+    }, []);
+    const count = Math.min(narrow ? 3 : 5, Math.max(1, pages));
+    const first = Math.max(1, Math.min(page - (narrow ? 1 : 2), pages - count + 1));
     const numbers = Array.from({ length: count }, (unused, index) => first + index);
     const step = (icon, target, off, label) => (
         <Button size={size} selected={false} onClick={() => onPage(target)} disabled={disabled || off} title={label} aria-label={label}>
@@ -43,20 +53,22 @@ export const Pagination = ({ page, pages, onPage, pageSize = null, pageSizes = n
     );
 
     return (
-        <Container layout="flex" padding={padding} width="100%">
-            <Container layout="flex" padding="none" align="center" flexFill>
+        <Container layout={narrow ? 'flex-column' : 'flex'} gap={narrow ? 'xs' : undefined} padding={padding} width="100%">
+            <Container layout="flex" padding="none" align="center" gap="xs" flexFill={!narrow}>
                 {pageSizes && (
-                    <Select
-                        size={size}
-                        value={String(pageSize)}
-                        disabled={disabled}
-                        onChange={(chosen) => onPageSize?.(Number(chosen?.target?.value ?? chosen))}
-                        options={pageSizes.map((option) => ({ value: String(option), label: String(option) }))}
-                    />
+                    <Container padding="none">
+                        <Select
+                            size={size}
+                            value={String(pageSize)}
+                            disabled={disabled}
+                            onChange={(chosen) => onPageSize?.(Number(chosen?.target?.value ?? chosen))}
+                            options={pageSizes.map((option) => ({ value: String(option), label: String(option) }))}
+                        />
+                    </Container>
                 )}
                 {children}
             </Container>
-            <Container layout="flex" padding="none" justify="end" flexFill wrap={false}>
+            <Container layout="flex" padding="none" justify="end" flexFill={!narrow} width={narrow ? '100%' : null} wrap={false}>
                 <ButtonGroup size={size} spaced wrap={false} justify="end">
                     {step('FiChevronsLeft', 1, page === 1, 'First page')}
                     {step('FiChevronLeft', page - 1, page === 1, 'Previous page')}

@@ -8,8 +8,10 @@ const RULES = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe
 // Links are sent to a new tab, which the frame is not allowed to open, so a link in the page does nothing.
 const SEAL = `<meta http-equiv="Content-Security-Policy" content="${RULES}"><base target="_blank">`;
 // The one thing a sealed page tells the app: how tall its content is, so the frame can be made to fit it with no
-// scrolling inside, and that it was pressed, which the app's own pop-ups need to know to close. It is told nothing back.
-const REPORT = `<script>(function(){var last=0;function size(){var b=document.body;if(!b)return;var top=Infinity,bottom=-Infinity,i,c,r;for(i=0;i<b.children.length;i++){c=b.children[i];if(c.tagName==='SCRIPT'||c.tagName==='STYLE')continue;r=c.getBoundingClientRect();if(!r.width&&!r.height)continue;top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom)}var s=getComputedStyle(b),h=bottom<top?document.documentElement.scrollHeight:Math.ceil(bottom-top+parseFloat(s.paddingTop)+parseFloat(s.paddingBottom)+parseFloat(s.marginTop)+parseFloat(s.marginBottom));if(Math.abs(h-last)>1){last=h;parent.postMessage({sealedFrame:'height',height:h},'*')}}function watch(){size();if(!document.body||!window.ResizeObserver)return;var seen=new ResizeObserver(size);seen.observe(document.documentElement);var each=function(){for(var i=0;i<document.body.children.length;i++)seen.observe(document.body.children[i]);size()};each();new MutationObserver(each).observe(document.body,{childList:true})}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',watch);else watch();addEventListener('load',size);addEventListener('pointerdown',function(){parent.postMessage({sealedFrame:'pressed'},'*')},true)})()</script>`;
+// scrolling inside, that it was pressed, which the app's own pop-ups need to know to close, and that the pointer came
+// over it. It is told one thing back: that the pointer has left the frame, which a page is not always told, so what it
+// was pointing at lets go.
+const REPORT = `<script>(function(){var last=0;function size(){var b=document.body;if(!b)return;var top=Infinity,bottom=-Infinity,i,c,r;for(i=0;i<b.children.length;i++){c=b.children[i];if(c.tagName==='SCRIPT'||c.tagName==='STYLE')continue;r=c.getBoundingClientRect();if(!r.width&&!r.height)continue;top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom)}var s=getComputedStyle(b),h=bottom<top?document.documentElement.scrollHeight:Math.ceil(bottom-top+parseFloat(s.paddingTop)+parseFloat(s.paddingBottom)+parseFloat(s.marginTop)+parseFloat(s.marginBottom));if(Math.abs(h-last)>1){last=h;parent.postMessage({sealedFrame:'height',height:h},'*')}}function watch(){size();if(!document.body||!window.ResizeObserver)return;var seen=new ResizeObserver(size);seen.observe(document.documentElement);var each=function(){for(var i=0;i<document.body.children.length;i++)seen.observe(document.body.children[i]);size()};each();new MutationObserver(each).observe(document.body,{childList:true})}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',watch);else watch();addEventListener('load',size);addEventListener('pointerdown',function(){parent.postMessage({sealedFrame:'pressed'},'*')},true);var over=null;addEventListener('pointermove',function(e){if(!e.isTrusted)return;if(!over)parent.postMessage({sealedFrame:'over'},'*');over=e.target},true);document.documentElement.addEventListener('pointerleave',function(e){if(e.isTrusted)over=null});addEventListener('message',function(e){if(e.source!==parent||!e.data||e.data.sealedFrame!=='left'||!over)return;var at=over,n;over=null;at.dispatchEvent(new PointerEvent('pointerout',{bubbles:true,pointerType:'mouse',pointerId:1}));at.dispatchEvent(new MouseEvent('mouseout',{bubbles:true}));for(n=at;n&&n.nodeType===1;n=n.parentNode){n.dispatchEvent(new PointerEvent('pointerleave',{pointerType:'mouse',pointerId:1}));n.dispatchEvent(new MouseEvent('mouseleave'))}})})()</script>`;
 
 // The app theme's colours and typeface, handed to the page as --app-… variables so a page can match the app it is shown
 // in. The page cannot read them itself, being sealed, so they are written into it.
@@ -46,7 +48,7 @@ const themeStyle = (theme, variables) => {
 
 // A dressed page has its own buttons and sliders drawn in the app's look: its typeface, its button shape and its
 // colours. A page's switch between its own light and dark is hidden, because the app's theme decides that.
-const DRESS = '<style>body,body *:not(code,pre,kbd,samp){font-family:var(--app-font,inherit)!important;letter-spacing:0!important}button{height:28px!important;padding:0 12px!important;font-size:12px!important;font-weight:500!important;line-height:1!important;border:1px solid var(--app-primary)!important;border-radius:var(--app-radius,6px)!important;background:var(--app-surface,transparent)!important;color:var(--app-text)!important;cursor:pointer}button:hover{background:color-mix(in srgb,var(--app-primary) 16%,var(--app-surface,transparent))!important}button[aria-pressed="true"]{background:var(--app-primary)!important;color:var(--app-contrast,var(--app-background))!important}button:focus-visible,input:focus-visible{outline:2px solid var(--app-primary)!important;outline-offset:2px!important}input[type="range"]{accent-color:var(--app-primary)}input[type="range"]::-webkit-slider-runnable-track{height:3px!important;border-radius:2px;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-webkit-slider-thumb{width:14px!important;height:14px!important;margin-top:-6px!important;border:none!important;background:var(--app-primary)!important}input[type="range"]::-moz-range-track{height:3px!important;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-moz-range-thumb{width:14px!important;height:14px!important;border:none!important;background:var(--app-primary)!important}[aria-label*="theme" i],span:has(+ [aria-label*="theme" i]){display:none!important}</style>';
+const DRESS = '<style>body,body *:not(code,pre,kbd,samp){font-family:var(--app-font,inherit)!important;letter-spacing:0!important}button{height:28px!important;padding:0 12px!important;font-size:12px!important;font-weight:500!important;line-height:1!important;border:1px solid var(--app-primary)!important;border-radius:var(--app-radius,6px)!important;background:var(--app-surface,transparent)!important;color:var(--app-text)!important;cursor:pointer}button:hover{background:color-mix(in srgb,var(--app-primary) 16%,var(--app-surface,transparent))!important}button[aria-pressed="true"]{background:var(--app-primary)!important;color:var(--app-contrast,var(--app-background))!important}button:focus-visible,input:focus-visible{outline:2px solid var(--app-primary)!important;outline-offset:2px!important}input[type="range"]{accent-color:var(--app-primary)}input[type="range"]::-webkit-slider-runnable-track{height:3px!important;border-radius:2px;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-webkit-slider-thumb{width:14px!important;height:14px!important;margin-top:-6px!important;border:none!important;background:var(--app-primary)!important}input[type="range"]::-moz-range-track{height:3px!important;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-moz-range-thumb{width:14px!important;height:14px!important;border:none!important;background:var(--app-primary)!important}[aria-label*="theme" i]{display:none!important}span:has(+ [aria-label*="theme" i]){display:none!important}</style>';
 
 export const sealPage = (html, { theme = {}, variables = null, dressed = false } = {}) => {
     const text = String(html ?? '');
@@ -112,9 +114,23 @@ export const Frame = ({
         changes.current = 0;
         setFitted(null);
     }, [html]);
+    const inside = useRef(false);
+    const left = () => {
+        inside.current = false;
+        frame.current?.contentWindow?.postMessage({ sealedFrame: 'left' }, '*');
+    };
+    useEffect(() => {
+        // The pointer moving over the app itself means it is no longer over the page in the frame.
+        const moved = (event) => {
+            if (inside.current && event.target !== frame.current) left();
+        };
+        document.addEventListener('pointermove', moved, true);
+        return () => document.removeEventListener('pointermove', moved, true);
+    }, []);
     useEffect(() => {
         const heard = (event) => {
             if (!frame.current || event.source !== frame.current.contentWindow || !event.data || typeof event.data !== 'object') return;
+            if (event.data.sealedFrame === 'over') inside.current = true;
             if (event.data.sealedFrame === 'pressed') frame.current.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
             if (event.data.sealedFrame === 'height' && fit && Number.isFinite(event.data.height) && changes.current < 24) {
                 changes.current += 1;
@@ -139,6 +155,10 @@ export const Frame = ({
             srcDoc={page}
             style={style}
             {...props}
+            onPointerLeave={(event) => {
+                left();
+                props.onPointerLeave?.(event);
+            }}
         />
     );
 };

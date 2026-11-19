@@ -8,7 +8,7 @@ import Input from './Input';
 import Select from './Select';
 import Icon from './Icon';
 import { Figure } from './Figure';
-import { Pagination } from './Data';
+import { Data, Pagination } from './Data';
 
 const PAGE_SIZES = [10, 20, 50, 100, 500];
 
@@ -261,21 +261,10 @@ const shift = (sheet, page, change, back) => {
     }
 };
 
-// The rows of a CSV file as records for the Data component: row 1 gives the field names, and a column with no name
-// of its own, or a name already used, goes by its letter.
-export const csvRecords = (text, fileName = '') => {
-    const { cells, columns } = readCsv(text || '', '', /\.tsv$/i.test(fileName) ? '\t' : ',');
-    const names = [];
-    for (let column = 0; column < columns; column += 1) {
-        const given = (cells[0]?.[column] || '').trim();
-        names.push(given && !names.includes(given) ? given : columnName(column));
-    }
-    return cells.slice(1).map((line) => Object.fromEntries(names.map((name, column) => [name, line[column] ?? ''])));
-};
-
 // A spreadsheet file shown as a grid, read in the browser. It shows what the file holds: a formula is shown with the
 // result stored beside it, and is not worked out again here. Row 1 is taken as the headings: it stays on top of every
 // page and names the columns in the search, filter, column and sort controls, which are the Data component's own.
+// With `view="data"` the open sheet is shown in the Data component instead, as records named by row 1.
 // With `editable`, cells can be changed: a CSV given as `text` reports every change through `onTextChange`, and a
 // file given as a blob is written again and handed to `onSave` when the person saves.
 export const Sheet = ({
@@ -283,6 +272,7 @@ export const Sheet = ({
     text = null, // The text of a CSV file, in place of a blob
     fileName = 'sheet.xlsx',
     compact = false,
+    view = 'grid',
     editable = false,
     onSave = null,
     onTextChange = null,
@@ -437,6 +427,15 @@ export const Sheet = ({
             : empty ? { figure: 'loupe', says: 'This sheet holds no rows.' }
                 : null;
     const size = 'xs';
+    const records = useMemo(() => {
+        if (view !== 'data' || !sheet) return [];
+        const names = [];
+        for (let column = 0; column < sheet.columns; column += 1) {
+            const given = textOf(sheet.cells[0]?.[column]).trim();
+            names.push(given && !names.includes(given) ? given : columnName(column));
+        }
+        return sheet.cells.slice(1).map((line) => Object.fromEntries(names.map((name, column) => [name, textOf(line[column])])));
+    }, [view, sheet, version]);
     const page = sheet && !sheet.text ? book.current?.worksheets[index] || null : null;
     const canEdit = editable && Boolean(sheet) && (sheet.text || Boolean(page)) && calc !== 'loading';
     // Rows and columns stay where they are when moving them would leave formulas or merged cells pointing at the wrong place.
@@ -565,6 +564,25 @@ export const Sheet = ({
             </tr>
         );
     };
+
+    const tabs = (
+        <ButtonGroup className="sheet-tabs" selectable={false} size={size}>
+            {state.sheets.map((one, at) => (
+                <Button key={`${one.name}-${at}`} size={size} color={at === index ? 'primary' : 'secondary'} selected={at === index} onClick={() => open(at)}>{one.name}</Button>
+            ))}
+        </ButtonGroup>
+    );
+
+    if (view === 'data' && sheet && !rest) {
+        return (
+            <Container className={`sheet ${className}`.trim()} layout="flex-column" gap="xs" padding="none" width={width} height={height}>
+                <Container layout="block" padding="none" width="100%" flexFill overflow="auto">
+                    <Data data={records} size={size} pageSize={20} width="100%" />
+                </Container>
+                {state.sheets.length > 1 && tabs}
+            </Container>
+        );
+    }
 
     return (
         <Container className={`sheet ${compact ? 'sheet-compact' : ''} ${className}`.trim()} layout="flex-column" gap="xs" padding="none" width={width} height={height}>
@@ -697,11 +715,7 @@ export const Sheet = ({
             {notes && <Typography size="xxs" color="muted">{notes}</Typography>}
             {(state.sheets.length > 1 || hasFormulas) && (
                 <Container className="sheet-controls" layout="flex" align="center" justify="between" gap="sm" padding="none" width="100%">
-                    <ButtonGroup className="sheet-tabs" selectable={false} size={size}>
-                        {state.sheets.map((one, at) => (
-                            <Button key={`${one.name}-${at}`} size={size} color={at === index ? 'primary' : 'secondary'} selected={at === index} onClick={() => open(at)}>{one.name}</Button>
-                        ))}
-                    </ButtonGroup>
+                    {tabs}
                     {hasFormulas && <Switch label="Show formulas" size={size} checked={formulas} onChange={(event) => setFormulas(event.target.checked)} />}
                 </Container>
             )}

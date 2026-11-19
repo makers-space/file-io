@@ -53,7 +53,7 @@ export const Pagination = ({ page, pages, onPage, pageSize = null, pageSizes = n
     );
 
     return (
-        <Container layout={narrow ? 'flex-column' : 'flex'} gap={narrow ? 'xs' : undefined} padding={padding} width="100%">
+        <Container layout={narrow ? 'flex-column' : 'flex'} align={narrow ? undefined : 'center'} gap={narrow ? 'xs' : undefined} padding={padding} width="100%">
             <Container layout="flex" padding="none" align="center" gap="xs" flexFill={!narrow}>
                 {pageSizes && (
                     <Container padding="none">
@@ -66,7 +66,7 @@ export const Pagination = ({ page, pages, onPage, pageSize = null, pageSizes = n
                         />
                     </Container>
                 )}
-                {children}
+                {children && <Container padding="none">{children}</Container>}
             </Container>
             <Container layout="flex" padding="none" justify="end" flexFill={!narrow} width={narrow ? '100%' : null} wrap={false}>
                 <ButtonGroup size={size} spaced wrap={false} justify="end">
@@ -153,40 +153,15 @@ export const Data = forwardRef(({
         const getButtonSize = () => size; // Buttons use main size
         const getInputSize = () => size; // Inputs use main size
 
-        // Get fields to display - use JSON order, not priority-based
-        const getDisplayFields = () => {
-            if (!data.length) return [];
-
-            // Get all unique fields from data in the order they appear in the first item
-            const firstItem = data[0];
-            const fieldsFromFirst = Object.keys(firstItem);
-
-            // Add any additional fields from other items that might not be in the first
-            const allFields = [...new Set([
-                ...fieldsFromFirst,
-                ...data.flatMap(item => Object.keys(item))
-            ])];
-
-            // Filter out excluded fields from display
-            return allFields.filter(field => !exclude.includes(field));
-        };
-
-        // Get all fields for filtering and searching (includes excluded fields)
-        const getAllFields = () => {
-            if (!data.length) return [];
-
-            // Get all unique fields from data in the order they appear in the first item
-            const firstItem = data[0];
-            const fieldsFromFirst = Object.keys(firstItem);
-
-            // Add any additional fields from other items that might not be in the first
-            const allFields = [...new Set([
-                ...fieldsFromFirst,
-                ...data.flatMap(item => Object.keys(item))
-            ])];
-
-            return allFields;
-        };
+        // Every field of the data, in the order the first item gives them and then any the others add. Worked out once
+        // for the data, so a long list is not walked again each time the table is drawn.
+        const allFields = useMemo(() => {
+            const seen = new Set();
+            data.forEach((item) => Object.keys(item).forEach((field) => seen.add(field)));
+            return [...seen];
+        }, [data]);
+        const excluded = exclude.join('\u0000');
+        const displayFields = useMemo(() => allFields.filter((field) => !exclude.includes(field)), [allFields, excluded]); // eslint-disable-line react-hooks/exhaustive-deps
 
         // Helper function to detect timestamp/date fields
         const isTimestampField = (field, data) => {
@@ -227,8 +202,6 @@ export const Data = forwardRef(({
             return timestampRatio >= 0.8;
         };
 
-        const displayFields = getDisplayFields();
-        const allFields = getAllFields();
 
         const getJustifySelfClass = () => {
             if (justifySelf) {

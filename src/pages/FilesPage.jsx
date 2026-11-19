@@ -31,10 +31,8 @@ import {
   Model3D,
   PdfViewer,
   Slides,
-  Sheet,
-  Data
+  Sheet
 } from '../components/Components';
-import { csvRecords } from '../components/Sheet';
 
 const escapeHtml = (value) => value
   .replace(/&/g, '&amp;')
@@ -2103,11 +2101,6 @@ const CommentPanel = ({ file }) => {
 
 // ─── File Metadata Bar ───────────────────────────────────────────────────────
 
-const CsvData = ({ text, fileName }) => {
-  const records = useMemo(() => csvRecords(text, fileName), [text, fileName]);
-  return <Data data={records} size="xs" pageSize={20} width="100%" />;
-};
-
 const FileMetadata = ({ file, typeBadge, isReadOnly, onDownload, onVersionLoaded, onSave, isSavingImage }) => {
   const [metadata, setMetadata] = useState(null);
   const [lastModified, setLastModified] = useState(null);
@@ -3231,8 +3224,8 @@ export const FilesPage = () => {
 
     const flowPage = isFlowFile && !showFlowText;
     const isTableFile = viewerType === 'text' && /\.(csv|tsv)$/i.test(activePath || '');
-    const dataPage = isTableFile && !flowAsText && csvAsData;
-    const sheetPage = isTableFile && !flowAsText && !csvAsData;
+    const sheetPage = isTableFile && !flowAsText;
+    const sheetView = csvAsData ? 'data' : 'grid';
 
     return (
       <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
@@ -3292,7 +3285,7 @@ export const FilesPage = () => {
             <Typography size="xs">
               {metadata.filePath}
             </Typography>
-            {isTableFile && !flowAsText && (
+            {(sheetPage || viewerType === 'sheet') && (
               <Button size="sm" variant="ghost" onClick={() => setCsvAsData(shown => !shown)} title={csvAsData ? 'Show the sheet' : 'Show as data'}>
                 <Icon name={csvAsData ? 'FiGrid' : 'FiList'} size="xs" />
               </Button>
@@ -3321,12 +3314,8 @@ export const FilesPage = () => {
               height="100%"
               minHeight="100%"
             />
-          ) : dataPage ? (
-            <Container layout="block" padding="none" width="100%" height="100%" overflow="auto">
-              <CsvData key={`data-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} />
-            </Container>
           ) : sheetPage ? (
-            <Sheet key={`sheet-text-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} editable={!isReadOnly} onTextChange={updateContent} />
+            <Sheet key={`sheet-text-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} view={sheetView} editable={!isReadOnly} onTextChange={updateContent} />
           ) : viewerType === 'text' ? (
             <Container layout="flex-column" gap="xs" padding="none" width="100%" height="100%">
             {flowError && (
@@ -3435,6 +3424,7 @@ export const FilesPage = () => {
               key={`sheet-${metadata.filePath}`}
               blob={fileBlob}
               fileName={metadata.fileName}
+              view={sheetView}
               editable={!isReadOnly && /.(xlsx|csv|tsv)$/i.test(metadata.fileName)}
               onSave={async (saved) => {
                 const folder = metadata.filePath.slice(0, metadata.filePath.lastIndexOf('/')) || '/';

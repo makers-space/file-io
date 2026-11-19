@@ -849,7 +849,8 @@ const FLOW_OPTIONS = {
 };
 const flowChoices = (name) => FLOW_OPTIONS[name].map(([value, label]) => ({ value, label }));
 
-const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
+// Every change in the form is applied as it is made; the form closes when the user clicks away from it.
+const FlowForm = ({ title, fields, values, onChange, onDone }) => (
   <Container className="flow-form" layout="flex-column" gap="xs" padding="none" width="100%">
     <Typography size="xs" weight="semibold">{title}</Typography>
     <Container layout="grid" columns={2} gap="xs" padding="none" width="100%">
@@ -867,7 +868,7 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
               type={field.type}
               value={values[field.key] ?? ''}
               onChange={(event) => onChange(field.key, field.type === 'number' ? parseInt(event.target.value, 10) || field.least || 0 : event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSave(); } }}
+              onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onDone(); } }}
               size="xs"
               width="100%"
               {...(field.lines ? { multiline: true, rows: field.lines, placeholder: 'Shift+Enter for a new line' } : {})}
@@ -877,10 +878,6 @@ const FlowForm = ({ title, fields, values, onChange, onSave, onCancel }) => (
         </Container>
       ))}
     </Container>
-    <ButtonGroup spaced selectable={false} justify="end" size="xs">
-      <Button size="xs" color="secondary" onClick={onCancel}>Cancel</Button>
-      <Button size="xs" color="primary" onClick={onSave}>Save</Button>
-    </ButtonGroup>
   </Container>
 );
 
@@ -1152,7 +1149,18 @@ const FlowCanvas = forwardRef(({
   const anchorRef = useRef(null);
   // Store ReactFlow instance for coordinate transformation in onPaneClick (before hook context available)
   const reactFlowInstanceRef = useRef(null);
-  
+
+  // The canvas keeps a press to itself, so the page is told of it here and its pop-ups close as for any other press.
+  useEffect(() => {
+    const box = containerRef.current;
+    if (!box) return undefined;
+    const pressed = (event) => {
+      if (event.isTrusted && event.target.closest?.('.react-flow__renderer')) box.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    };
+    box.addEventListener('mousedown', pressed, true);
+    return () => box.removeEventListener('mousedown', pressed, true);
+  }, []);
+
   // Initialize with sanitized data once on mount. When flow text is given, the diagram is drawn from it.
   const fromText = content !== undefined && content !== null;
   const firstFlow = useMemo(() => (fromText ? parseFlow(content) : null), []);
@@ -1484,7 +1492,7 @@ const FlowCanvas = forwardRef(({
     setNodeEditor(null);
   }, [readOnly]);
   
-  const saveNode = useCallback(() => {
+  const applyNode = useCallback((nodeEditor) => {
     if (!nodeEditor) return;
     const colorToken = resolveColorToken(nodeEditor.color, DEFAULT_NODE_COLOR_TOKEN);
     const shape = nodeEditor.shape || DEFAULT_NODE_SHAPE;
@@ -1546,10 +1554,9 @@ const FlowCanvas = forwardRef(({
         };
       })
     );
-    setNodeEditor(null);
-  }, [nodeEditor, setNodes, nodes, joinGroup, leaveGroup]);
+  }, [setNodes, nodes, joinGroup, leaveGroup]);
   
-  const saveEdge = useCallback(() => {
+  const applyEdge = useCallback((edgeEditor) => {
     if (!edgeEditor) return;
     const colorToken = resolveColorToken(edgeEditor.color, DEFAULT_EDGE_COLOR_TOKEN);
     setEdges((eds) =>
@@ -1580,8 +1587,7 @@ const FlowCanvas = forwardRef(({
           : e
       )
     );
-    setEdgeEditor(null);
-  }, [edgeEditor, setEdges]);
+  }, [setEdges]);
   
   const shownNodes = useMemo(() => {
     const shut = new Set(nodes.filter((node) => node.type === 'group' && node.data?.collapsed).map((node) => node.id));
@@ -2197,9 +2203,12 @@ const FlowCanvas = forwardRef(({
           <FlowForm
             title={nodeEditor.nodeType === 'group' ? 'Group' : 'Step'}
             values={nodeEditor}
-            onChange={(key, value) => setNodeEditor((now) => (now ? { ...now, [key]: value, ...(key === 'parentId' ? { extent: value ? 'parent' : '' } : {}) } : now))}
-            onSave={saveNode}
-            onCancel={() => setNodeEditor(null)}
+            onChange={(key, value) => {
+              const next = { ...nodeEditor, [key]: value, ...(key === 'parentId' ? { extent: value ? 'parent' : '' } : {}) };
+              setNodeEditor(next);
+              applyNode(next);
+            }}
+            onDone={() => setNodeEditor(null)}
             fields={nodeEditor.nodeType === 'group' ? [
               { key: 'label', label: 'Label', type: 'text', wide: true },
               { key: 'color', label: 'Colour', type: 'select', options: COLOR_OPTIONS },
@@ -2300,9 +2309,12 @@ const FlowCanvas = forwardRef(({
           <FlowForm
             title="Connector"
             values={edgeEditor}
-            onChange={(key, value) => setEdgeEditor((now) => (now ? { ...now, [key]: value } : now))}
-            onSave={saveEdge}
-            onCancel={() => setEdgeEditor(null)}
+            onChange={(key, value) => {
+              const next = { ...edgeEditor, [key]: value };
+              setEdgeEditor(next);
+              applyEdge(next);
+            }}
+            onDone={() => setEdgeEditor(null)}
             fields={[
               { key: 'label', label: 'Label', type: 'text', wide: true, lines: 2 },
               { key: 'color', label: 'Colour', type: 'select', options: edgeEditor.member ? [{ value: 'group', label: 'Same as the group' }, ...COLOR_OPTIONS] : COLOR_OPTIONS },

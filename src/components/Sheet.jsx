@@ -4,7 +4,7 @@ import Button from './Button';
 import { ButtonGroup } from './ButtonGroup';
 import { Switch } from './Switch';
 import Typography from './Typography';
-import CircularProgress from './CircularProgress';
+import { Figure } from './Figure';
 import { Pagination } from './Data';
 
 const MAX_ROWS = 5000;
@@ -116,6 +116,10 @@ const readCsv = (text, name, mark = ',', partial = false) => {
 
 // A spreadsheet file shown as a grid, read in the browser. It shows what the file holds: a formula is shown with the
 // result stored beside it, and is not worked out again here.
+//
+// Its look keeps the rules of the Hairline figures: one plate with one outline, dim rules inside it and nothing
+// filled; the chosen cell is marked by its stroke alone, and only one thing is bright at a time; what a cell holds is
+// named in the corner read-out; and a sheet with nothing to show rests on a drawing, never on a blank.
 export const Sheet = ({
     blob,
     text = null, // The text of a CSV file, in place of a blob
@@ -174,67 +178,84 @@ export const Sheet = ({
     const shown = useMemo(() => (sheet ? sheet.cells.slice(from, from + PAGE_ROWS) : []), [sheet, from]);
     const chosen = picked && sheet ? sheet.cells[picked.row]?.[picked.column] : null;
     const pending = state.sheets.reduce((sum, one) => sum + one.pending, 0);
+    const empty = Boolean(sheet) && (sheet.rows === 0 || sheet.columns === 0);
+    const hasFormulas = state.sheets.some((one) => one.cells.some((row) => row.some((cell) => cell?.formula)));
+    const address = picked ? `${columnName(picked.column)}${picked.row + 1}` : null;
+    const reading = !picked ? 'rest' : !chosen ? 'empty' : chosen.formula ? `${chosen.formula}${chosen.waiting ? '' : ` → ${chosen.text}`}` : chosen.text;
+    // What stands in for the grid when there is nothing to show: a file being read, a file with no rows, a file that failed.
+    const rest = state.loading ? { figure: 'format', play: true, says: 'Reading the file…' }
+        : state.problem ? { figure: 'query', says: state.problem }
+            : empty ? { figure: 'loupe', says: 'This sheet holds no rows.' }
+                : null;
 
     return (
         <Container className={`sheet ${compact ? 'sheet-compact' : ''} ${className}`.trim()} layout="flex-column" gap="xs" padding="none" width={width} height={height}>
-            <Container layout="flex" wrap={false} align="center" justify="between" gap="sm" padding="none" width="100%">
-                <Typography size="xs" color="muted" truncate title={fileName}>{fileName}</Typography>
-                {state.sheets.some((one) => one.cells.some((row) => row.some((cell) => cell?.formula))) && <Switch label="Show formulas" size="xs" checked={formulas} onChange={(event) => setFormulas(event.target.checked)} />}
-            </Container>
-            <Container className="sheet-readout" layout="flex" wrap={false} align="center" gap="sm" padding="xs" width="100%">
-                <Typography size="xs" weight="semibold">{picked ? `${columnName(picked.column)}${picked.row + 1}` : 'Cell'}</Typography>
-                <Typography size="xs" color={chosen ? null : 'muted'} truncate>
-                    {!picked ? 'Choose a cell to see what it holds.' : !chosen ? 'Empty' : chosen.formula ? `${chosen.formula}${chosen.waiting ? '  (no result stored)' : `  →  ${chosen.text}`}` : chosen.text}
-                </Typography>
-            </Container>
-            <Container className="sheet-grid" layout="block" padding="none" width="100%" flexFill>
-                {state.loading && <Container layout="flex" align="center" justify="center" padding="md" width="100%"><CircularProgress size="sm" /></Container>}
-                {state.problem && <Container padding="sm"><Typography size="xs" color="warning">{state.problem}</Typography></Container>}
-                {sheet && (
-                    <table className="sheet-table">
-                        <thead>
-                            <tr>
-                                <th className="sheet-corner" />
-                                {Array.from({ length: sheet.columns }, (_, column) => <th key={column} className={picked?.column === column ? 'sheet-head-on' : ''}>{columnName(column)}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {shown.map((line, offset) => {
-                                const row = from + offset;
-                                return (
-                                    <tr key={row}>
-                                        <th className={picked?.row === row ? 'sheet-head-on' : ''}>{row + 1}</th>
-                                        {Array.from({ length: sheet.columns }, (_, column) => {
-                                            if (sheet.covered.has(`${row}:${column}`)) return null;
-                                            const cell = line[column] || null;
-                                            const span = sheet.spans.get(`${row}:${column}`);
-                                            const on = picked?.row === row && picked?.column === column;
-                                            const kind = [cell?.number && !formulas ? 'sheet-number' : '', cell?.bold ? 'sheet-bold' : '', cell?.waiting ? 'sheet-waiting' : '', on ? 'sheet-on' : ''].filter(Boolean).join(' ');
-                                            return (
-                                                <td key={column} className={kind || undefined} rowSpan={span?.rowSpan} colSpan={span?.colSpan} onClick={() => setPicked({ row, column })}>
-                                                    {cell ? (formulas && cell.formula ? cell.formula : cell.waiting ? cell.formula : cell.text) : ''}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                )}
+            <Container className="sheet-plate" layout="flex-column" gap="none" padding="none" width="100%" flexFill>
+                <Container className="sheet-tags" layout="flex" wrap={false} align="center" justify="between" gap="sm" padding="none" width="100%">
+                    <Typography className="sheet-tag" size="xxs" color="muted" truncate title={fileName}>{fileName}</Typography>
+                    <Container className="sheet-read" layout="flex" wrap={false} align="center" gap="xs" padding="none" minWidth="0">
+                        {address && <Typography className="sheet-tag sheet-tag-on" size="xxs">{address}</Typography>}
+                        <Typography className="sheet-tag" size="xxs" color={picked && chosen ? null : 'muted'} truncate title={chosen?.waiting ? 'The file holds no result for this formula.' : null}>{reading}</Typography>
+                    </Container>
+                </Container>
+                <Container className="sheet-grid" layout="block" padding="none" width="100%" flexFill>
+                    {rest && (
+                        <Container className="sheet-rest" layout="flex-column" align="center" justify="center" gap="xs" padding="md" width="100%" height="100%">
+                            <Figure name={rest.figure} play={Boolean(rest.play)} label={rest.says} maxWidth={compact ? '200px' : '280px'} />
+                            <Typography size="xs" color="muted">{rest.says}</Typography>
+                        </Container>
+                    )}
+                    {sheet && !rest && (
+                        <table className="sheet-table">
+                            <thead>
+                                <tr>
+                                    <th className="sheet-corner" />
+                                    {Array.from({ length: sheet.columns }, (_, column) => <th key={column} className={picked?.column === column ? 'sheet-head-on' : ''}>{columnName(column)}</th>)}
+                                    <th className="sheet-fill" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {shown.map((line, offset) => {
+                                    const row = from + offset;
+                                    return (
+                                        <tr key={row}>
+                                            <th className={picked?.row === row ? 'sheet-head-on' : ''}>{row + 1}</th>
+                                            {Array.from({ length: sheet.columns }, (_, column) => {
+                                                if (sheet.covered.has(`${row}:${column}`)) return null;
+                                                const cell = line[column] || null;
+                                                const span = sheet.spans.get(`${row}:${column}`);
+                                                const on = picked?.row === row && picked?.column === column;
+                                                const kind = [cell?.number && !formulas ? 'sheet-number' : '', cell?.bold ? 'sheet-bold' : '', cell?.waiting ? 'sheet-waiting' : '', on ? 'sheet-on' : ''].filter(Boolean).join(' ');
+                                                return (
+                                                    <td key={column} className={kind || undefined} rowSpan={span?.rowSpan} colSpan={span?.colSpan} onClick={() => setPicked({ row, column })}>
+                                                        {cell ? (formulas && cell.formula ? cell.formula : cell.waiting ? cell.formula : cell.text) : ''}
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="sheet-fill" aria-hidden="true" />
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </Container>
             </Container>
             {(pending > 0 || sheet?.cut) && (
-                <Typography size="xxs" color="warning">
+                <Typography size="xxs" color="muted">
                     {[pending > 0 ? `${pending === 1 ? '1 formula has' : `${pending} formulas have`} no result stored in this file, so ${pending === 1 ? 'it is' : 'they are'} shown as written.` : '', sheet?.cut ? `Only the first ${MAX_ROWS.toLocaleString()} rows and ${MAX_COLUMNS} columns are shown.` : ''].filter(Boolean).join(' ')}
                 </Typography>
             )}
-            <Container layout="flex" align="center" justify="between" gap="sm" padding="none" width="100%">
-                <ButtonGroup selectable={false} size="xs">
+            <Container className="sheet-controls" layout="flex" align="center" justify="between" gap="sm" padding="none" width="100%">
+                <ButtonGroup className="sheet-tabs" selectable={false} size="xs">
                     {state.sheets.map((one, at) => (
-                        <Button key={`${one.name}-${at}`} size="xs" color={at === index ? 'primary' : 'secondary'} selected={at === index} onClick={() => { setIndex(at); setPage(1); setPicked(null); }}>{one.name}</Button>
+                        <Button key={`${one.name}-${at}`} size="xs" flat color="secondary" selected={at === index} onClick={() => { setIndex(at); setPage(1); setPicked(null); }}>{one.name}</Button>
                     ))}
                 </ButtonGroup>
-                {pages > 1 && <Pagination page={page} pages={pages} onPage={setPage} size="xs" padding="none" />}
+                <Container layout="flex" wrap={false} align="center" gap="sm" padding="none">
+                    {hasFormulas && <Switch label="Show formulas" size="xs" checked={formulas} onChange={(event) => setFormulas(event.target.checked)} />}
+                    {pages > 1 && <Pagination page={page} pages={pages} onPage={setPage} size="xs" padding="none" />}
+                </Container>
             </Container>
         </Container>
     );

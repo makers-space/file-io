@@ -196,8 +196,9 @@ export const Genie = forwardRef(({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    // Heard on the way down, so a part of the page that keeps its presses to itself (a diagram's canvas) still closes it.
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
   }, [visible, closeOnClickOutside, onClose]);
 
   // Handle auto-close timer

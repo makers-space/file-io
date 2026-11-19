@@ -26,6 +26,8 @@ export const readAppTheme = () => {
     if (contrast) theme.contrast = contrast;
     const font = styles.getPropertyValue('--font-family-primary').trim() || styles.fontFamily;
     if (font) theme.font = font;
+    const radius = styles.getPropertyValue('--button-radius').trim() || styles.getPropertyValue('--border-radius-md').trim();
+    if (radius) theme.radius = radius;
     return theme;
 };
 const isDark = (color) => {
@@ -42,10 +44,14 @@ const themeStyle = (theme, variables) => {
     return `<style>:root{${own}${scheme}}${mapped ? `:root,:root[data-theme]{${mapped}}` : ''}</style>`;
 };
 
-export const sealPage = (html, { theme = {}, variables = null } = {}) => {
+// A dressed page has its own buttons and sliders drawn in the app's look: its typeface, its button shape and its
+// colours. A page's switch between its own light and dark is hidden, because the app's theme decides that.
+const DRESS = '<style>body,body *:not(code,pre,kbd,samp){font-family:var(--app-font,inherit)!important;letter-spacing:0!important}button{height:28px!important;padding:0 12px!important;font-size:12px!important;font-weight:500!important;line-height:1!important;border:1px solid var(--app-primary)!important;border-radius:var(--app-radius,6px)!important;background:var(--app-surface,transparent)!important;color:var(--app-text)!important;cursor:pointer}button:hover{background:color-mix(in srgb,var(--app-primary) 16%,var(--app-surface,transparent))!important}button[aria-pressed="true"]{background:var(--app-primary)!important;color:var(--app-contrast,var(--app-background))!important}button:focus-visible,input:focus-visible{outline:2px solid var(--app-primary)!important;outline-offset:2px!important}input[type="range"]{accent-color:var(--app-primary)}input[type="range"]::-webkit-slider-runnable-track{height:3px!important;border-radius:2px;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-webkit-slider-thumb{width:14px!important;height:14px!important;margin-top:-6px!important;border:none!important;background:var(--app-primary)!important}input[type="range"]::-moz-range-track{height:3px!important;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-moz-range-thumb{width:14px!important;height:14px!important;border:none!important;background:var(--app-primary)!important}[aria-label*="theme" i],span:has(+ [aria-label*="theme" i]){display:none!important}</style>';
+
+export const sealPage = (html, { theme = {}, variables = null, dressed = false } = {}) => {
     const text = String(html ?? '');
     // The theme goes at the end of the page's own head, so the page's styles can use it and a mapped colour wins.
-    const style = Object.keys(theme).length > 0 || variables ? themeStyle(theme, variables) : '';
+    const style = `${Object.keys(theme).length > 0 || variables ? themeStyle(theme, variables) : ''}${dressed ? DRESS : ''}`;
     const close = (page) => (style ? (/<\/head>/i.test(page) ? page.replace(/<\/head>/i, () => `${style}</head>`) : page.replace(SEAL, () => `${SEAL}${style}`)) : page);
     const head = text.match(/<head[^>]*>/i);
     if (head) return close(text.replace(head[0], () => `${head[0]}${SEAL}${REPORT}`));
@@ -61,6 +67,7 @@ export const Frame = ({
     height = '480px',
     minHeight = null,
     fit = false, // Grow or shrink to the height of the page's content, so nothing scrolls inside the frame
+    dressed = false, // Draw the page's own buttons and sliders in the app's look
     bordered = true,
     themed = true,
     variables = null,
@@ -96,7 +103,7 @@ export const Frame = ({
             timers.forEach(clearTimeout);
         };
     }, [themed, currentTheme]);
-    const page = useMemo(() => sealPage(html, { theme: themed ? appTheme : {}, variables }), [html, themed, appTheme, variables]);
+    const page = useMemo(() => sealPage(html, { theme: themed ? appTheme : {}, variables, dressed: dressed && themed }), [html, themed, appTheme, variables, dressed]);
     // What the page reports is taken only from this frame's own page. A page whose height follows the frame's would
     // grow for ever, so the fitting stops after a number of changes.
     const [fitted, setFitted] = useState(null);

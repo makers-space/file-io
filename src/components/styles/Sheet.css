@@ -113,3 +113,13 @@
 .sheet-table .sheet-head-on {
     color: var(--primary-color);
 }
+
+.sheet-table .sheet-heading td {
+    background: var(--surface-color);
+    font-weight: 600;
+}
+
+.sheet-filters {
+    border: 1px solid var(--border-color);
+    border-radius: var(--card-radius, var(--border-radius-md));
+}

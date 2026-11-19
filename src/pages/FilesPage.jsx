@@ -395,7 +395,7 @@ const useFileViewer = (filePath) => {
           const blob = await fileService.downloadFile(filePath);
           if (cancelled) return;
           if (viewerType === 'slides' || viewerType === 'sheet') {
-            return setReady({ viewerType, metadata, isReadOnly: true, fileBlob: blob });
+            return setReady({ viewerType, metadata, isReadOnly, fileBlob: blob });
           }
           if (viewerType === 'pdf') {
             return setReady({ viewerType: 'pdf', metadata, isReadOnly, pdfBlob: blob });

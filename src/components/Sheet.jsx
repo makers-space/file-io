@@ -4,12 +4,15 @@ import Button from './Button';
 import { ButtonGroup } from './ButtonGroup';
 import { Switch } from './Switch';
 import Typography from './Typography';
+import Input from './Input';
+import Select from './Select';
+import Icon from './Icon';
 import { Figure } from './Figure';
 import { Pagination } from './Data';
 
 const MAX_ROWS = 5000;
 const MAX_COLUMNS = 200;
-const PAGE_ROWS = 100;
+const PAGE_SIZES = [10, 20, 50, 100, 500];
 const CSV_READ_BYTES = 8 * 1024 * 1024;
 
 const columnName = (index) => {
@@ -34,6 +37,7 @@ const dateText = (value) => {
     const iso = value.toISOString();
     return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 16).replace('T', ' ');
 };
+const textOf = (cell) => (cell ? (cell.waiting ? cell.formula : cell.text) : '');
 const valueText = (value, format) => {
     if (value === null || value === undefined) return '';
     if (value instanceof Date) return dateText(value);
@@ -77,7 +81,7 @@ const readSheet = (sheet) => {
             const result = formula ? cell.result : value;
             const waiting = Boolean(formula) && (result === undefined || result === null);
             if (waiting) pending += 1;
-            line.push({ text: waiting ? '' : valueText(result, cell.numFmt), formula, waiting, number: typeof result === 'number', bold: Boolean(cell.font?.bold) });
+            line.push({ text: waiting ? '' : valueText(result, cell.numFmt), formula, waiting, number: typeof result === 'number', value: typeof result === 'number' ? result : null, bold: Boolean(cell.font?.bold) });
         }
         cells.push(line);
     }
@@ -91,7 +95,7 @@ const readCsv = (text, name, mark = ',', partial = false) => {
     let quoted = false;
     const push = () => {
         const number = field.trim() !== '' && Number.isFinite(Number(field));
-        line.push(field === '' ? null : { text: field, formula: null, waiting: false, number, bold: false });
+        line.push(field === '' ? null : { text: field, formula: null, waiting: false, number, value: number ? Number(field) : null, bold: false });
         field = '';
     };
     for (let at = 0; at < text.length && cells.length < MAX_ROWS; at += 1) {
@@ -115,7 +119,8 @@ const readCsv = (text, name, mark = ',', partial = false) => {
 };
 
 // A spreadsheet file shown as a grid, read in the browser. It shows what the file holds: a formula is shown with the
-// result stored beside it, and is not worked out again here.
+// result stored beside it, and is not worked out again here. Row 1 is taken as the headings: it stays on top of every
+// page and names the columns in the search, filter, column and sort controls, which are the Data component's own.
 export const Sheet = ({
     blob,
     text = null, // The text of a CSV file, in place of a blob
@@ -129,18 +134,21 @@ export const Sheet = ({
     const [state, setState] = useState({ loading: true, sheets: [], problem: null });
     const [index, setIndex] = useState(0);
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(100);
     const [picked, setPicked] = useState(null);
     const [formulas, setFormulas] = useState(false);
+    const [search, setSearch] = useState('');
+    const [filtering, setFiltering] = useState(false);
+    const [filters, setFilters] = useState({});
+    const [hidden, setHidden] = useState(() => new Set());
+    const [sort, setSort] = useState('none');
+    const open = (at) => { setIndex(at); setPage(1); setPicked(null); setSearch(''); setFilters({}); setHidden(new Set()); setSort('none'); };
 
     useEffect(() => {
         if (!blob && text === null) return undefined;
         let live = true;
         setState((now) => (text !== null && now.sheets.length > 0 ? now : { loading: true, sheets: [], problem: null }));
-        if (text === null) {
-            setIndex(0);
-            setPage(1);
-            setPicked(null);
-        }
+        if (text === null) open(0);
         (async () => {
             try {
                 let sheets;
@@ -169,9 +177,56 @@ export const Sheet = ({
     }, [blob, text, fileName]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const sheet = state.sheets[index] || null;
-    const pages = sheet ? Math.max(1, Math.ceil(sheet.rows / PAGE_ROWS)) : 1;
-    const from = (page - 1) * PAGE_ROWS;
-    const shown = useMemo(() => (sheet ? sheet.cells.slice(from, from + PAGE_ROWS) : []), [sheet, from]);
+    const head = sheet?.cells[0] || [];
+    const label = (column) => (head[column]?.text ? `${columnName(column)} · ${head[column].text}` : columnName(column));
+    const columns = useMemo(() => (sheet ? Array.from({ length: sheet.columns }, (_, column) => column).filter((column) => !hidden.has(column)) : []), [sheet, hidden]);
+    // A column with ten values or fewer is filtered by picking one; any other by typing part of a value.
+    const choices = useMemo(() => {
+        const found = {};
+        if (!sheet || !filtering) return found;
+        for (let column = 0; column < sheet.columns; column += 1) {
+            const seen = new Set();
+            for (let row = 1; row < sheet.rows && seen.size <= 10; row += 1) {
+                const value = textOf(sheet.cells[row]?.[column]);
+                if (value !== '') seen.add(value);
+            }
+            found[column] = seen.size > 0 && seen.size <= 10 ? [...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) : null;
+        }
+        return found;
+    }, [sheet, filtering]);
+    const term = search.trim().toLowerCase();
+    const altered = term !== '' || sort !== 'none' || Object.values(filters).some((filter) => filter.value.trim() !== '');
+    const body = useMemo(() => {
+        if (!sheet) return [];
+        let rows = Array.from({ length: Math.max(0, sheet.rows - 1) }, (_, at) => at + 1);
+        if (term) rows = rows.filter((row) => sheet.cells[row].some((cell) => textOf(cell).toLowerCase().includes(term)));
+        for (const [column, filter] of Object.entries(filters)) {
+            const wanted = filter.value.trim().toLowerCase();
+            if (!wanted) continue;
+            rows = rows.filter((row) => {
+                const value = textOf(sheet.cells[row][column]).toLowerCase();
+                return filter.exact ? value === wanted : value.includes(wanted);
+            });
+        }
+        if (sort !== 'none') {
+            const [column, way] = sort.split(':');
+            const turn = way === 'desc' ? -1 : 1;
+            rows.sort((a, b) => {
+                const one = sheet.cells[a][column] || null;
+                const other = sheet.cells[b][column] || null;
+                const left = textOf(one);
+                const right = textOf(other);
+                if (left === '' || right === '') return (left === '') - (right === '');
+                if (typeof one.value === 'number' && typeof other.value === 'number') return (one.value - other.value) * turn;
+                return left.localeCompare(right, undefined, { numeric: true }) * turn;
+            });
+        }
+        return rows;
+    }, [sheet, term, filters, sort]);
+    const pages = Math.max(1, Math.ceil(body.length / pageSize));
+    const shown = body.slice((page - 1) * pageSize, page * pageSize);
+    // Merged cells are drawn merged only while the rows and columns stand as the file has them.
+    const plain = !altered && hidden.size === 0;
     const chosen = picked && sheet ? sheet.cells[picked.row]?.[picked.column] : null;
     const pending = state.sheets.reduce((sum, one) => sum + one.pending, 0);
     const empty = Boolean(sheet) && (sheet.rows === 0 || sheet.columns === 0);
@@ -183,9 +238,103 @@ export const Sheet = ({
         : state.problem ? { figure: 'query', says: state.problem }
             : empty ? { figure: 'loupe', says: 'This sheet holds no rows.' }
                 : null;
+    const size = 'xs';
+    const setFilter = (column, value) => { setFilters((now) => ({ ...now, [column]: { value, exact: Boolean(choices[column]) } })); setPage(1); };
+    const showOnly = (kept) => setHidden(new Set(kept ? [] : Array.from({ length: sheet?.columns || 0 }, (_, column) => column)));
+    const notes = [
+        altered ? `${body.length.toLocaleString()} of ${Math.max(0, (sheet?.rows || 1) - 1).toLocaleString()} rows match.` : '',
+        pending > 0 ? `${pending === 1 ? '1 formula has' : `${pending} formulas have`} no result stored in this file, so ${pending === 1 ? 'it is' : 'they are'} shown as written.` : '',
+        sheet?.cut ? `Only the first ${MAX_ROWS.toLocaleString()} rows and ${MAX_COLUMNS} columns of this file are read.` : ''
+    ].filter(Boolean).join(' ');
+
+    const line = (row, heading) => {
+        const cells = sheet.cells[row] || [];
+        const merged = plain && (!heading || page === 1);
+        return (
+            <tr key={row} className={heading ? 'sheet-heading' : undefined}>
+                <th className={picked?.row === row ? 'sheet-head-on' : ''}>{row + 1}</th>
+                {columns.map((column) => {
+                    if (merged && sheet.covered.has(`${row}:${column}`)) return null;
+                    const cell = cells[column] || null;
+                    const span = merged ? sheet.spans.get(`${row}:${column}`) : null;
+                    const on = picked?.row === row && picked?.column === column;
+                    const kind = [cell?.number && !formulas ? 'sheet-number' : '', cell?.bold ? 'sheet-bold' : '', cell?.waiting ? 'sheet-waiting' : '', on ? 'sheet-on' : ''].filter(Boolean).join(' ');
+                    return (
+                        <td key={column} className={kind || undefined} rowSpan={span?.rowSpan} colSpan={span?.colSpan} onClick={() => setPicked({ row, column })}>
+                            {cell ? (formulas && cell.formula ? cell.formula : textOf(cell)) : ''}
+                        </td>
+                    );
+                })}
+                <td className="sheet-fill" aria-hidden="true" />
+            </tr>
+        );
+    };
 
     return (
         <Container className={`sheet ${compact ? 'sheet-compact' : ''} ${className}`.trim()} layout="flex-column" gap="xs" padding="none" width={width} height={height}>
+            {sheet && !rest && (
+                <Container className="sheet-tools" layout="flex" wrap={false} align="center" gap="sm" padding="none" width="100%">
+                    <Container padding="none" flexFill>
+                        <Input placeholder="Search all columns..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} size={size} variant="outline" type="search" icon="FaSearch" />
+                    </Container>
+                    <Button variant="secondary" size={size} selected={filtering} onClick={() => setFiltering((now) => !now)}>
+                        <Icon name="FiFilter" size="xxs" />
+                        Filters
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        size={size}
+                        genieTrigger="click"
+                        genie={
+                            <Container layout="flex-column" gap="sm" padding="md">
+                                <Container layout="flex" align="center" justify="between" padding="none">
+                                    <Typography size={size} weight="medium">Select Columns</Typography>
+                                    <ButtonGroup spaced selectable={false} justify="start">
+                                        <Button variant="tertiary" size={size} onClick={() => showOnly(true)}>All</Button>
+                                        <Button variant="tertiary" size={size} onClick={() => showOnly(false)}>None</Button>
+                                    </ButtonGroup>
+                                </Container>
+                                {Array.from({ length: sheet.columns }, (_, column) => (
+                                    <Container key={column} layout="flex" align="center" gap="sm" padding="none">
+                                        <Input
+                                            type="checkbox"
+                                            id={`sheet-column-${column}`}
+                                            checked={!hidden.has(column)}
+                                            onChange={() => setHidden((now) => { const next = new Set(now); if (!next.delete(column)) next.add(column); return next; })}
+                                        />
+                                        <Typography as="label" htmlFor={`sheet-column-${column}`} size={size}>{label(column)}</Typography>
+                                    </Container>
+                                ))}
+                            </Container>
+                        }
+                    >
+                        <Icon name="FiColumns" size="xxs" />
+                        Columns
+                    </Button>
+                </Container>
+            )}
+            {sheet && !rest && filtering && (
+                <Container className="sheet-filters" gap="sm" padding="sm" backgroundColor="surface" width="100%">
+                    <Container layout="flex" align="center" justify="between" padding="none">
+                        <Typography weight="semibold" size={size}>Column Filters</Typography>
+                        <Button variant="secondary" size={size} onClick={() => { setFilters({}); setPage(1); }}>Clear All</Button>
+                    </Container>
+                    <Container layout="flex" gap="sm" padding="none">
+                        {columns.map((column) => (choices[column] ? (
+                            <Select
+                                key={column}
+                                placeholder={`Filter by ${label(column)}...`}
+                                value={filters[column]?.value || ''}
+                                onChange={(event) => setFilter(column, event?.target?.value ?? event)}
+                                options={[{ value: '', label: `${label(column)}: all` }, ...choices[column].map((option) => ({ value: option, label: option }))]}
+                                size={size}
+                            />
+                        ) : (
+                            <Input key={column} placeholder={`Filter ${label(column)}...`} value={filters[column]?.value || ''} onChange={(event) => setFilter(column, event.target.value)} size={size} variant="outline" />
+                        )))}
+                    </Container>
+                </Container>
+            )}
             <Container className="sheet-plate" layout="flex-column" gap="none" padding="none" width="100%" flexFill>
                 <Container className="sheet-tags" layout="flex" wrap={false} align="center" justify="between" gap="sm" padding="none" width="100%">
                     <Typography className="sheet-tag" size="xxs" color="muted" truncate title={fileName}>{fileName}</Typography>
@@ -206,53 +355,40 @@ export const Sheet = ({
                             <thead>
                                 <tr>
                                     <th className="sheet-corner" />
-                                    {Array.from({ length: sheet.columns }, (_, column) => <th key={column} className={picked?.column === column ? 'sheet-head-on' : ''}>{columnName(column)}</th>)}
+                                    {columns.map((column) => <th key={column} className={picked?.column === column ? 'sheet-head-on' : ''}>{columnName(column)}</th>)}
                                     <th className="sheet-fill" />
                                 </tr>
                             </thead>
                             <tbody>
-                                {shown.map((line, offset) => {
-                                    const row = from + offset;
-                                    return (
-                                        <tr key={row}>
-                                            <th className={picked?.row === row ? 'sheet-head-on' : ''}>{row + 1}</th>
-                                            {Array.from({ length: sheet.columns }, (_, column) => {
-                                                if (sheet.covered.has(`${row}:${column}`)) return null;
-                                                const cell = line[column] || null;
-                                                const span = sheet.spans.get(`${row}:${column}`);
-                                                const on = picked?.row === row && picked?.column === column;
-                                                const kind = [cell?.number && !formulas ? 'sheet-number' : '', cell?.bold ? 'sheet-bold' : '', cell?.waiting ? 'sheet-waiting' : '', on ? 'sheet-on' : ''].filter(Boolean).join(' ');
-                                                return (
-                                                    <td key={column} className={kind || undefined} rowSpan={span?.rowSpan} colSpan={span?.colSpan} onClick={() => setPicked({ row, column })}>
-                                                        {cell ? (formulas && cell.formula ? cell.formula : cell.waiting ? cell.formula : cell.text) : ''}
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="sheet-fill" aria-hidden="true" />
-                                        </tr>
-                                    );
-                                })}
+                                {line(0, true)}
+                                {shown.map((row) => line(row, false))}
                             </tbody>
                         </table>
                     )}
                 </Container>
             </Container>
-            {(pending > 0 || sheet?.cut) && (
-                <Typography size="xxs" color="muted">
-                    {[pending > 0 ? `${pending === 1 ? '1 formula has' : `${pending} formulas have`} no result stored in this file, so ${pending === 1 ? 'it is' : 'they are'} shown as written.` : '', sheet?.cut ? `Only the first ${MAX_ROWS.toLocaleString()} rows and ${MAX_COLUMNS} columns are shown.` : ''].filter(Boolean).join(' ')}
-                </Typography>
-            )}
-            <Container className="sheet-controls" layout="flex" align="center" justify="between" gap="sm" padding="none" width="100%">
-                <ButtonGroup className="sheet-tabs" selectable={false} size="xs">
-                    {state.sheets.map((one, at) => (
-                        <Button key={`${one.name}-${at}`} size="xs" color={at === index ? 'primary' : 'secondary'} selected={at === index} onClick={() => { setIndex(at); setPage(1); setPicked(null); }}>{one.name}</Button>
-                    ))}
-                </ButtonGroup>
-                <Container layout="flex" wrap={false} align="center" gap="sm" padding="none">
-                    {hasFormulas && <Switch label="Show formulas" size="xs" checked={formulas} onChange={(event) => setFormulas(event.target.checked)} />}
-                    {pages > 1 && <Pagination page={page} pages={pages} onPage={setPage} size="xs" padding="none" />}
+            {notes && <Typography size="xxs" color="muted">{notes}</Typography>}
+            {(state.sheets.length > 1 || hasFormulas) && (
+                <Container className="sheet-controls" layout="flex" align="center" justify="between" gap="sm" padding="none" width="100%">
+                    <ButtonGroup className="sheet-tabs" selectable={false} size={size}>
+                        {state.sheets.map((one, at) => (
+                            <Button key={`${one.name}-${at}`} size={size} color={at === index ? 'primary' : 'secondary'} selected={at === index} onClick={() => open(at)}>{one.name}</Button>
+                        ))}
+                    </ButtonGroup>
+                    {hasFormulas && <Switch label="Show formulas" size={size} checked={formulas} onChange={(event) => setFormulas(event.target.checked)} />}
                 </Container>
-            </Container>
+            )}
+            {sheet && !rest && (
+                <Pagination page={page} pages={pages} onPage={setPage} pageSize={pageSize} pageSizes={PAGE_SIZES} onPageSize={(chosenSize) => { setPageSize(chosenSize); setPage(1); }} size={size} padding="none">
+                    <Select
+                        size={size}
+                        value={sort}
+                        onChange={(event) => { setSort((event?.target?.value ?? event) || 'none'); setPage(1); }}
+                        options={[{ value: 'none', label: 'No sorting' }, ...columns.flatMap((column) => [{ value: `${column}:asc`, label: `${label(column)} ↑` }, { value: `${column}:desc`, label: `${label(column)} ↓` }])]}
+                        placeholder="Sort by..."
+                    />
+                </Pagination>
+            )}
         </Container>
     );
 };

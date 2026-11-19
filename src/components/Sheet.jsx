@@ -30,6 +30,9 @@ const numberText = (value, format = '') => {
     if (decimals !== undefined) return value.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
     return String(Number(value.toPrecision(12)));
 };
+// A date as the day number a spreadsheet keeps it as.
+const SERIAL_DAY = 86400000;
+const SERIAL_START = Date.UTC(1899, 11, 30);
 const dateText = (value) => {
     const iso = value.toISOString();
     return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 16).replace('T', ' ');
@@ -85,7 +88,7 @@ const readSheet = (sheet) => {
             const result = formula ? cell.result : value;
             const waiting = Boolean(formula) && (result === undefined || result === null);
             if (waiting) pending += 1;
-            line.push({ text: waiting ? '' : valueText(result, cell.numFmt), formula, waiting, number: typeof result === 'number', value: typeof result === 'number' ? result : null, bold: Boolean(cell.font?.bold), format: cell.numFmt || '', source: value });
+            line.push({ text: waiting ? '' : valueText(result, cell.numFmt), formula, waiting, number: typeof result === 'number', value: typeof result === 'number' ? result : null, bold: Boolean(cell.font?.bold), format: cell.numFmt || '', source: value, serial: result instanceof Date ? (result.getTime() - SERIAL_START) / SERIAL_DAY : null });
         }
         cells.push(line);
     }
@@ -158,6 +161,66 @@ const writeCsv = (sheet, mark) => sheet.cells.map((line) => Array.from(line, (ce
     return field.includes(mark) || /["\r\n]/.test(field) ? `"${field.replace(/"/g, '""')}"` : field;
 }).join(mark)).join('\n');
 
+// Formulas are worked out by IronCalc, a spreadsheet engine loaded only for a workbook that holds formulas and can be
+// edited. It is given what every cell holds, and after a change each formula's result is read back. It hands results
+// back as text, so each formula cell is given a number format that prints every digit.
+const PRECISE = '0.000000000000000E+00';
+const UNKNOWN = ['#NAME?', '#N/IMPL!'];
+const inputOf = (cell) => {
+    if (!cell) return '';
+    if (cell.formula) return cell.formula;
+    if (cell.source instanceof Date) return String((cell.source.getTime() - SERIAL_START) / SERIAL_DAY);
+    if (typeof cell.value === 'number') return String(cell.value);
+    if (typeof cell.source === 'boolean') return cell.source ? 'TRUE' : 'FALSE';
+    return `'${cell.text}`;
+};
+const resultOf = (cell) => (typeof cell.serial === 'number' ? new Date(SERIAL_START + Math.round(cell.serial * SERIAL_DAY))
+    : cell.value !== null && cell.value !== undefined ? cell.value
+        : cell.text === 'TRUE' || cell.text === 'FALSE' ? cell.text === 'TRUE'
+            : /^#[A-Z0-9/]+[!?]?$/.test(cell.text) ? { error: cell.text } : cell.text);
+const tell = (model, at, row, column, cell) => {
+    model.setUserInput(at, row + 1, column + 1, inputOf(cell));
+    if (cell?.formula) model.updateRangeStyle({ sheet: at, row: row + 1, column: column + 1, width: 1, height: 1 }, 'num_fmt', PRECISE);
+};
+const startEngine = async (sheets) => {
+    const [library, wasm] = await Promise.all([import('@ironcalc/wasm'), import('@ironcalc/wasm/wasm_bg.wasm?url')]);
+    await library.default({ module_or_path: wasm.default });
+    const model = new library.Model('sheet', 'en', 'UTC', 'en');
+    model.pauseEvaluation();
+    sheets.forEach((one, at) => {
+        if (at > 0) model.newSheet();
+        try { model.renameSheet(at, one.name); } catch { /* it already has this name */ }
+        one.cells.forEach((line, row) => line.forEach((cell, column) => { if (cell) tell(model, at, row, column, cell); }));
+    });
+    model.resumeEvaluation();
+    model.evaluate();
+    return model;
+};
+// Reads every formula's result back. A result is left as the file had it, and its cell remembered in `held`, when the
+// engine does not know a function in it, or when on first reading the file the engine comes to a different answer.
+const recalc = (model, sheets, pages, held, first) => {
+    sheets.forEach((one, at) => one.cells.forEach((line, row) => line.forEach((cell, column) => {
+        if (!cell || !cell.formula) return;
+        const key = `${at}:${row}:${column}`;
+        if (held.has(key)) return;
+        const shown = model.getFormattedCellValue(at, row + 1, column + 1);
+        const kind = model.getCellType(at, row + 1, column + 1);
+        const number = kind === 1 && shown !== '' && Number.isFinite(Number(shown)) ? Number(shown) : null;
+        const before = typeof cell.serial === 'number' ? cell.serial : cell.value;
+        const same = number !== null ? typeof before === 'number' && Math.abs(number - before) <= 1e-9 * Math.max(1, Math.abs(number)) : cell.text === shown;
+        if (!cell.waiting && same) return;
+        if (!cell.waiting && (first || UNKNOWN.includes(shown))) { held.add(key); return; }
+        if (cell.waiting) one.pending -= 1;
+        const dated = typeof cell.serial === 'number' && number !== null;
+        Object.assign(cell, { waiting: false, number: number !== null && !dated, value: dated ? null : number, serial: dated ? number : null });
+        cell.text = dated ? dateText(new Date(SERIAL_START + Math.round(number * SERIAL_DAY))) : number !== null ? numberText(number, cell.format) : shown;
+        delete cell.source;
+        const page = pages[at];
+        if (page) page.getCell(row + 1, column + 1).value = { formula: cell.formula.slice(1), result: resultOf(cell) };
+    })));
+    return held.size;
+};
+
 // Every change is made twice: to the rows the grid draws, and to the workbook the file was read into (`page` is its
 // worksheet; a CSV file has none), so saving writes the workbook as it stands.
 const put = (sheet, page, row, column, cell) => {
@@ -166,7 +229,7 @@ const put = (sheet, page, row, column, cell) => {
     line[column] = cell;
     if (!page) return;
     const target = page.getCell(row + 1, column + 1);
-    target.value = !cell ? null : cell.source !== undefined ? cell.source : cell.formula ? { formula: cell.formula.slice(1) } : cell.value !== null ? cell.value : cell.text;
+    target.value = !cell ? null : cell.source !== undefined ? cell.source : cell.formula ? { formula: cell.formula.slice(1), ...(cell.waiting ? {} : { result: resultOf(cell) }) } : cell.value !== null ? cell.value : cell.text;
     if (!cell) return;
     if (Boolean(target.font?.bold) !== cell.bold) target.font = { ...(target.font || {}), bold: cell.bold };
     if ((target.numFmt || '') !== cell.format && (cell.format || target.numFmt)) target.numFmt = cell.format || 'General';
@@ -239,6 +302,23 @@ export const Sheet = ({
     const emitted = useRef(null);
     const draft = useRef(null);
     const grid = useRef(null);
+    const engine = useRef(null);
+    const [calc, setCalc] = useState('off');
+    const [heldBack, setHeldBack] = useState(0);
+    const drop = () => { engine.current?.model?.free(); engine.current = null; setCalc('off'); setHeldBack(0); };
+    const begin = (sheets) => {
+        const holder = { model: null, held: new Set() };
+        engine.current = holder;
+        setCalc('loading');
+        startEngine(sheets).then((model) => {
+            if (engine.current !== holder) { model.free(); return; }
+            holder.model = model;
+            setHeldBack(recalc(model, sheets, book.current?.worksheets || [], holder.held, true));
+            setCalc('on');
+            setVersion((now) => now + 1);
+        }).catch(() => { if (engine.current === holder) { engine.current = null; setCalc('failed'); } });
+    };
+    useEffect(() => () => { engine.current?.model?.free(); engine.current = null; }, []);
     const mark = /\.tsv$/i.test(fileName) ? '\t' : ',';
     const [index, setIndex] = useState(0);
     const [pageNumber, setPage] = useState(1);
@@ -258,6 +338,7 @@ export const Sheet = ({
         if (text !== null && text === emitted.current) return undefined;
         let live = true;
         book.current = null;
+        drop();
         done.current = [];
         undone.current = [];
         draft.current = null;
@@ -281,6 +362,7 @@ export const Sheet = ({
                     if (live) book.current = loaded;
                 }
                 if (live) setState({ loading: false, sheets, problem: sheets.length === 0 ? 'This file holds no sheets.' : null });
+                if (live && editable && book.current && sheets.some((one) => one.cells.some((row) => row.some((cell) => cell?.formula)))) begin(sheets);
             } catch (error) {
                 if (!live) return;
                 setState({ loading: false, sheets: [], problem: 'This file could not be shown as a sheet.' });
@@ -356,12 +438,21 @@ export const Sheet = ({
                 : null;
     const size = 'xs';
     const page = sheet && !sheet.text ? book.current?.worksheets[index] || null : null;
-    const canEdit = editable && Boolean(sheet) && (sheet.text || Boolean(page));
+    const canEdit = editable && Boolean(sheet) && (sheet.text || Boolean(page)) && calc !== 'loading';
     // Rows and columns stay where they are when moving them would leave formulas or merged cells pointing at the wrong place.
     const merged = Boolean(sheet) && (sheet.spans.size > 0 || (Boolean(page) && hasFormulas));
     const run = (change, back = false) => {
         if (change.cells) change.cells.forEach((one) => put(sheet, page, one.row, one.column, back ? one.before : one.after));
         else shift(sheet, page, change, back);
+        const live = engine.current;
+        if (page && !change.cells) drop();
+        else if (page && live?.model) {
+            change.cells.forEach((one) => {
+                live.held.delete(`${index}:${one.row}:${one.column}`);
+                tell(live.model, index, one.row, one.column, back ? one.before : one.after);
+            });
+            setHeldBack(recalc(live.model, state.sheets, book.current.worksheets, live.held, false));
+        } else if (page && !live && change.cells.some((one) => (back ? one.before : one.after)?.formula)) begin(state.sheets);
         setVersion((now) => now + 1);
         if (text !== null) {
             emitted.current = writeCsv(sheet, mark);
@@ -435,7 +526,8 @@ export const Sheet = ({
     const setFilter = (column, value) => { setFilters((now) => ({ ...now, [column]: { value, exact: Boolean(choices[column]) } })); setPage(1); };
     const showOnly = (kept) => setHidden(new Set(kept ? [] : Array.from({ length: sheet?.columns || 0 }, (_, column) => column)));
     const notes = [
-        dirty && page && hasFormulas ? 'Formulas are not worked out again here: their results are from before your changes, and are worked out when the file is next opened in a spreadsheet program.' : '',
+        dirty && page && hasFormulas && calc !== 'on' ? 'Formulas are not worked out again here: their results are from before your changes, and are worked out when the file is next opened in a spreadsheet program.' : '',
+        calc === 'on' && heldBack > 0 ? `${heldBack === 1 ? '1 formula is' : `${heldBack} formulas are`} left as the file had ${heldBack === 1 ? 'it' : 'them'}: ${heldBack === 1 ? 'it uses' : 'they use'} something this app works out differently or not at all.` : '',
         dirty && page ? 'Saving writes the whole workbook again: charts, pictures and pivot tables in it may not survive.' : '',
         altered ? `${body.length.toLocaleString()} of ${Math.max(0, (sheet?.rows || 1) - 1).toLocaleString()} rows match.` : '',
         pending > 0 ? `${pending === 1 ? '1 formula has' : `${pending} formulas have`} no result stored in this file, so ${pending === 1 ? 'it is' : 'they are'} shown as written.` : ''

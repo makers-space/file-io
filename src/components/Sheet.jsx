@@ -7,7 +7,7 @@ import Typography from './Typography';
 import Input from './Input';
 import Select from './Select';
 import Icon from './Icon';
-import { Figure } from './Figure';
+import CircularProgress from './CircularProgress';
 import { Data, Pagination } from './Data';
 
 const PAGE_SIZES = [10, 20, 50, 100, 500];
@@ -422,9 +422,9 @@ export const Sheet = ({
     const address = picked ? `${columnName(picked.column)}${picked.row + 1}` : null;
     const reading = !picked ? 'rest' : !chosen ? 'empty' : chosen.formula ? `${chosen.formula}${chosen.waiting ? '' : ` → ${chosen.text}`}` : chosen.text;
     // What stands in for the grid when there is nothing to show: a file being read, a file with no rows, a file that failed.
-    const rest = state.loading ? { figure: 'format', play: true, says: 'Reading the file…' }
-        : state.problem ? { figure: 'query', says: state.problem }
-            : empty ? { figure: 'loupe', says: 'This sheet holds no rows.' }
+    const rest = state.loading ? { busy: true, says: 'Reading the file…' }
+        : state.problem ? { says: state.problem }
+            : empty ? { says: 'This sheet holds no rows.' }
                 : null;
     const size = 'xs';
     const records = useMemo(() => {
@@ -691,7 +691,7 @@ export const Sheet = ({
                 <Container className="sheet-grid" layout="block" padding="none" width="100%" flexFill>
                     {rest && (
                         <Container className="sheet-rest" layout="flex-column" align="center" justify="center" gap="xs" padding="md" width="100%" height="100%">
-                            <Figure name={rest.figure} play={Boolean(rest.play)} label={rest.says} maxWidth={compact ? '200px' : '280px'} />
+                            {rest.busy && <CircularProgress size="sm" />}
                             <Typography size="xs" color="muted">{rest.says}</Typography>
                         </Container>
                     )}

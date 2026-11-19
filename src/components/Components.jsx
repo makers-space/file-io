@@ -36,7 +36,6 @@ export {default as Audio} from './Audio';
 export {default as Model3D} from './Model3D';
 export {default as PdfViewer} from './PdfViewer';
 export {default as Frame} from './Frame';
-export {default as Figure} from './Figure';
 export {default as Slides} from './Slides';
 export {default as Sheet} from './Sheet';
 export {useGenie, useGenieTrigger, withGenie, GenieTrigger} from './Genie';

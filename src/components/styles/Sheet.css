@@ -31,10 +31,6 @@
     background: var(--background-color);
 }
 
-.sheet-rest .figure {
-    --hairline-plate: var(--background-color);
-}
-
 .sheet-table {
     min-width: 100%;
     border-collapse: separate;

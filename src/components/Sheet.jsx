@@ -116,10 +116,6 @@ const readCsv = (text, name, mark = ',', partial = false) => {
 
 // A spreadsheet file shown as a grid, read in the browser. It shows what the file holds: a formula is shown with the
 // result stored beside it, and is not worked out again here.
-//
-// Its look keeps the rules of the Hairline figures: one plate with one outline, dim rules inside it and nothing
-// filled; the chosen cell is marked by its stroke alone, and only one thing is bright at a time; what a cell holds is
-// named in the corner read-out; and a sheet with nothing to show rests on a drawing, never on a blank.
 export const Sheet = ({
     blob,
     text = null, // The text of a CSV file, in place of a blob
@@ -249,7 +245,7 @@ export const Sheet = ({
             <Container className="sheet-controls" layout="flex" align="center" justify="between" gap="sm" padding="none" width="100%">
                 <ButtonGroup className="sheet-tabs" selectable={false} size="xs">
                     {state.sheets.map((one, at) => (
-                        <Button key={`${one.name}-${at}`} size="xs" flat color="secondary" selected={at === index} onClick={() => { setIndex(at); setPage(1); setPicked(null); }}>{one.name}</Button>
+                        <Button key={`${one.name}-${at}`} size="xs" color={at === index ? 'primary' : 'secondary'} selected={at === index} onClick={() => { setIndex(at); setPage(1); setPicked(null); }}>{one.name}</Button>
                     ))}
                 </ButtonGroup>
                 <Container layout="flex" wrap={false} align="center" gap="sm" padding="none">

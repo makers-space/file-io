@@ -123,3 +123,20 @@
     border: 1px solid var(--border-color);
     border-radius: var(--card-radius, var(--border-radius-md));
 }
+
+.sheet-table:focus {
+    outline: none;
+}
+
+.sheet-table .sheet-typing {
+    padding: 0;
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.sheet-table .sheet-editor,
+.sheet-table .sheet-editor input {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}

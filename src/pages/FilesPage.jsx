@@ -3326,7 +3326,7 @@ export const FilesPage = () => {
               <CsvData key={`data-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} />
             </Container>
           ) : sheetPage ? (
-            <Sheet key={`sheet-text-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} />
+            <Sheet key={`sheet-text-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} editable={!isReadOnly} onTextChange={updateContent} />
           ) : viewerType === 'text' ? (
             <Container layout="flex-column" gap="xs" padding="none" width="100%" height="100%">
             {flowError && (
@@ -3431,7 +3431,22 @@ export const FilesPage = () => {
           ) : viewerType === 'slides' ? (
             <Slides key={`slides-${metadata.filePath}`} blob={fileBlob} fileName={metadata.fileName} />
           ) : viewerType === 'sheet' ? (
-            <Sheet key={`sheet-${metadata.filePath}`} blob={fileBlob} fileName={metadata.fileName} />
+            <Sheet
+              key={`sheet-${metadata.filePath}`}
+              blob={fileBlob}
+              fileName={metadata.fileName}
+              editable={!isReadOnly && /.(xlsx|csv|tsv)$/i.test(metadata.fileName)}
+              onSave={async (saved) => {
+                const folder = metadata.filePath.slice(0, metadata.filePath.lastIndexOf('/')) || '/';
+                try {
+                  await fileService.uploadFiles([new File([saved], metadata.fileName, { type: saved.type })], folder, null, true);
+                  showSuccess('Sheet saved');
+                } catch (error) {
+                  showError(`The sheet could not be saved: ${error?.response?.data?.message || error.message}`);
+                  throw error;
+                }
+              }}
+            />
           ) : viewerType === 'pdf' ? (
             <PdfViewer
               key={`pdf-viewer-${metadata.filePath}`}

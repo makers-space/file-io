@@ -1,0 +1,88 @@
+.sheet {
+    min-height: 0;
+}
+
+.sheet-readout {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    background: var(--surface-color);
+    min-height: 28px;
+}
+
+.sheet-grid {
+    min-height: 120px;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--card-radius, var(--border-radius-md));
+    background: var(--background-color);
+}
+
+.sheet-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--font-family-primary);
+    font-size: var(--font-size-xs);
+    color: var(--text-color);
+}
+
+.sheet-table th,
+.sheet-table td {
+    padding: 3px 8px;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+}
+
+.sheet-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    min-width: 40px;
+    background: var(--surface-color);
+    color: var(--text-muted-color, var(--text-color));
+    font-weight: 500;
+    text-align: center;
+    user-select: none;
+}
+
+.sheet-table tbody th {
+    left: 0;
+    top: auto;
+}
+
+.sheet-table .sheet-corner {
+    left: 0;
+    z-index: 2;
+}
+
+.sheet-table td {
+    min-width: 72px;
+    cursor: cell;
+}
+
+.sheet-table .sheet-number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.sheet-table .sheet-bold {
+    font-weight: 600;
+}
+
+.sheet-table .sheet-waiting {
+    font-style: italic;
+    color: var(--warning-color);
+}
+
+.sheet-table .sheet-on {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.sheet-table .sheet-head-on {
+    color: var(--primary-color);
+}

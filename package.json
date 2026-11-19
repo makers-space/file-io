@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aiden0z/pptx-renderer": "^1.4.0",
     "@audiowave/react": "^0.6.2",
     "@mdxeditor/editor": "^4.5.0",
     "@monaco-editor/react": "^4.8.0-rc.3",
@@ -35,6 +36,7 @@
     "@xyflow/react": "^12.12.1",
     "axios": "^1.21.1",
     "docx-preview": "^0.4.1",
+    "exceljs": "^4.4.0",
     "katex": "^0.19.1",
     "monaco-editor": "^0.57.0",
     "opentype.js": "^2.0.0",

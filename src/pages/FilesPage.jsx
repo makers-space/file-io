@@ -29,7 +29,9 @@ import {
   Video,
   Audio,
   Model3D,
-  PdfViewer
+  PdfViewer,
+  Slides,
+  Sheet
 } from '../components/Components';
 
 const escapeHtml = (value) => value
@@ -194,7 +196,7 @@ const buildDocxUploadImports = async (files) => {
 
 const IDLE_VIEWER_STATE = {
   status: 'idle',           // 'idle' | 'loading' | 'ready' | 'error'
-  viewerType: null,         // null | 'directory' | 'text' | 'image' | 'video' | 'audio' | 'pdf' | '3d' | 'binary'
+  viewerType: null,         // null | 'directory' | 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'slides' | 'sheet' | '3d' | 'binary'
   metadata: null,
   isReadOnly: true,
   errorMessage: null,
@@ -205,6 +207,7 @@ const IDLE_VIEWER_STATE = {
   imageSrc: null,
   streamingSrc: null,
   pdfBlob: null,
+  fileBlob: null,
   modelSrc: null,
   modelFormat: null,
 };
@@ -223,6 +226,8 @@ const getViewerType = (metadata, fp) => {
   // routed to the text editor (open the matching .obj for 3D viewing).
   if (/\.(obj|gltf|glb|fbx|stl|dae|ply|3mf|vox|3ds)$/i.test(fp)) return '3d';
   if (/\.pdf$/i.test(fp)) return 'pdf';
+  if (/\.(pptx|potx)$/i.test(fp)) return 'slides';
+  if (/\.(xlsx|xltx)$/i.test(fp)) return 'sheet';
   if (metadata.type === 'text') return 'text';
   return 'binary';
 };
@@ -239,6 +244,8 @@ const getTypeBadge = (viewerType, filePath) => {
     viewerType === 'audio' ? { icon: 'FiMusic',          label: 'AUDIO',        color: 'primary' } :
     viewerType === '3d'    ? { icon: 'FiBox',            label: '3D MODEL',     color: 'primary' } :
     viewerType === 'pdf'   ? { icon: 'FiFileText',       label: 'PDF',          color: 'primary' } :
+    viewerType === 'slides'? { icon: 'FiMonitor',        label: 'SLIDES',       color: 'primary' } :
+    viewerType === 'sheet' ? { icon: 'FiGrid',           label: 'SHEET',        color: 'primary' } :
     isDocx                 ? { icon: 'FiFileText',       label: 'DOCUMENT',     color: 'primary' } :
     isMarkdown             ? { icon: 'FiFileText',       label: 'MARKDOWN',     color: 'primary' } :
     isPlain                ? { icon: 'FiFileText',       label: 'TEXT',         color: 'primary' } :
@@ -377,9 +384,12 @@ const useFileViewer = (filePath) => {
             streamingSrc: fileService.getStreamingUrl(filePath),
           });
         }
-        if (viewerType === 'image' || viewerType === 'pdf' || viewerType === '3d') {
+        if (viewerType === 'image' || viewerType === 'pdf' || viewerType === '3d' || viewerType === 'slides' || viewerType === 'sheet') {
           const blob = await fileService.downloadFile(filePath);
           if (cancelled) return;
+          if (viewerType === 'slides' || viewerType === 'sheet') {
+            return setReady({ viewerType, metadata, isReadOnly: true, fileBlob: blob });
+          }
           if (viewerType === 'pdf') {
             return setReady({ viewerType: 'pdf', metadata, isReadOnly, pdfBlob: blob });
           }
@@ -3163,7 +3173,7 @@ export const FilesPage = () => {
       );
     }
 
-    const { viewerType, metadata, isReadOnly, content, connectionStatus, updateContent, ytext, provider, imageSrc, streamingSrc, pdfBlob, modelSrc, modelFormat, setMetadata } = viewer;
+    const { viewerType, metadata, isReadOnly, content, connectionStatus, updateContent, ytext, provider, imageSrc, streamingSrc, pdfBlob, fileBlob, modelSrc, modelFormat, setMetadata } = viewer;
     const editorMode = activePath?.match(/\.docx?$/i) ? 'document' : activePath?.match(/\.(md|mdx|txt)$/i) ? 'markdown' : 'code';
     // Native y-monaco binding handles code mode; markdown/document keep the
     // manual updateContent bridge (TipTap requires XmlFragment storage,
@@ -3361,6 +3371,10 @@ export const FilesPage = () => {
                 );
               })()}
             </Container>
+          ) : viewerType === 'slides' ? (
+            <Slides key={`slides-${metadata.filePath}`} blob={fileBlob} fileName={metadata.fileName} />
+          ) : viewerType === 'sheet' ? (
+            <Sheet key={`sheet-${metadata.filePath}`} blob={fileBlob} fileName={metadata.fileName} />
           ) : viewerType === 'pdf' ? (
             <PdfViewer
               key={`pdf-viewer-${metadata.filePath}`}

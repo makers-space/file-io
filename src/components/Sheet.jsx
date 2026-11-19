@@ -10,10 +10,7 @@ import Icon from './Icon';
 import { Figure } from './Figure';
 import { Pagination } from './Data';
 
-const MAX_ROWS = 5000;
-const MAX_COLUMNS = 200;
 const PAGE_SIZES = [10, 20, 50, 100, 500];
-const CSV_READ_BYTES = 8 * 1024 * 1024;
 
 const columnName = (index) => {
     let name = '';
@@ -37,7 +34,14 @@ const dateText = (value) => {
     const iso = value.toISOString();
     return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 16).replace('T', ' ');
 };
-const textOf = (cell) => (cell ? (cell.waiting ? cell.formula : cell.text) : '');
+// A CSV file's cells are kept as the plain text the file holds, so a very large file fits in memory; a cell of a
+// workbook is an object with its formula and format.
+const cellOf = (cell) => {
+    if (typeof cell !== 'string') return cell || null;
+    const number = cell.trim() !== '' && Number.isFinite(Number(cell));
+    return { text: cell, formula: null, waiting: false, number, value: number ? Number(cell) : null, bold: false };
+};
+const textOf = (cell) => (typeof cell === 'string' ? cell : cell ? (cell.waiting ? cell.formula : cell.text) : '');
 const valueText = (value, format) => {
     if (value === null || value === undefined) return '';
     if (value instanceof Date) return dateText(value);
@@ -55,8 +59,8 @@ const valueText = (value, format) => {
 
 // One sheet as rows of cells: what each cell shows, its formula if it has one, and whether the file holds a result for it.
 const readSheet = (sheet) => {
-    const rows = Math.min(sheet.rowCount, MAX_ROWS);
-    const columns = Math.min(sheet.columnCount, MAX_COLUMNS);
+    const rows = sheet.rowCount;
+    const columns = sheet.columnCount;
     const spans = new Map();
     const covered = new Set();
     for (const range of sheet.model?.merges || []) {
@@ -85,37 +89,53 @@ const readSheet = (sheet) => {
         }
         cells.push(line);
     }
-    return { name: sheet.name, rows, columns, cells, spans, covered, pending, cut: sheet.rowCount > rows || sheet.columnCount > columns };
+    return { name: sheet.name, rows, columns, cells, spans, covered, pending };
 };
 
-const readCsv = (text, name, mark = ',', partial = false) => {
+const readCsv = (text, name, mark = ',') => {
     const cells = [];
-    let line = [];
-    let field = '';
-    let quoted = false;
-    const push = () => {
-        const number = field.trim() !== '' && Number.isFinite(Number(field));
-        line.push(field === '' ? null : { text: field, formula: null, waiting: false, number, value: number ? Number(field) : null, bold: false });
-        field = '';
+    const split = mark.charCodeAt(0);
+    const size = text.length;
+    const fieldEnd = (from) => {
+        let to = from;
+        for (; to < size; to += 1) {
+            const code = text.charCodeAt(to);
+            if (code === split || code === 10 || code === 13) break;
+        }
+        return to;
     };
-    for (let at = 0; at < text.length && cells.length < MAX_ROWS; at += 1) {
-        const letter = text[at];
-        if (quoted) {
-            if (letter === '"' && text[at + 1] === '"') { field += '"'; at += 1; } else if (letter === '"') quoted = false; else field += letter;
-        } else if (letter === '"') quoted = true;
-        else if (letter === mark) push();
-        else if (letter === '\n' || letter === '\r') {
-            if (letter === '\r' && text[at + 1] === '\n') at += 1;
-            push();
-            cells.push(line.slice(0, MAX_COLUMNS));
-            line = [];
-        } else field += letter;
+    let line = [];
+    let columns = 0;
+    let at = 0;
+    const endLine = () => {
+        if (line.length > columns) columns = line.length;
+        cells.push(line);
+        line = [];
+    };
+    while (at < size) {
+        let field = '';
+        if (text.charCodeAt(at) === 34) {
+            let from = at + 1;
+            for (;;) {
+                const close = text.indexOf('"', from);
+                if (close < 0) { field += text.slice(from); at = size; break; }
+                if (text.charCodeAt(close + 1) === 34) { field += text.slice(from, close + 1); from = close + 2; continue; }
+                field += text.slice(from, close);
+                at = close + 1;
+                break;
+            }
+        }
+        const to = fieldEnd(at);
+        if (to > at) field += text.slice(at, to);
+        at = to;
+        line.push(field === '' ? null : field);
+        if (at >= size) { endLine(); break; }
+        const code = text.charCodeAt(at);
+        at += code === 13 && text.charCodeAt(at + 1) === 10 ? 2 : 1;
+        if (code !== split) endLine();
+        else if (at >= size) { line.push(null); endLine(); }
     }
-    const full = cells.length >= MAX_ROWS;
-    // The last line of a file read only in part may be half a line, so it is left out.
-    if (!full && !partial && (field !== '' || line.length > 0)) { push(); cells.push(line.slice(0, MAX_COLUMNS)); }
-    const columns = cells.reduce((most, row) => Math.max(most, row.length), 0);
-    return { name, rows: cells.length, columns, cells, spans: new Map(), covered: new Set(), pending: 0, cut: full || partial };
+    return { name, rows: cells.length, columns, cells, spans: new Map(), covered: new Set(), pending: 0, text: true };
 };
 
 // A spreadsheet file shown as a grid, read in the browser. It shows what the file holds: a formula is shown with the
@@ -157,9 +177,7 @@ export const Sheet = ({
                 if (text !== null) {
                     sheets = [readCsv(text, title, mark)];
                 } else if (/\.(csv|tsv|txt)$/i.test(fileName) || /csv|plain/.test(blob.type || '')) {
-                    // Only the rows that can be shown are read, so a very large file still opens.
-                    const partial = blob.size > CSV_READ_BYTES;
-                    sheets = [readCsv(await (partial ? blob.slice(0, CSV_READ_BYTES) : blob).text(), title, mark, partial)];
+                    sheets = [readCsv(await blob.text(), title, mark)];
                 } else {
                     const [library, bytes] = await Promise.all([import('exceljs'), blob.arrayBuffer()]);
                     const book = new (library.default || library).Workbook();
@@ -178,7 +196,7 @@ export const Sheet = ({
 
     const sheet = state.sheets[index] || null;
     const head = sheet?.cells[0] || [];
-    const label = (column) => (head[column]?.text ? `${columnName(column)} · ${head[column].text}` : columnName(column));
+    const label = (column) => (textOf(head[column]) ? `${columnName(column)} · ${textOf(head[column])}` : columnName(column));
     const columns = useMemo(() => (sheet ? Array.from({ length: sheet.columns }, (_, column) => column).filter((column) => !hidden.has(column)) : []), [sheet, hidden]);
     // A column with ten values or fewer is filtered by picking one; any other by typing part of a value.
     const choices = useMemo(() => {
@@ -211,14 +229,16 @@ export const Sheet = ({
         if (sort !== 'none') {
             const [column, way] = sort.split(':');
             const turn = way === 'desc' ? -1 : 1;
+            const keys = new Map(rows.map((row) => {
+                const cell = cellOf(sheet.cells[row][column]);
+                return [row, { text: textOf(cell), value: cell ? cell.value : null }];
+            }));
             rows.sort((a, b) => {
-                const one = sheet.cells[a][column] || null;
-                const other = sheet.cells[b][column] || null;
-                const left = textOf(one);
-                const right = textOf(other);
-                if (left === '' || right === '') return (left === '') - (right === '');
-                if (typeof one.value === 'number' && typeof other.value === 'number') return (one.value - other.value) * turn;
-                return left.localeCompare(right, undefined, { numeric: true }) * turn;
+                const one = keys.get(a);
+                const other = keys.get(b);
+                if (one.text === '' || other.text === '') return (one.text === '') - (other.text === '');
+                if (one.value !== null && other.value !== null) return (one.value - other.value) * turn;
+                return one.text.localeCompare(other.text, undefined, { numeric: true }) * turn;
             });
         }
         return rows;
@@ -227,10 +247,10 @@ export const Sheet = ({
     const shown = body.slice((page - 1) * pageSize, page * pageSize);
     // Merged cells are drawn merged only while the rows and columns stand as the file has them.
     const plain = !altered && hidden.size === 0;
-    const chosen = picked && sheet ? sheet.cells[picked.row]?.[picked.column] : null;
+    const chosen = picked && sheet ? cellOf(sheet.cells[picked.row]?.[picked.column]) : null;
     const pending = state.sheets.reduce((sum, one) => sum + one.pending, 0);
     const empty = Boolean(sheet) && (sheet.rows === 0 || sheet.columns === 0);
-    const hasFormulas = state.sheets.some((one) => one.cells.some((row) => row.some((cell) => cell?.formula)));
+    const hasFormulas = useMemo(() => state.sheets.some((one) => !one.text && one.cells.some((row) => row.some((cell) => cell?.formula))), [state.sheets]);
     const address = picked ? `${columnName(picked.column)}${picked.row + 1}` : null;
     const reading = !picked ? 'rest' : !chosen ? 'empty' : chosen.formula ? `${chosen.formula}${chosen.waiting ? '' : ` → ${chosen.text}`}` : chosen.text;
     // What stands in for the grid when there is nothing to show: a file being read, a file with no rows, a file that failed.
@@ -243,8 +263,7 @@ export const Sheet = ({
     const showOnly = (kept) => setHidden(new Set(kept ? [] : Array.from({ length: sheet?.columns || 0 }, (_, column) => column)));
     const notes = [
         altered ? `${body.length.toLocaleString()} of ${Math.max(0, (sheet?.rows || 1) - 1).toLocaleString()} rows match.` : '',
-        pending > 0 ? `${pending === 1 ? '1 formula has' : `${pending} formulas have`} no result stored in this file, so ${pending === 1 ? 'it is' : 'they are'} shown as written.` : '',
-        sheet?.cut ? `Only the first ${MAX_ROWS.toLocaleString()} rows and ${MAX_COLUMNS} columns of this file are read.` : ''
+        pending > 0 ? `${pending === 1 ? '1 formula has' : `${pending} formulas have`} no result stored in this file, so ${pending === 1 ? 'it is' : 'they are'} shown as written.` : ''
     ].filter(Boolean).join(' ');
 
     const line = (row, heading) => {
@@ -255,7 +274,7 @@ export const Sheet = ({
                 <th className={picked?.row === row ? 'sheet-head-on' : ''}>{row + 1}</th>
                 {columns.map((column) => {
                     if (merged && sheet.covered.has(`${row}:${column}`)) return null;
-                    const cell = cells[column] || null;
+                    const cell = cellOf(cells[column]);
                     const span = merged ? sheet.spans.get(`${row}:${column}`) : null;
                     const on = picked?.row === row && picked?.column === column;
                     const kind = [cell?.number && !formulas ? 'sheet-number' : '', cell?.bold ? 'sheet-bold' : '', cell?.waiting ? 'sheet-waiting' : '', on ? 'sheet-on' : ''].filter(Boolean).join(' ');

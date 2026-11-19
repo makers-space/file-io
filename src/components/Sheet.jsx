@@ -10,6 +10,7 @@ import { Pagination } from './Data';
 const MAX_ROWS = 5000;
 const MAX_COLUMNS = 200;
 const PAGE_ROWS = 100;
+const CSV_READ_BYTES = 8 * 1024 * 1024;
 
 const columnName = (index) => {
     let name = '';
@@ -83,7 +84,7 @@ const readSheet = (sheet) => {
     return { name: sheet.name, rows, columns, cells, spans, covered, pending, cut: sheet.rowCount > rows || sheet.columnCount > columns };
 };
 
-const readCsv = (text, name) => {
+const readCsv = (text, name, mark = ',', partial = false) => {
     const cells = [];
     let line = [];
     let field = '';
@@ -98,7 +99,7 @@ const readCsv = (text, name) => {
         if (quoted) {
             if (letter === '"' && text[at + 1] === '"') { field += '"'; at += 1; } else if (letter === '"') quoted = false; else field += letter;
         } else if (letter === '"') quoted = true;
-        else if (letter === ',') push();
+        else if (letter === mark) push();
         else if (letter === '\n' || letter === '\r') {
             if (letter === '\r' && text[at + 1] === '\n') at += 1;
             push();
@@ -106,15 +107,18 @@ const readCsv = (text, name) => {
             line = [];
         } else field += letter;
     }
-    if (field !== '' || line.length > 0) { push(); cells.push(line.slice(0, MAX_COLUMNS)); }
-    const columns = Math.max(0, ...cells.map((row) => row.length));
-    return { name, rows: cells.length, columns, cells, spans: new Map(), covered: new Set(), pending: 0, cut: false };
+    const full = cells.length >= MAX_ROWS;
+    // The last line of a file read only in part may be half a line, so it is left out.
+    if (!full && !partial && (field !== '' || line.length > 0)) { push(); cells.push(line.slice(0, MAX_COLUMNS)); }
+    const columns = cells.reduce((most, row) => Math.max(most, row.length), 0);
+    return { name, rows: cells.length, columns, cells, spans: new Map(), covered: new Set(), pending: 0, cut: full || partial };
 };
 
 // A spreadsheet file shown as a grid, read in the browser. It shows what the file holds: a formula is shown with the
 // result stored beside it, and is not worked out again here.
 export const Sheet = ({
     blob,
+    text = null, // The text of a CSV file, in place of a blob
     fileName = 'sheet.xlsx',
     compact = false,
     width = '100%',
@@ -129,17 +133,25 @@ export const Sheet = ({
     const [formulas, setFormulas] = useState(false);
 
     useEffect(() => {
-        if (!blob) return undefined;
+        if (!blob && text === null) return undefined;
         let live = true;
-        setState({ loading: true, sheets: [], problem: null });
-        setIndex(0);
-        setPage(1);
-        setPicked(null);
+        setState((now) => (text !== null && now.sheets.length > 0 ? now : { loading: true, sheets: [], problem: null }));
+        if (text === null) {
+            setIndex(0);
+            setPage(1);
+            setPicked(null);
+        }
         (async () => {
             try {
                 let sheets;
-                if (/\.(csv|tsv|txt)$/i.test(fileName) || /csv|plain/.test(blob.type || '')) {
-                    sheets = [readCsv(await blob.text(), fileName.replace(/\.[^.]+$/, ''))];
+                const mark = /\.tsv$/i.test(fileName) ? '\t' : ',';
+                const title = fileName.replace(/\.[^.]+$/, '');
+                if (text !== null) {
+                    sheets = [readCsv(text, title, mark)];
+                } else if (/\.(csv|tsv|txt)$/i.test(fileName) || /csv|plain/.test(blob.type || '')) {
+                    // Only the rows that can be shown are read, so a very large file still opens.
+                    const partial = blob.size > CSV_READ_BYTES;
+                    sheets = [readCsv(await (partial ? blob.slice(0, CSV_READ_BYTES) : blob).text(), title, mark, partial)];
                 } else {
                     const [library, bytes] = await Promise.all([import('exceljs'), blob.arrayBuffer()]);
                     const book = new (library.default || library).Workbook();
@@ -154,7 +166,7 @@ export const Sheet = ({
             }
         })();
         return () => { live = false; };
-    }, [blob, fileName]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [blob, text, fileName]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const sheet = state.sheets[index] || null;
     const pages = sheet ? Math.max(1, Math.ceil(sheet.rows / PAGE_ROWS)) : 1;

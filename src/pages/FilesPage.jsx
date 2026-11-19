@@ -212,6 +212,9 @@ const IDLE_VIEWER_STATE = {
   modelFormat: null,
 };
 
+// A text file larger than this is kept by the server as a plain file, not as a document to edit together.
+const LIVE_TEXT_BYTES = 10 * 1024 * 1024;
+
 const getViewerType = (metadata, fp) => {
   if (!metadata || !fp) return null;
   if (metadata.type === 'directory') return 'directory';
@@ -228,6 +231,8 @@ const getViewerType = (metadata, fp) => {
   if (/\.pdf$/i.test(fp)) return 'pdf';
   if (/\.(pptx|potx)$/i.test(fp)) return 'slides';
   if (/\.(xlsx|xltx)$/i.test(fp)) return 'sheet';
+  // A table small enough to edit together opens as a sheet over its own text; a larger one is only read.
+  if (/\.(csv|tsv)$/i.test(fp) && (metadata.type !== 'text' || (metadata.size || 0) > LIVE_TEXT_BYTES)) return 'sheet';
   if (metadata.type === 'text') return 'text';
   return 'binary';
 };
@@ -237,6 +242,7 @@ const getTypeBadge = (viewerType, filePath) => {
   const isMarkdown = viewerType === 'text' && filePath?.match(/\.(md|mdx)$/i);
   const isPlain    = viewerType === 'text' && filePath?.match(/\.txt$/i);
   const isFlow     = viewerType === 'text' && filePath?.match(/\.flow$/i);
+  const isTable    = viewerType === 'text' && filePath?.match(/\.(csv|tsv)$/i);
   const isZip      = viewerType === 'binary' && filePath?.match(/\.zip$/i);
   return (
     viewerType === 'image' ? { icon: 'TbImageInPicture', label: 'IMAGE',        color: 'primary' } :
@@ -250,6 +256,7 @@ const getTypeBadge = (viewerType, filePath) => {
     isMarkdown             ? { icon: 'FiFileText',       label: 'MARKDOWN',     color: 'primary' } :
     isPlain                ? { icon: 'FiFileText',       label: 'TEXT',         color: 'primary' } :
     isFlow                 ? { icon: 'FiGitMerge',       label: 'FLOW',         color: 'primary' } :
+    isTable                ? { icon: 'FiGrid',           label: 'SHEET',        color: 'primary' } :
     viewerType === 'text'  ? { icon: 'FiCode',           label: 'CODE',         color: 'primary' } :
     isZip                  ? { icon: 'FiArchive',        label: 'ZIP ARCHIVE',  color: null      } :
     viewerType === 'binary'? { icon: 'FiFile',           label: 'BINARY',       color: null      } :
@@ -1037,11 +1044,14 @@ export const CreateItemForm = ({ type, targetPath: initialPath, fileTree, onSucc
   );
 };
 
-export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCancel }) => {
+// The server takes at most this many files in one request, and each request is held in its memory while it is saved.
+const UPLOAD_BATCH_FILES = 20;
+const UPLOAD_BATCH_BYTES = 64 * 1024 * 1024;
+
+export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCancel, folder: uploadFolder = false }) => {
   const [files, setFiles] = useState([]);
   const [destinationPath, setDestinationPath] = useState(initialPath || '/');
   const [overwrite, setOverwrite] = useState(false);
-  const [uploadFolder, setUploadFolder] = useState(false);
   const [extractZips, setExtractZips] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -1064,20 +1074,47 @@ export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCan
 
     try {
       const safePath = destinationPath || '/';
-      const textImports = await buildDocxUploadImports(filesToUpload);
-      const response = await fileService.uploadFiles(
-        filesToUpload,
-        safePath,
-        (progress) => {
-          setUploadProgress(progress);
-        },
-        overwrite,
-        { textImports, onConflict }
-      );
-      const uploadedFiles = response.files || [];
+      // Many files, or large ones, go up a few at a time, so no single request is too big for the server to hold.
+      const batches = [];
+      let batch = [];
+      let batchBytes = 0;
+      for (const file of Array.from(filesToUpload)) {
+        if (batch.length >= UPLOAD_BATCH_FILES || (batch.length > 0 && batchBytes + file.size > UPLOAD_BATCH_BYTES)) {
+          batches.push(batch);
+          batch = [];
+          batchBytes = 0;
+        }
+        batch.push(file);
+        batchBytes += file.size;
+      }
+      if (batch.length > 0) batches.push(batch);
+      const totalBytes = batches.flat().reduce((sum, file) => sum + file.size, 0) || 1;
+      const uploadedFiles = [];
+      const conflicts = [];
+      const failures = [];
+      let sentBytes = 0;
+      for (const group of batches) {
+        const groupBytes = group.reduce((sum, file) => sum + file.size, 0);
+        const textImports = await buildDocxUploadImports(group);
+        const response = await fileService.uploadFiles(
+          group,
+          safePath,
+          (progress) => {
+            setUploadProgress(Math.round(((sentBytes + (groupBytes * progress) / 100) / totalBytes) * 100));
+          },
+          overwrite,
+          { textImports, onConflict }
+        );
+        sentBytes += groupBytes;
+        uploadedFiles.push(...(response.files || []));
+        conflicts.push(...(response.conflicts || []));
+        failures.push(...(response.errors || []));
+      }
       const uploadedPaths = uploadedFiles.map(file => file.filePath);
+      if (failures.length > 0) {
+        showError(failures.length === 1 ? `"${failures[0].fileName}" could not be saved: ${failures[0].error}` : `${failures.length} files could not be saved. The first: "${failures[0].fileName}", ${failures[0].error}`);
+      }
 
-      const conflicts = response.conflicts || [];
       if (conflicts.length > 0) {
         const conflictNames = new Set(conflicts.map(c => c.fileName));
         const pending = Array.from(filesToUpload).filter(f => conflictNames.has(f.webkitRelativePath || f.name));
@@ -1122,13 +1159,6 @@ export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCan
     }
   };
 
-  // Reset file input when toggling folder mode
-  const handleFolderToggle = (e) => {
-    setUploadFolder(e.target.checked);
-    setFiles([]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
   return (
     <Container layout="flex-column" padding="none" width="100%">
       <Typography variant="label">{uploadFolder ? 'Select Folder *' : 'Select Files *'}</Typography>
@@ -1150,15 +1180,6 @@ export const UploadForm = ({ targetPath: initialPath, fileTree, onSuccess, onCan
           Selected: {files.length} file(s){uploadFolder && files[0]?.webkitRelativePath ? ` from ${files[0].webkitRelativePath.split('/')[0]}` : ''}
         </Typography>
       )}
-
-      <Container layout="flex" align="center" padding="none" gap="xs">
-        <Switch
-          checked={uploadFolder}
-          onChange={handleFolderToggle}
-          disabled={isUploading}
-        />
-        <Typography size="sm">Upload folder</Typography>
-      </Container>
 
       <Container layout="flex-column" gap="small" padding="none" width="100%">
         <Typography variant="label">Upload Destination</Typography>
@@ -1676,9 +1697,9 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
     );
   }
 
-  if (view === 'upload') {
+  if (view === 'upload' || view === 'upload-folder') {
     return (
-      <UploadForm targetPath={node.filePath} fileTree={fileTree}
+      <UploadForm folder={view === 'upload-folder'} targetPath={node.filePath} fileTree={fileTree}
         onSuccess={() => { doRefresh(); setView('menu'); }}
         onCancel={() => setView('menu')}
       />
@@ -1757,6 +1778,10 @@ const FileNodeActions = ({ node: rawNode, fileTree, onRefresh, onNavigate }) => 
             <Icon name="FiUpload" size="xs" />
             Upload Here
           </Button>
+          <Button size="sm" variant="ghost" width="100%" onClick={() => setView('upload-folder')}>
+            <Icon name="FiFolder" size="xs" />
+            Upload Folder Here
+          </Button>
         </>
       )}
       {sep}
@@ -1810,6 +1835,14 @@ export const QuickActions = ({ targetPath, fileTree, onActionComplete }) => {
           <Icon name="FiUpload" size="sm" />
           Upload Files
         </Button>
+
+        <Button
+          onClick={() => setActiveAction('upload-folder')}
+          width="100%"
+        >
+          <Icon name="FiFolder" size="sm" />
+          Upload Folder
+        </Button>
       </Container>
     );
   }
@@ -1828,6 +1861,8 @@ export const QuickActions = ({ targetPath, fileTree, onActionComplete }) => {
       return <CreateItemForm type="directory" {...actionProps} />;
     case 'upload':
       return <UploadForm {...actionProps} />;
+    case 'upload-folder':
+      return <UploadForm folder {...actionProps} />;
     default:
       return null;
   }
@@ -3187,6 +3222,8 @@ export const FilesPage = () => {
     const showFlowText = isFlowFile && (flowAsText || Boolean(flowError));
 
     const flowPage = isFlowFile && !showFlowText;
+    const isTableFile = viewerType === 'text' && /\.(csv|tsv)$/i.test(activePath || '');
+    const sheetPage = isTableFile && !flowAsText;
 
     return (
       <Container layout="flex-column" height="100vh" width="100%" gap="none" style={{ padding: '5vmin' }}>
@@ -3246,9 +3283,9 @@ export const FilesPage = () => {
             <Typography size="xs">
               {metadata.filePath}
             </Typography>
-            {isFlowFile && !flowError && (
-              <Button size="sm" variant="ghost" onClick={() => setFlowAsText(shown => !shown)} title={flowAsText ? 'Show the diagram' : 'Show the text'}>
-                <Icon name={flowAsText ? 'FiGitMerge' : 'FiCode'} size="xs" />
+            {((isFlowFile && !flowError) || isTableFile) && (
+              <Button size="sm" variant="ghost" onClick={() => setFlowAsText(shown => !shown)} title={flowAsText ? (isTableFile ? 'Show the sheet' : 'Show the diagram') : 'Show the text'}>
+                <Icon name={flowAsText ? (isTableFile ? 'FiGrid' : 'FiGitMerge') : 'FiCode'} size="xs" />
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={handleToggleStar} title={isStarred ? 'Unstar file' : 'Star file'}>
@@ -3270,6 +3307,8 @@ export const FilesPage = () => {
               height="100%"
               minHeight="100%"
             />
+          ) : sheetPage ? (
+            <Sheet key={`sheet-text-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} />
           ) : viewerType === 'text' ? (
             <Container layout="flex-column" gap="xs" padding="none" width="100%" height="100%">
             {flowError && (

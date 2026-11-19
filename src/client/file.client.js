@@ -709,10 +709,12 @@ export const fileService = {
             formData.append('onConflict', onConflict);
         }
 
+        // A transfer takes as long as the file is large, so it is not held to the time allowed for other requests.
         const config = {
             headers: {
                 'Content-Type': 'multipart/form-data'
-            }
+            },
+            timeout: 0
         };
 
         if (onProgress) {
@@ -750,7 +752,8 @@ export const fileService = {
         const encodedPath = encodeURIComponent(normalizedPath);
         
         const response = await api.get(`/files/${encodedPath}/download`, {
-            responseType: 'blob'
+            responseType: 'blob',
+            timeout: 0
         });
         
         // The response interceptor already unwraps response.data, so `response`

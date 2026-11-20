@@ -2363,6 +2363,13 @@ const sortFiles = (files, sortKey) => {
 
 const CRUMB_LABEL = { maxWidth: '32ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
 
+// The host answers a path ending in a file type such as .html or .txt with its own 404, so a file's address ends with '/'.
+const pathFromUrl = (pathname) => {
+  const urlPath = pathname.replace(/^\/files\/?/, '').replace(/\/+$/, '');
+  return urlPath ? '/' + decodeURIComponent(urlPath) : null;
+};
+const needsEndSlash = (pathname) => !pathname.endsWith('/') && (pathname.split('/').pop() || '').includes('.');
+
 const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   const { error: showError, confirm } = useNotification();
   const withConflictPrompt = useConflictPrompt();
@@ -2370,11 +2377,7 @@ const DriveView = ({ onRefresh, userRoot, fileTree }) => {
   const driveLocation = useLocation();
 
   // URL is the single source of truth for the current folder.
-  const folderPath = useMemo(() => {
-    const urlPath = driveLocation.pathname.replace(/^\/files\/?/, '');
-    if (!urlPath) return userRoot;
-    return '/' + decodeURIComponent(urlPath);
-  }, [driveLocation.pathname, userRoot]);
+  const folderPath = useMemo(() => pathFromUrl(driveLocation.pathname) || userRoot, [driveLocation.pathname, userRoot]);
 
   // Flat filePath→node map used to resolve human-readable names in the breadcrumb.
   const treeNodeMap = useMemo(() => flattenNodes(buildFullTree(fileTree || {})), [fileTree]);
@@ -2830,8 +2833,11 @@ export const FilesPage = () => {
   const { success: showSuccess, error: showError, warning: showWarning, info: showInfo } = useNotification();
 
   // ─── Derive active path directly from URL (no state needed) ───────────────
-  const rawUrlPath = location.pathname.replace(/^\/files\/?/, '');
-  const activePath = rawUrlPath ? '/' + decodeURIComponent(rawUrlPath) : null;
+  const activePath = pathFromUrl(location.pathname);
+
+  useEffect(() => {
+    if (needsEndSlash(location.pathname)) navigate(location.pathname + '/' + location.search + location.hash, { replace: true });
+  }, [location.pathname, location.search, location.hash, navigate]);
   const looksLikeFile = (activePath?.split('/').pop() || '').includes('.');
 
   // ─── File viewer hook — owns loading, Yjs, blob lifecycle ─────────────────

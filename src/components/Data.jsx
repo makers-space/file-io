@@ -43,8 +43,8 @@ export const Pagination = ({ page, pages, onPage, pageSize = null, pageSizes = n
         media.addEventListener('change', changed);
         return () => media.removeEventListener('change', changed);
     }, []);
-    const count = Math.min(narrow ? 3 : 5, Math.max(1, pages));
-    const first = Math.max(1, Math.min(page - (narrow ? 1 : 2), pages - count + 1));
+    const count = Math.min(3, Math.max(1, pages));
+    const first = Math.max(1, Math.min(page - 1, pages - count + 1));
     const numbers = Array.from({ length: count }, (unused, index) => first + index);
     const step = (icon, target, off, label) => (
         <Button size={size} selected={false} onClick={() => onPage(target)} disabled={disabled || off} title={label} aria-label={label}>

@@ -31,7 +31,8 @@ import {
   Model3D,
   PdfViewer,
   Slides,
-  Sheet
+  Sheet,
+  Frame
 } from '../components/Components';
 
 const escapeHtml = (value) => value
@@ -3225,6 +3226,9 @@ export const FilesPage = () => {
     const flowPage = isFlowFile && !showFlowText;
     const isTableFile = viewerType === 'text' && /\.(csv|tsv)$/i.test(activePath || '');
     const sheetPage = isTableFile && !flowAsText;
+    // A web page is shown as the page itself, in a sealed frame with no network; its code is a click away.
+    const isPageFile = viewerType === 'text' && /\.html?$/i.test(activePath || '');
+    const webPage = isPageFile && !flowAsText;
     const sheetView = csvAsData ? 'data' : 'grid';
 
     return (
@@ -3290,9 +3294,9 @@ export const FilesPage = () => {
                 <Icon name={csvAsData ? 'FiGrid' : 'FiList'} size="xs" />
               </Button>
             )}
-            {((isFlowFile && !flowError) || isTableFile) && (
-              <Button size="sm" variant="ghost" onClick={() => setFlowAsText(shown => !shown)} title={flowAsText ? (isTableFile ? 'Show the sheet' : 'Show the diagram') : 'Show the text'}>
-                <Icon name={flowAsText ? (isTableFile ? 'FiGrid' : 'FiGitMerge') : 'FiCode'} size="xs" />
+            {((isFlowFile && !flowError) || isTableFile || isPageFile) && (
+              <Button size="sm" variant="ghost" onClick={() => setFlowAsText(shown => !shown)} title={flowAsText ? (isTableFile ? 'Show the sheet' : isPageFile ? 'Show the page' : 'Show the diagram') : isPageFile ? 'Show the code' : 'Show the text'}>
+                <Icon name={flowAsText ? (isTableFile ? 'FiGrid' : isPageFile ? 'FiGlobe' : 'FiGitMerge') : 'FiCode'} size="xs" />
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={handleToggleStar} title={isStarred ? 'Unstar file' : 'Star file'}>
@@ -3314,6 +3318,8 @@ export const FilesPage = () => {
               height="100%"
               minHeight="100%"
             />
+          ) : webPage ? (
+            <Frame key={`page-${metadata.filePath}`} html={content || ''} title={metadata.fileName} width="100%" height="100%" minHeight="100%" />
           ) : sheetPage ? (
             <Sheet key={`sheet-text-${metadata.filePath}`} text={content || ''} fileName={metadata.fileName} view={sheetView} editable={!isReadOnly} onTextChange={updateContent} />
           ) : viewerType === 'text' ? (

@@ -1127,7 +1127,7 @@ export const Data = forwardRef(({
                             </Button>
                         </Container>
                         <Container layout="flex" justify="wrap" gap="md" padding="none">
-                            {allFields.map(field => {
+                            {allFields.filter((field) => field !== 'id' && field !== '_id').map(field => {
                                 const options = fieldOptions[field] || [];
                                 const hasOptions = options.length > 0;
                                 const isTimestamp = isTimestampField(field, data);

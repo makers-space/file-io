@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
+import { returnPath } from '@components/Navigation';
 import { useNotification } from '@contexts/NotificationContext';
 import { 
   Page, 
@@ -16,6 +17,7 @@ export const BY_WORDS = { splitBy: 'words' };
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     identifier: '',
     password: ''
@@ -59,7 +61,7 @@ const LoginPage = () => {
 
       if (result.success) {
         showSuccess('Login successful! Welcome back.');
-        navigate('/dashboard');
+        navigate(returnPath(location.state), { replace: true });
       } else {
         showError(result.error || 'Login failed. Please check your credentials.');
       }

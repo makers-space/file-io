@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useTheme } from '@contexts/ThemeContext';
 import { NotificationsMenu } from './AppNotifications';
@@ -319,9 +319,15 @@ export const Navigation = ({
     );
 };
 
+export const returnPath = (state) => {
+    const from = state?.from;
+    return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
+};
+
 // Simple route access control - just basic checks
 export const RouteAccessControl = ({children, path}) => {
     const {user, isLoading} = useAuth();
+    const location = useLocation();
 
     // Show loading during auth check
     if (isLoading) {
@@ -336,12 +342,11 @@ export const RouteAccessControl = ({children, path}) => {
     const isPublicPage = PUBLIC_PAGES.includes(path);
     if (!isAuthPage && !isPublicPage && !user) {
         // Protected page, no user - go to login
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/login" replace state={{ from: location.pathname + location.search + location.hash }} />;
     }
 
     if (isAuthPage && user) {
-        // Auth page, but user is logged in - go to dashboard
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to={returnPath(location.state)} replace />;
     }
 
     // Simple role check for admin pages

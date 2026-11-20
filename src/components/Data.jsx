@@ -940,7 +940,7 @@ export const Data = forwardRef(({
         const dataElement = (
             <Card
                 ref={ref}
-                className={`data-container data-variant-${currentVariant} ${flat ? 'data-flat' : ''} theme-${dataTheme} ${getJustifySelfClass()} ${className}`}
+                className={`data-container data-view-${currentVariant} ${flat ? 'data-flat' : ''} theme-${dataTheme} ${getJustifySelfClass()} ${className}`}
                 data-theme={dataTheme}
                 data-theme-source={theme ? 'local' : 'inherited'}
                 layout="block"

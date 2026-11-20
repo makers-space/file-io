@@ -188,9 +188,6 @@
     min-height: 1.5rem;
     display: flex;
     text-align: center;
-    max-width: 28rem;
-    white-space: normal;
-    overflow-wrap: anywhere;
 }
 
 .data-variant-table .table-empty {
@@ -208,7 +205,7 @@
 }
 
 /* Cards: a grid of tiles that reflows by width; title, a clamped summary, then labelled facts */
-.data-container {
+.data-view-list {
     container-type: inline-size;
 }
 
@@ -242,7 +239,7 @@
 .container.data-card-summary {
     color: var(--text-muted, color-mix(in srgb, var(--text-color) 65%, transparent));
     font-size: var(--font-size-xs);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .container.data-card-facts {
@@ -277,6 +274,7 @@
 }
 
 .data-list .data-list-item {
+    width: 100%;
     border-radius: 0;
     background-color: transparent;
     border-bottom: 1px solid var(--border-color);
@@ -293,7 +291,7 @@
 
 .container.data-list-row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(12rem, 1fr) minmax(0, auto);
     align-items: center;
     column-gap: var(--spacing-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
@@ -313,8 +311,9 @@
 .container.data-list-title {
     font-weight: var(--font-weight-medium);
     flex: 0 0 auto;
-    max-width: 45%;
-    overflow-wrap: anywhere;
+    min-width: 8rem;
+    max-width: 16rem;
+    overflow-wrap: break-word;
 }
 
 .container.data-list-summary {
@@ -322,17 +321,18 @@
     flex: 1 1 auto;
     color: var(--text-muted, color-mix(in srgb, var(--text-color) 65%, transparent));
     font-size: var(--font-size-xs);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .container.data-list-meta {
     justify-content: flex-end;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    row-gap: 2px;
 }
 
 .data-list-value {
-    max-width: 14rem;
-    overflow-wrap: anywhere;
+    max-width: 16rem;
+    overflow-wrap: break-word;
 }
 
 @container (max-width: 34rem) {

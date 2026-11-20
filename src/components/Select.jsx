@@ -27,6 +27,7 @@ export const Select = ({
     color = 'primary', // 'primary', 'secondary', 'tertiary'
     size = 'md', // 'xxs', 'xs', 'sm', 'md', 'lg', 'xl'
     multiSelect = false, // Enable multi-select mode with badges
+    onBadgeClick = null, // Multi-select: called with a chosen value when its badge is clicked
     options = [],
     value,
     onChange,
@@ -660,8 +661,10 @@ export const Select = ({
                                     key={selectedValue}
                                     color={badgeVariant}
                                     size={getBadgeSize()}
-                                    className="select-badge"
+                                    className={`select-badge ${onBadgeClick ? 'select-badge-clickable' : ''}`}
                                     theme={selectTheme}
+                                    onClick={onBadgeClick ? (e) => { e.stopPropagation(); onBadgeClick(selectedValue); } : undefined}
+                                    title={onBadgeClick ? `Show ${displayText}` : undefined}
                                 >
                                     {displayText}
                                     <Icon

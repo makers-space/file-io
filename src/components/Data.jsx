@@ -103,6 +103,7 @@ export const Data = forwardRef(({
     cardGap,
     cardPadding,
     flat = false, // No border, shadow or padding around the whole component
+    reveal = null, // { id, at }: open the page holding that row and mark it; a new `at` repeats it
     selector = false, // Enable row selection with checkboxes
     onSelectionChange = null, // Optional callback when selection changes: (selectedItems, selectedIds) => {}
     selectedItems = null, // Optional controlled selection - array of selected item IDs or items
@@ -354,6 +355,35 @@ export const Data = forwardRef(({
         React.useEffect(() => {
             setPage(1);
         }, [globalSearch, columnFilters]);
+
+        // `reveal` ({ id, at }) opens the page that holds that row and marks it for a moment, clearing a search or filter that hides it.
+        const revealUid = React.useId();
+        const revealHandled = useRef(null);
+        const [revealed, setRevealed] = useState(null);
+        React.useEffect(() => {
+            if (!reveal?.id || revealHandled.current === reveal.at) return;
+            const index = filteredData.findIndex((item, i) => String(getItemId(item, i)) === String(reveal.id));
+            if (index < 0) {
+                if (globalSearch || Object.keys(columnFilters).length) {
+                    setGlobalSearch('');
+                    setColumnFilters({});
+                }
+                return;
+            }
+            revealHandled.current = reveal.at;
+            setPage(Math.floor(index / pageSize) + 1);
+            setRevealed(String(reveal.id));
+        }, [reveal?.id, reveal?.at, filteredData, pageSize]);
+        React.useEffect(() => {
+            if (!revealed) return undefined;
+            document.querySelector(`[data-reveal="${CSS.escape(`${revealUid}-${revealed}`)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            const timer = setTimeout(() => setRevealed(null), 2000);
+            return () => clearTimeout(timer);
+        }, [revealed, page]);
+        const revealProps = (item, rowIndex) => {
+            const id = String(getItemId(item, rowIndex));
+            return { 'data-reveal': `${revealUid}-${id}`, revealedClass: revealed === id ? 'data-item-revealed' : '' };
+        };
 
         // Helper function to check if a value is a complex object/array
         const isComplexValue = (value) => {
@@ -671,7 +701,8 @@ export const Data = forwardRef(({
                 <>
                     <tr
                         ref={rowRef}
-                        className={`table-row ${rowGenieConfig ? 'genie-trigger' : ''}`}
+                        data-reveal={revealProps(item, rowIndex)['data-reveal']}
+                        className={`table-row ${rowGenieConfig ? 'genie-trigger' : ''} ${revealProps(item, rowIndex).revealedClass}`}
                         {...triggerProps}
                     >
                         {selector && (
@@ -782,7 +813,8 @@ export const Data = forwardRef(({
                         padding="none"
                         shadow={false}
                         hover={false}
-                        className={`data-card-item ${chosen ? 'data-item-chosen' : ''}`}
+                        data-reveal={revealProps(item, rowIndex)['data-reveal']}
+                        className={`data-card-item ${chosen ? 'data-item-chosen' : ''} ${revealProps(item, rowIndex).revealedClass}`}
                         genie={itemGenie(item, rowIndex)}
                         onGenieShow={onGenieShow ? () => onGenieShow(item, rowIndex) : null}
                         onGenieHide={onGenieHide ? () => onGenieHide(item, rowIndex) : null}
@@ -833,7 +865,8 @@ export const Data = forwardRef(({
                         bordered={false}
                         shadow={false}
                         hover={false}
-                        className={`data-list-item ${chosen ? 'data-item-chosen' : ''}`}
+                        data-reveal={revealProps(item, rowIndex)['data-reveal']}
+                        className={`data-list-item ${chosen ? 'data-item-chosen' : ''} ${revealProps(item, rowIndex).revealedClass}`}
                         genie={itemGenie(item, rowIndex)}
                         onGenieShow={onGenieShow ? () => onGenieShow(item, rowIndex) : null}
                         onGenieHide={onGenieHide ? () => onGenieHide(item, rowIndex) : null}

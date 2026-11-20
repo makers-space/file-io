@@ -692,3 +692,11 @@
 .select-option-selected {
     background-color: var(--surface-accent-color, rgba(59, 130, 246, 0.1));
 }
+
+.select-badge-clickable {
+    cursor: pointer;
+}
+
+.select-badge-clickable:hover {
+    filter: brightness(1.08);
+}

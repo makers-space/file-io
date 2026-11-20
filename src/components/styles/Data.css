@@ -450,3 +450,18 @@
     word-break: break-word;
     margin: 0;
 }
+
+.data-item-revealed,
+.data-card-grid .card.data-item-revealed,
+.table-row.data-item-revealed {
+    animation: data-reveal 2s ease-out;
+}
+
+@keyframes data-reveal {
+    0%, 40% { background-color: color-mix(in srgb, var(--primary-color) 22%, transparent); }
+    100% { background-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .data-item-revealed { animation: none; outline: 2px solid var(--primary-color); }
+}

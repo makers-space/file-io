@@ -102,6 +102,7 @@ export const Data = forwardRef(({
     cardColumns,
     cardGap,
     cardPadding,
+    flat = false, // No border, shadow or padding around the whole component
     selector = false, // Enable row selection with checkboxes
     onSelectionChange = null, // Optional callback when selection changes: (selectedItems, selectedIds) => {}
     selectedItems = null, // Optional controlled selection - array of selected item IDs or items
@@ -746,166 +747,127 @@ export const Data = forwardRef(({
             );
         };
 
+        const itemGenie = (item, rowIndex) => genie ? {
+            ...genie,
+            content: typeof genie.content === 'function' ? genie.content(item, rowIndex) : genie.content,
+            trigger: genie.trigger === 'hover' ? 'click' : genie.trigger || 'click',
+        } : null;
+
+        const itemCheck = (item, rowIndex) => selector && (
+            <Container padding="none" className="data-item-check">
+                <Input
+                    type="checkbox"
+                    checked={isItemSelected(item, rowIndex)}
+                    onChange={(e) => handleItemSelection(item, rowIndex, e.target.checked)}
+                    size={getButtonSize()}
+                />
+            </Container>
+        );
+
+        const emptyItems = (
+            <Container padding="md">
+                <Typography size={getTypographySize()} color="muted">No data available</Typography>
+            </Container>
+        );
+
         const renderCardsVariant = () => {
+            const [titleField, summaryField, ...metaFields] = visibleFields.filter((field) => field !== 'id' && field !== '_id');
+            const DataCard = ({item, index}) => {
+                const rowIndex = index + (page - 1) * pageSize;
+                const cardRef = useRef(null);
+                const chosen = selector && isItemSelected(item, rowIndex);
+                return (
+                    <Card
+                        ref={cardRef}
+                        padding="none"
+                        shadow={false}
+                        hover={false}
+                        className={`data-card-item ${chosen ? 'data-item-chosen' : ''}`}
+                        genie={itemGenie(item, rowIndex)}
+                        onGenieShow={onGenieShow ? () => onGenieShow(item, rowIndex) : null}
+                        onGenieHide={onGenieHide ? () => onGenieHide(item, rowIndex) : null}
+                    >
+                        <Container layout="flex" gap="sm" align="start" padding="none" className="data-card-head">
+                            {itemCheck(item, rowIndex)}
+                            <Container padding="none" flexFill className="data-card-title">
+                                {titleField && renderFieldValue(item, titleField, cardRef)}
+                            </Container>
+                        </Container>
+                        {summaryField && (
+                            <Container padding="none" className="data-card-summary">
+                                {renderFieldValue(item, summaryField, cardRef)}
+                            </Container>
+                        )}
+                        {metaFields.length > 0 && (
+                            <Container padding="none" className="data-card-facts">
+                                {metaFields.map((field) => (
+                                    <Container key={field} layout="flex" gap="sm" align="center" justify="between" padding="none" className="data-card-fact">
+                                        <Typography as="span" size={getIconSize()} color="muted">{formatFieldName(field)}</Typography>
+                                        <Container padding="none" className="data-card-value">{renderFieldValue(item, field, cardRef)}</Container>
+                                    </Container>
+                                ))}
+                            </Container>
+                        )}
+                    </Card>
+                );
+            };
             return (
-                <Container
-                    layout="grid"
-                    columns="auto"
-                    gap="lg"
-                    className="data-item-container"
-                >
-                    {paginatedFilteredData.length === 0 ? (
-                        <Card padding="lg">
-                            <Typography size={getTypographySize()}>No data available</Typography>
-                        </Card>
-                    ) : (
-                        paginatedFilteredData.map((item, index) => {
-                            const CardComponent = ({item, index}) => {
-                                const rowIndex = index + (page - 1) * pageSize;
-                                const cardRef = useRef(null);
-
-                                // Prepare generic genie configuration if provided
-                                const cardGenieConfig = genie ? {
-                                    ...genie,
-                                    // Pass item data to genie content if it's a function
-                                    content: typeof genie.content === 'function' ? genie.content(item, rowIndex) : genie.content,
-                                    trigger: genie.trigger === 'hover' ? 'click' : genie.trigger || 'click', // Force click/contextmenu only
-                                } : null;
-
-                                return (
-                                    <Card
-                                        ref={cardRef}
-                                        padding="lg"
-                                        className="data-card-item"
-                                        genie={cardGenieConfig}
-                                        onGenieShow={onGenieShow ? () => onGenieShow(item, rowIndex) : null}
-                                        onGenieHide={onGenieHide ? () => onGenieHide(item, rowIndex) : null}
-                                    >
-                                        {selector ? (
-                                            <Container layout="flex" gap="sm" padding="none">
-                                                <div>
-                                                    <Input
-                                                        type="checkbox"
-                                                        checked={isItemSelected(item, rowIndex)}
-                                                        onChange={(e) => handleItemSelection(item, rowIndex, e.target.checked)}
-                                                        size={getButtonSize()}
-                                                    />
-                                                </div>
-                                                <Container layout="flex-column" gap="sm" padding="none" flexFill>
-                                                    {visibleFields.map((field) => (
-                                                        <Container key={field} layout="flex" gap="sm" align="center"
-                                                                   padding="none">
-                                                            <Typography weight="medium" size={getIconSize()}
-                                                                        style={{minWidth: '80px', flex: '0 0 auto'}}>
-                                                                {formatFieldName(field)}:
-                                                            </Typography>
-                                                            <Container padding="none" flexFill>
-                                                                {renderFieldValue(item, field, cardRef)}
-                                                            </Container>
-                                                        </Container>
-                                                    ))}
-                                                </Container>
-                                            </Container>
-                                        ) : (
-                                            <Container layout="flex-column" gap="sm" padding="none">
-                                                {visibleFields.map((field) => (
-                                                    <Container key={field} layout="flex" gap="sm" align="center"
-                                                               padding="none">
-                                                        <Typography weight="medium" size={getIconSize()}
-                                                                    style={{minWidth: '80px', flex: '0 0 auto'}}>
-                                                            {formatFieldName(field)}:
-                                                        </Typography>
-                                                        <Container padding="none" flexFill>
-                                                            {renderFieldValue(item, field, cardRef)}
-                                                        </Container>
-                                                    </Container>
-                                                ))}
-                                            </Container>
-                                        )}
-                                    </Card>
-                                );
-                            };
-
-                            return <CardComponent key={index} item={item} index={index}/>;
-                        })
-                    )}
+                <Container padding="none" className="data-item-container data-card-grid">
+                    {paginatedFilteredData.length === 0 ? emptyItems : paginatedFilteredData.map((item, index) => (
+                        <DataCard key={item.id || index} item={item} index={index}/>
+                    ))}
                 </Container>
             );
         };
+
         const renderListVariant = () => {
+            const [titleField, summaryField, ...metaFields] = visibleFields.filter((field) => field !== 'id' && field !== '_id');
+            const DataRow = ({item, index}) => {
+                const rowIndex = index + (page - 1) * pageSize;
+                const rowRef = useRef(null);
+                const chosen = selector && isItemSelected(item, rowIndex);
+                return (
+                    <Card
+                        ref={rowRef}
+                        padding="none"
+                        bordered={false}
+                        shadow={false}
+                        hover={false}
+                        className={`data-list-item ${chosen ? 'data-item-chosen' : ''}`}
+                        genie={itemGenie(item, rowIndex)}
+                        onGenieShow={onGenieShow ? () => onGenieShow(item, rowIndex) : null}
+                        onGenieHide={onGenieHide ? () => onGenieHide(item, rowIndex) : null}
+                    >
+                        <Container padding="none" className="data-list-row">
+                            {itemCheck(item, rowIndex)}
+                            <Container padding="none" className="data-list-main">
+                                <Container padding="none" className="data-list-title">
+                                    {titleField && renderFieldValue(item, titleField, rowRef)}
+                                </Container>
+                                {summaryField && (
+                                    <Container padding="none" className="data-list-summary">
+                                        {renderFieldValue(item, summaryField, rowRef)}
+                                    </Container>
+                                )}
+                            </Container>
+                            {metaFields.length > 0 && (
+                                <Container layout="flex" gap="sm" align="center" padding="none" className="data-list-meta">
+                                    {metaFields.map((field) => (
+                                        <Container key={field} padding="none" className="data-list-value" title={formatFieldName(field)}>
+                                            {renderFieldValue(item, field, rowRef)}
+                                        </Container>
+                                    ))}
+                                </Container>
+                            )}
+                        </Container>
+                    </Card>
+                );
+            };
             return (
-                <Container layout="flex-column" gap="sm" padding="none" className="data-item-container">
-                    {paginatedFilteredData.length === 0 ? (
-                        <Card padding="md">
-                            <Typography size={getTypographySize()}>No data available</Typography>
-                        </Card>
-                    ) : (
-                        paginatedFilteredData.map((item, index) => {
-                            const ListItemComponent = ({item, index}) => {
-                                const rowIndex = index + (page - 1) * pageSize;
-                                const listItemRef = useRef(null);
-
-                                // Prepare generic genie configuration if provided
-                                const listItemGenieConfig = genie ? {
-                                    ...genie,
-                                    // Pass item data to genie content if it's a function
-                                    content: typeof genie.content === 'function' ? genie.content(item, rowIndex) : genie.content,
-                                    trigger: genie.trigger === 'hover' ? 'click' : genie.trigger || 'click', // Force click/contextmenu only
-                                } : null;
-
-                                return (
-                                    <Card
-                                        ref={listItemRef}
-                                        padding="md"
-                                        className="data-list-item"
-                                        genie={listItemGenieConfig}
-                                        onGenieShow={onGenieShow ? () => onGenieShow(item, rowIndex) : null}
-                                        onGenieHide={onGenieHide ? () => onGenieHide(item, rowIndex) : null}
-                                    >
-                                        {selector ? (
-                                            <Container layout="flex" gap="md" align="center" padding="none">
-                                                <div>
-                                                    <Input
-                                                        type="checkbox"
-                                                        checked={isItemSelected(item, rowIndex)}
-                                                        onChange={(e) => handleItemSelection(item, rowIndex, e.target.checked)}
-                                                        size={getButtonSize()}
-                                                    />
-                                                </div>
-                                                <Container layout="flex" justify="wrap" gap="lg" align="center"
-                                                           flexFill>
-                                                    {visibleFields.map((field, fieldIndex) => (
-                                                        <Container key={field} layout="flex-column" gap="xs"
-                                                                   padding="none"
-                                                                   flexFill={fieldIndex === 0}>
-                                                            <Typography weight="medium" size={getIconSize()}>
-                                                                {formatFieldName(field)}
-                                                            </Typography>
-                                                            {renderFieldValue(item, field, listItemRef)}
-                                                        </Container>
-                                                    ))}
-                                                </Container>
-                                            </Container>
-                                        ) : (
-                                            <Container layout="flex" justify="wrap" gap="lg" align="center">
-                                                {visibleFields.map((field, fieldIndex) => (
-                                                    <Container key={field} layout="flex-column" gap="xs" padding="none"
-                                                               flexFill={fieldIndex === 0}>
-                                                        <Typography weight="medium" size={getIconSize()}>
-                                                            {formatFieldName(field)}
-                                                        </Typography>
-                                                        {renderFieldValue(item, field, listItemRef)}
-                                                    </Container>
-                                                ))}
-                                            </Container>
-                                        )}
-                                    </Card>
-                                );
-                            };
-
-                            return <ListItemComponent key={index} item={item} index={index}/>;
-                        })
-                    )}
+                <Container padding="none" className="data-item-container data-list">
+                    {paginatedFilteredData.length === 0 ? emptyItems : paginatedFilteredData.map((item, index) => (
+                        <DataRow key={item.id || index} item={item} index={index}/>
+                    ))}
                 </Container>
             );
         };
@@ -978,10 +940,11 @@ export const Data = forwardRef(({
         const dataElement = (
             <Card
                 ref={ref}
-                className={`data-container theme-${dataTheme} ${getJustifySelfClass()} ${className}`}
+                className={`data-container data-variant-${currentVariant} ${flat ? 'data-flat' : ''} theme-${dataTheme} ${getJustifySelfClass()} ${className}`}
                 data-theme={dataTheme}
                 data-theme-source={theme ? 'local' : 'inherited'}
                 layout="block"
+                {...(flat ? { bordered: false, shadow: false, padding: 'none', hover: false } : {})}
                 style={getDataStyle()}
                 {...props}
             >

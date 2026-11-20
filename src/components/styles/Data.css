@@ -127,8 +127,6 @@
 }
 
 /* ===== DATA COMPONENT SPECIFIC STYLES ===== */
-
-/* ===== DATA COMPONENT SPECIFIC STYLES ===== */
 .table-scroll-wrapper {
     overflow: hidden;
 }
@@ -147,61 +145,6 @@
     background-color: var(--surface-accent-color);
     border-radius: var(--border-radius-md);
     border: 1px solid var(--border-color);
-}
-
-/* Data table variant - customize base table styles for Data component */
-.data-variant-table .table-scroll-wrapper {
-    overflow: none;
-    border-radius: var(--border-radius-md);
-    border: 1px solid var(--border-color);
-}
-
-.data-variant-table .themed-table {
-    background-color: transparent;
-    color: var(--text-color);
-    font-size: var(--font-size-sm);
-}
-
-.data-variant-table .table-header-cell {
-    padding: 0 var(--spacing-md);
-    text-align: center;
-    font-weight: var(--font-weight-semibold);
-    white-space: nowrap;
-}
-
-.data-variant-table .sort-indicator {
-    opacity: 0.6;
-    transition: opacity var(--transition-fast);
-}
-
-.data-variant-table .table-body {
-    background-color: transparent;
-}
-
-.data-variant-table .table-cell {
-    border-right: 1px solid var(--border-color);
-    vertical-align: top;
-    background-color: inherit;
-}
-
-.data-variant-table .table-cell-content {
-    min-height: 1.5rem;
-    display: flex;
-    text-align: center;
-}
-
-.data-variant-table .table-empty {
-    text-align: center;
-    color: var(--text-muted);
-}
-
-/* Data table filters row customization */
-.data-variant-table .table-filters-row {
-    background-color: var(--background-color);
-}
-
-.data-variant-table .table-filter-cell {
-    background-color: var(--background-color);
 }
 
 /* Cards: a grid of tiles that reflows by width; title, a clamped summary, then labelled facts */
@@ -414,11 +357,6 @@
 .card.layout-grid .data-content {
     flex: 1;
     min-height: 0;
-}
-
-/* Ensure consistent spacing for badges in table cells */
-.data-variant-table .table-cell .badge + .badge {
-    margin-left: var(--spacing-xs);
 }
 
 /* JustifySelf utility classes for Data components */

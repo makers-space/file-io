@@ -476,15 +476,9 @@ export const Data = forwardRef(({
             }
             let componentProps = {...config.props};
 
-            // Remove any size prop from fieldConfig - parent Data component's size prop takes precedence
-            delete componentProps.size;
-
-            // Apply transform if available
             if (config.transform) {
                 const transformedProps = config.transform(value);
                 componentProps = {...componentProps, ...transformedProps};
-                // Also remove size from transformed props
-                delete componentProps.size;
             } else {
                 componentProps.children = hasComplexData ? getPreviewValue(value) : value;
             }
@@ -509,13 +503,13 @@ export const Data = forwardRef(({
                             variant: 'popover'
                         }}
                     >
-                        <Component {...componentProps} size={getTypographySize()} />
+                        <Component size={getTypographySize()} {...componentProps} />
                         <Icon name="FiEye" size={getIconSize()}/>
                     </Container>
                 );
             }
 
-            return <Component {...componentProps} size={getTypographySize()} />;
+            return <Component size={getTypographySize()} {...componentProps} />;
         };
 
         // Handle sort field and direction change

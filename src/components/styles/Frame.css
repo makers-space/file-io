@@ -1,5 +1,4 @@
 .frame {
-    display: block;
     max-width: 100%;
     border: none;
     background: var(--surface-color);
@@ -8,4 +7,13 @@
 
 .frame-bordered {
     border: 1px solid var(--border-color);
+}
+
+/* The page fills its frame; the frame's own props set the size. */
+.frame-page {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: transparent;
 }

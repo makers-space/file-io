@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@contexts/ThemeContext';
+import Container from './Container';
 
 // A sealed frame that shows a web page given as text. The page runs its own scripts, but it is cut off from the app
 // around it: it has no access to the app's page, its sign-in or its storage, and it cannot load or send anything
@@ -50,10 +51,13 @@ const themeStyle = (theme, variables) => {
 // colours. A page's switch between its own light and dark is hidden, because the app's theme decides that.
 const DRESS = '<style>body,body *:not(code,pre,kbd,samp){font-family:var(--app-font,inherit)!important;letter-spacing:0!important}button{height:28px!important;padding:0 12px!important;font-size:12px!important;font-weight:500!important;line-height:1!important;border:1px solid var(--app-primary)!important;border-radius:var(--app-radius,6px)!important;background:var(--app-surface,transparent)!important;color:var(--app-text)!important;cursor:pointer}button:hover{background:color-mix(in srgb,var(--app-primary) 16%,var(--app-surface,transparent))!important}button[aria-pressed="true"]{background:var(--app-primary)!important;color:var(--app-contrast,var(--app-background))!important}button:focus-visible,input:focus-visible{outline:2px solid var(--app-primary)!important;outline-offset:2px!important}input[type="range"]{accent-color:var(--app-primary)}input[type="range"]::-webkit-slider-runnable-track{height:3px!important;border-radius:2px;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-webkit-slider-thumb{width:14px!important;height:14px!important;margin-top:-6px!important;border:none!important;background:var(--app-primary)!important}input[type="range"]::-moz-range-track{height:3px!important;background:color-mix(in srgb,var(--app-primary) 35%,transparent)!important}input[type="range"]::-moz-range-thumb{width:14px!important;height:14px!important;border:none!important;background:var(--app-primary)!important}button:has(> svg:only-child){width:28px!important;padding:0!important}select{height:28px!important;padding:0 8px!important;font-size:12px!important;font-weight:500!important;border:1px solid var(--app-border,var(--app-primary))!important;border-radius:var(--app-radius,6px)!important;background:var(--app-surface,transparent)!important;color:var(--app-text)!important}input[role="switch"]:checked{border-color:var(--app-primary)!important}input[role="switch"]:checked::after{background:var(--app-primary)!important}input[type="checkbox"]:not([role="switch"]){accent-color:var(--app-primary)}[aria-label*="theme" i]{display:none!important}span:has(+ [aria-label*="theme" i]){display:none!important}</style>';
 
-export const sealPage = (html, { theme = {}, variables = null, dressed = false } = {}) => {
+// A page fitted to its height never scrolls itself: the frame grows to it, and past maxHeight the frame scrolls instead.
+const FITTED = '<style>html{overflow:hidden!important}</style>';
+
+export const sealPage = (html, { theme = {}, variables = null, dressed = false, fit = false } = {}) => {
     const text = String(html ?? '');
     // The theme goes at the end of the page's own head, so the page's styles can use it and a mapped colour wins.
-    const style = `${Object.keys(theme).length > 0 || variables ? themeStyle(theme, variables) : ''}${dressed ? DRESS : ''}`;
+    const style = `${Object.keys(theme).length > 0 || variables ? themeStyle(theme, variables) : ''}${dressed ? DRESS : ''}${fit ? FITTED : ''}`;
     const close = (page) => (style ? (/<\/head>/i.test(page) ? page.replace(/<\/head>/i, () => `${style}</head>`) : page.replace(SEAL, () => `${SEAL}${style}`)) : page);
     const head = text.match(/<head[^>]*>/i);
     if (head) return close(text.replace(head[0], () => `${head[0]}${SEAL}${REPORT}`));
@@ -67,7 +71,10 @@ export const Frame = ({
     title = 'Page',
     width = '100%',
     height = '480px',
+    minWidth = null,
     minHeight = null,
+    maxWidth = null,
+    maxHeight = null, // With fit, the frame grows to the page's height up to this, and only then scrolls
     fit = false, // Grow or shrink to the height of the page's content, so nothing scrolls inside the frame
     dressed = false, // Draw the page's own buttons and sliders in the app's look
     bordered = true,
@@ -105,7 +112,7 @@ export const Frame = ({
             timers.forEach(clearTimeout);
         };
     }, [themed, currentTheme]);
-    const page = useMemo(() => sealPage(html, { theme: themed ? appTheme : {}, variables, dressed: dressed && themed }), [html, themed, appTheme, variables, dressed]);
+    const page = useMemo(() => sealPage(html, { theme: themed ? appTheme : {}, variables, dressed: dressed && themed, fit }), [html, themed, appTheme, variables, dressed, fit]);
     // What the page reports is taken only from this frame's own page. A page whose height follows the frame's would
     // grow for ever, so the fitting stops after a number of changes.
     const [fitted, setFitted] = useState(null);
@@ -140,26 +147,41 @@ export const Frame = ({
         window.addEventListener('message', heard);
         return () => window.removeEventListener('message', heard);
     }, [fit]);
-    const style = { width, height: fit && fitted !== null ? `${fitted + (bordered ? 2 : 0)}px` : height };
-    if (minHeight !== null) style.minHeight = minHeight;
+    // The frame is a Container sized by the same props as any other; the page fills it. When fitting, the page is given
+    // exactly the height it reported (rounded up), so it never has a fraction of a pixel left over to scroll.
+    const fitting = fit && fitted !== null;
 
     return (
-        <iframe
-            ref={frame}
-            className={`frame ${bordered ? 'frame-bordered' : ''} themed-frame theme-${theme || currentTheme} ${className}`.trim()}
-            data-theme={theme || currentTheme}
-            title={title}
-            sandbox="allow-scripts"
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            srcDoc={page}
-            style={style}
-            {...props}
-            onPointerLeave={(event) => {
-                left();
-                props.onPointerLeave?.(event);
-            }}
-        />
+        <Container
+            layout="block"
+            padding="none"
+            gap="none"
+            width={width}
+            height={fitting ? 'auto' : height}
+            minWidth={minWidth}
+            minHeight={minHeight}
+            maxWidth={maxWidth}
+            maxHeight={maxHeight}
+            overflow={fitting && maxHeight ? 'auto' : 'hidden'}
+            className={`frame ${bordered ? 'frame-bordered' : ''} themed-frame ${className}`.trim()}
+            theme={theme}
+        >
+            <iframe
+                ref={frame}
+                className="frame-page"
+                title={title}
+                sandbox="allow-scripts"
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                srcDoc={page}
+                style={fitting ? { height: `${fitted}px` } : undefined}
+                {...props}
+                onPointerLeave={(event) => {
+                    left();
+                    props.onPointerLeave?.(event);
+                }}
+            />
+        </Container>
     );
 };
 
